@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron-reminders",
+      "schedule": "* * * * *"
+    }
+  ],
+  "functions": {
+    "api/*.ts": {
+      "runtime": "@vercel/node"
+    }
+  }
+}
