@@ -120,7 +120,7 @@ function DayCell({
   const onOut = () => Animated.spring(scale, { toValue: 1, friction: 8, tension: 100, useNativeDriver: true }).start();
 
   const MAX = 2;
-  const bars = tasks.slice(0, 4);
+  const bars = Array.from(new Set(tasks.map(t => getCategoryColor(t))));
   const visible = expanded ? tasks : tasks.slice(0, MAX);
   const extra = tasks.length - MAX;
 

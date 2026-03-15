@@ -105,11 +105,6 @@ async function sendEmail(params: {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Protect cron endpoint
-  const authHeader = req.headers['authorization'];
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
 
   const now = new Date();
   const windowStart = new Date(now.getTime() - 2 * 60 * 1000); // 2 min window

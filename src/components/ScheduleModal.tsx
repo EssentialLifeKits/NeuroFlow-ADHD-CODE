@@ -320,15 +320,34 @@ export default function ScheduleModal({
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       const isVideo = asset.type === 'video' || (asset.fileName ?? '').match(/\.(mp4|mov|avi|mkv)$/i);
-      setAttachedFile({ 
-        uri: asset.uri, 
-        name: cleanFileName(asset.fileName ?? 'media'), 
-        mimeType: asset.mimeType, 
-        type: isVideo ? 'video' : 'image',
-        width: asset.width,
-        height: asset.height
-      });
-      setUploadSuccess(true);
+      if (!isVideo && Platform.OS === 'web') {
+        // Convert to base64 so thumbnail persists after re-login
+        const resp = await fetch(asset.uri);
+        const blob = await resp.blob();
+        const reader = new FileReader();
+        reader.onload = (ev: any) => {
+          setAttachedFile({
+            uri: ev.target.result as string,
+            name: cleanFileName(asset.fileName ?? 'image'),
+            mimeType: asset.mimeType,
+            type: 'image',
+            width: asset.width,
+            height: asset.height,
+          });
+          setUploadSuccess(true);
+        };
+        reader.readAsDataURL(blob);
+      } else {
+        setAttachedFile({
+          uri: asset.uri,
+          name: cleanFileName(asset.fileName ?? 'media'),
+          mimeType: asset.mimeType,
+          type: isVideo ? 'video' : 'image',
+          width: asset.width,
+          height: asset.height,
+        });
+        setUploadSuccess(true);
+      }
     }
   };
 
@@ -342,18 +361,33 @@ export default function ScheduleModal({
       input.onchange = (e: any) => {
         const file: File = e.target.files?.[0];
         if (!file) return;
-        const url = URL.createObjectURL(file);
         const mime = file.type ?? '';
         const nm = file.name ?? '';
         const isVideo = mime.startsWith('video/') || /\.(mp4|mov|avi|mkv)$/i.test(nm);
         const isImage = mime.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(nm);
-        setAttachedFile({
-          uri: url,
-          name: cleanFileName(nm),
-          mimeType: mime,
-          type: isVideo ? 'video' : isImage ? 'image' : 'document',
-        });
-        setUploadSuccess(true);
+        if (isImage) {
+          // Convert image to base64 so thumbnail persists after re-login
+          const reader = new FileReader();
+          reader.onload = (ev: any) => {
+            setAttachedFile({
+              uri: ev.target.result as string,
+              name: cleanFileName(nm),
+              mimeType: mime,
+              type: 'image',
+            });
+            setUploadSuccess(true);
+          };
+          reader.readAsDataURL(file);
+        } else {
+          const url = URL.createObjectURL(file);
+          setAttachedFile({
+            uri: url,
+            name: cleanFileName(nm),
+            mimeType: mime,
+            type: isVideo ? 'video' : 'document',
+          });
+          setUploadSuccess(true);
+        }
       };
       input.click();
       return;

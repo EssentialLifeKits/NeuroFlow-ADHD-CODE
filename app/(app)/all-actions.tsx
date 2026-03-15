@@ -48,7 +48,7 @@ const MONTH_NAMES = [
 
 function getStatusBadge(task: Task): { label: string; color: string } {
   if (task.status === 'completed') return { label: 'Completed', color: '#34D399' };
-  if (task.status === 'draft')     return { label: 'Pending/Draft', color: '#F59E0B' };
+  if (task.status === 'draft')     return { label: 'Draft',         color: '#F59E0B' };
   return                                  { label: 'Active',  color: '#34D399' };
 }
 
@@ -182,7 +182,7 @@ export default function AllActionsScreen() {
         <View style={st.statDivider} />
         <View style={st.statItem}>
           <Text style={[st.statNum, { color: '#34D399' }]}>
-            {tasks.filter(t => t.status === 'completed').length}
+            {tasks.filter(t => t.status === 'pending').length}
           </Text>
           <Text style={st.statLabel}>Active</Text>
         </View>
