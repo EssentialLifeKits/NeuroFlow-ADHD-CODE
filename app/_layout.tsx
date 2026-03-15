@@ -1,5 +1,6 @@
 import '../global.css';
 import { useEffect, useRef } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -33,6 +34,15 @@ function RootNavigator() {
       if (redirectTimer.current) clearTimeout(redirectTimer.current);
     };
   }, [user, isLoading, segments]);
+
+  // Block rendering until auth state is confirmed — prevents dashboard flash
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0e0e1a', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#4A90E2" />
+      </View>
+    );
+  }
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
