@@ -337,6 +337,23 @@ export default function ScheduleModal({
           setUploadSuccess(true);
         };
         reader.readAsDataURL(blob);
+      } else if (isVideo && Platform.OS === 'web') {
+        // Convert video to base64 so thumbnail persists after re-login
+        const resp = await fetch(asset.uri);
+        const blob = await resp.blob();
+        const reader = new FileReader();
+        reader.onload = (ev: any) => {
+          setAttachedFile({
+            uri: ev.target.result as string,
+            name: cleanFileName(asset.fileName ?? 'video'),
+            mimeType: asset.mimeType,
+            type: 'video',
+            width: asset.width,
+            height: asset.height,
+          });
+          setUploadSuccess(true);
+        };
+        reader.readAsDataURL(blob);
       } else {
         setAttachedFile({
           uri: asset.uri,
@@ -378,15 +395,33 @@ export default function ScheduleModal({
             setUploadSuccess(true);
           };
           reader.readAsDataURL(file);
+        } else if (isVideo) {
+          // Convert video to base64 so thumbnail persists after re-login
+          const reader = new FileReader();
+          reader.onload = (ev: any) => {
+            setAttachedFile({
+              uri: ev.target.result as string,
+              name: cleanFileName(nm),
+              mimeType: mime,
+              type: 'video',
+            });
+            setUploadSuccess(true);
+          };
+          reader.readAsDataURL(file);
         } else {
-          const url = URL.createObjectURL(file);
-          setAttachedFile({
-            uri: url,
-            name: cleanFileName(nm),
-            mimeType: mime,
-            type: isVideo ? 'video' : 'document',
-          });
-          setUploadSuccess(true);
+          // Convert document to base64 so the preview/thumbnail persists after re-login.
+          // Blob URLs expire when the session ends.
+          const reader = new FileReader();
+          reader.onload = (ev: any) => {
+            setAttachedFile({
+              uri: ev.target.result as string,
+              name: cleanFileName(nm),
+              mimeType: mime,
+              type: 'document',
+            });
+            setUploadSuccess(true);
+          };
+          reader.readAsDataURL(file);
         }
       };
       input.click();
@@ -458,7 +493,12 @@ export default function ScheduleModal({
                     </View>
                   )}
                   {attachedFile ? (
-                    <View style={[ms.filePreview, ms.portraitContainer, { aspectRatio: dynamicRatio }]}>
+                    <View style={[
+                      ms.filePreview,
+                      attachedFile.type === 'document'
+                        ? { minHeight: 420, width: '100%' }
+                        : [ms.portraitContainer, { aspectRatio: dynamicRatio }],
+                    ]}>
                       {attachedFile.type === 'image' ? (
                         <TouchableOpacity onPress={() => setLightbox({ visible: true, file: attachedFile })} activeOpacity={0.85} style={{ flex: 1 }}>
                           <Image source={{ uri: attachedFile.uri }} style={[ms.fileImage, { height: '100%' }]} resizeMode="cover" />
@@ -512,41 +552,31 @@ export default function ScheduleModal({
                         </View>
                       ) : attachedFile.type === 'document' ? (
                         <View style={{ flex: 1, minHeight: 320 }}>
-                          {Platform.OS === 'web' && (attachedFile.mimeType === 'application/pdf' || attachedFile.name?.toLowerCase().endsWith('.pdf')) ? (
-                            // PDF: inline iframe preview with capture button overlay
-                            <View style={{ flex: 1, position: 'relative' }}>
+                          {Platform.OS === 'web' ? (
+                            // Web: use iframe for ALL document types — browser handles PDF, images,
+                            // text, HTML natively. For unsupported types the browser shows a download prompt.
+                            <View style={{ flex: 1, position: 'relative', minHeight: 320 }}>
                               {React.createElement('iframe', {
                                 src: attachedFile.uri,
-                                style: { width: '100%', height: '100%', minHeight: 320, border: 'none', borderRadius: 8 },
+                                title: attachedFile.name,
+                                style: {
+                                  width: '100%',
+                                  height: '100%',
+                                  minHeight: 320,
+                                  border: 'none',
+                                  borderRadius: 8,
+                                  backgroundColor: '#fff',
+                                  display: 'block',
+                                },
                               })}
                               <TouchableOpacity
                                 onPress={() => { setThumbnailTime(0); fireCaptureToast(); }}
                                 style={ms.thumbBtnTop}
                                 activeOpacity={0.85}
                               >
-                                <Text style={ms.thumbBtnText}>📸 Capture Page as Thumbnail</Text>
+                                <Text style={ms.thumbBtnText}>📸 Capture as Thumbnail</Text>
                               </TouchableOpacity>
                             </View>
-                          ) : Platform.OS === 'web' && (attachedFile.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(attachedFile.name || '')) ? (
-                            <View style={{ flex: 1, position: 'relative' }}>
-                              <Image source={{ uri: attachedFile.uri }} style={{ flex: 1, width: '100%', height: '100%' }} resizeMode="contain" />
-                              <TouchableOpacity
-                                onPress={() => { setThumbnailTime(0); fireCaptureToast(); }}
-                                style={ms.thumbBtnTop}
-                                activeOpacity={0.85}
-                              >
-                                <Text style={ms.thumbBtnText}>📸 Set as Thumbnail</Text>
-                              </TouchableOpacity>
-                            </View>
-                          ) : Platform.OS === 'web' ? (
-                            // Other web docs: show icon + open in new tab
-                            <TouchableOpacity onPress={() => (window as any).open(attachedFile.uri, '_blank')} activeOpacity={0.85} style={{ flex: 1, justifyContent: 'center' }}>
-                              <View style={[ms.docPreview, { flex: 1, justifyContent: 'center' }]}>
-                                <Text style={ms.docIcon}>📄</Text>
-                                <Text style={ms.docName} numberOfLines={2}>{attachedFile.name}</Text>
-                                <Text style={ms.tapToView}>Tap to open file ↗</Text>
-                              </View>
-                            </TouchableOpacity>
                           ) : (
                             <TouchableOpacity onPress={() => setLightbox({ visible: true, file: attachedFile })} activeOpacity={0.85} style={{ flex: 1, justifyContent: 'center' }}>
                               <View style={[ms.docPreview, { flex: 1, justifyContent: 'center' }]}>

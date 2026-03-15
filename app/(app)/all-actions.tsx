@@ -175,14 +175,14 @@ export default function AllActionsScreen() {
         <View style={st.statDivider} />
         <View style={st.statItem}>
           <Text style={[st.statNum, { color: '#F59E0B' }]}>
-            {tasks.filter(t => t.status === 'pending' || t.status === 'draft').length}
+            {tasks.filter(t => t.status === 'draft').length}
           </Text>
-          <Text style={st.statLabel}>Pending/Draft</Text>
+          <Text style={st.statLabel}>Draft</Text>
         </View>
         <View style={st.statDivider} />
         <View style={st.statItem}>
           <Text style={[st.statNum, { color: '#34D399' }]}>
-            {tasks.filter(t => t.status === 'pending').length}
+            {tasks.filter(t => t.status === 'pending' || t.status === 'completed').length}
           </Text>
           <Text style={st.statLabel}>Active</Text>
         </View>

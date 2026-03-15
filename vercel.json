@@ -2,6 +2,11 @@
   "buildCommand": "npx expo export -p web",
   "outputDirectory": "dist",
   "framework": null,
+  "functions": {
+    "api/cron-reminders.ts": {
+      "runtime": "nodejs20.x"
+    }
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/((?!_expo|assets|favicon.ico).*)", "destination": "/index.html" }
@@ -9,7 +14,7 @@
   "crons": [
     {
       "path": "/api/cron-reminders",
-      "schedule": "0 0 * * *"
+      "schedule": "* * * * *"
     }
   ]
 }

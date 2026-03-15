@@ -120,7 +120,16 @@ function DayCell({
   const onOut = () => Animated.spring(scale, { toValue: 1, friction: 8, tension: 100, useNativeDriver: true }).start();
 
   const MAX = 2;
-  const bars = Array.from(new Set(tasks.map(t => getCategoryColor(t))));
+  // Deduplicate by category key so each category shows at most one color bar (max 5)
+  const seenCats = new Set<string>();
+  const bars: string[] = [];
+  for (const t of tasks) {
+    const cat = t.chore_category?.toLowerCase() ?? 'task';
+    if (!seenCats.has(cat)) {
+      seenCats.add(cat);
+      bars.push(getCategoryColor(t));
+    }
+  }
   const visible = expanded ? tasks : tasks.slice(0, MAX);
   const extra = tasks.length - MAX;
 
@@ -135,8 +144,8 @@ function DayCell({
       {/* Category color bars — flush to very top edge, full width, no padding */}
       {bars.length > 0 && (
         <View style={cs.barRow}>
-          {bars.map((t, i) => (
-            <View key={i} style={[cs.bar, { backgroundColor: getCategoryColor(t) }]} />
+          {bars.map((color, i) => (
+            <View key={i} style={[cs.bar, { backgroundColor: color }]} />
           ))}
         </View>
       )}

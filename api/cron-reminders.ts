@@ -15,7 +15,9 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const INSFORGE_URL   = process.env.EXPO_PUBLIC_INSFORGE_URL!;
+// EXPO_PUBLIC_ vars are build-time only; for serverless functions Vercel also needs
+// the plain INSFORGE_URL var. Fall back to the EXPO_PUBLIC_ variant as a safety net.
+const INSFORGE_URL   = (process.env.INSFORGE_URL ?? process.env.EXPO_PUBLIC_INSFORGE_URL)!;
 const INSFORGE_KEY   = process.env.INSFORGE_API_KEY!;
 const RESEND_API_KEY = process.env.RESEND_API_KEY!;
 const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <onboarding@resend.dev>';
@@ -105,6 +107,16 @@ async function sendEmail(params: {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+
+  // Guard: ensure required env vars are present
+  if (!INSFORGE_URL || !INSFORGE_KEY || !RESEND_API_KEY) {
+    console.error('[cron] Missing env vars:', {
+      INSFORGE_URL: !!INSFORGE_URL,
+      INSFORGE_KEY: !!INSFORGE_KEY,
+      RESEND_API_KEY: !!RESEND_API_KEY,
+    });
+    return res.status(500).json({ error: 'Missing required environment variables' });
+  }
 
   const now = new Date();
   const windowStart = new Date(now.getTime() - 2 * 60 * 1000); // 2 min window
