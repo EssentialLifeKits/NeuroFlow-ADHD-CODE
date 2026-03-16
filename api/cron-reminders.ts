@@ -24,13 +24,20 @@ const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <onboarding@resend.d
 const CRON_SECRET    = process.env.CRON_SECRET ?? '';
 
 // Lightweight postgrest fetch helper (InsForge REST API)
-async function dbSelect(table: string, select: string, filters: Record<string, string> = {}) {
+async function dbSelect(table: string, select: string, eqFilters: Record<string, string> = {}) {
   const params = new URLSearchParams({ select });
-  for (const [k, v] of Object.entries(filters)) params.append(k, v);
-  const res = await fetch(`${INSFORGE_URL}/api/database/rows/${table}?${params}`, {
+  // Simple equality filters: ?column=value
+  for (const [k, v] of Object.entries(eqFilters)) params.append(k, v);
+  const url = `${INSFORGE_URL}/api/database/rows/${table}?${params}`;
+  console.log(`[cron] dbSelect ${table}: ${url}`);
+  const res = await fetch(url, {
     headers: { 'Authorization': `Bearer ${INSFORGE_KEY}`, 'Content-Type': 'application/json' },
   });
-  if (!res.ok) return { data: null, error: { message: await res.text() } };
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`[cron] dbSelect ${table} failed ${res.status}: ${body}`);
+    return { data: null, error: { message: body } };
+  }
   const json = await res.json() as any;
   const data = Array.isArray(json) ? json : (json.data ?? []);
   return { data: data as any[], error: null };
@@ -112,10 +119,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const windowStart = new Date(now.getTime() - 2 * 60 * 1000); // 2 min window
   console.log(`[cron] Running at ${now.toISOString()}, window: ${windowStart.toISOString()} → ${now.toISOString()}`);
 
-  // Fetch all non-completed tasks that have a due_date and due_time
-  const { data: tasks, error } = await dbSelect('tasks',
+  // Fetch all tasks (filter in JS to avoid InsForge query param issues)
+  const { data: allTasks, error } = await dbSelect('tasks',
     'id,title,due_date,due_time,chore_category,recurrence_rule,user_id,status',
-    { 'status=neq': 'completed', 'due_date=not.is': 'null', 'due_time=not.is': 'null' },
   );
 
   if (error) {
@@ -123,7 +129,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: error.message });
   }
 
-  console.log(`[cron] Found ${tasks?.length ?? 0} tasks to check`);
+  // Filter: non-completed, must have due_date and due_time
+  const tasks = (allTasks ?? []).filter(
+    (t: any) => t.status !== 'completed' && t.due_date && t.due_time,
+  );
+
+  console.log(`[cron] Found ${tasks.length} tasks to check (from ${allTasks?.length ?? 0} total)`);
 
   let sent = 0;
   const results: string[] = [];
@@ -135,13 +146,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Build the exact event datetime
     const eventDt = new Date(`${task.due_date}T${task.due_time}:00`);
 
-    // Try profiles table first, fall back to users table
+    // Try users table for email (simple equality filter)
     let userRow: { email?: string; display_name?: string } | undefined;
-    const { data: profiles } = await dbSelect('profiles', 'email,display_name', { 'id=eq': task.user_id });
-    userRow = profiles?.[0];
+    const { data: users } = await dbSelect('users', 'email,display_name', { id: task.user_id });
+    userRow = users?.[0];
     if (!userRow?.email) {
-      const { data: users } = await dbSelect('users', 'email,display_name', { 'id=eq': task.user_id });
-      userRow = users?.[0];
+      const { data: profiles } = await dbSelect('profiles', 'email,display_name', { id: task.user_id });
+      userRow = profiles?.[0];
     }
 
     if (!userRow?.email) {
