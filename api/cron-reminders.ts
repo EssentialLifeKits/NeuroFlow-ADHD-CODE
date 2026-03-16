@@ -28,7 +28,7 @@ async function dbSelect(table: string, select: string, eqFilters: Record<string,
   const params = new URLSearchParams({ select });
   // Simple equality filters: ?column=value
   for (const [k, v] of Object.entries(eqFilters)) params.append(k, v);
-  const url = `${INSFORGE_URL}/api/database/rows/${table}?${params}`;
+  const url = `${INSFORGE_URL}/api/database/records/${table}?${params}`;
   console.log(`[cron] dbSelect ${table}: ${url}`);
   const res = await fetch(url, {
     headers: { 'Authorization': `Bearer ${INSFORGE_KEY}`, 'Content-Type': 'application/json' },
