@@ -173,6 +173,7 @@ export default function ScheduleModal({
   const [thumbnailTime, setThumbnailTime] = useState<number | null>(null);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const scrubTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [capturedThumbnail, setCapturedThumbnail] = useState<string | null>(null);
   const [scheduleHovered, setScheduleHovered] = useState(false);
   const [draftHovered, setDraftHovered] = useState(false);
   const [thumbnailCaptured, setThumbnailCaptured] = useState(false);
@@ -220,14 +221,15 @@ export default function ScheduleModal({
         if (initialData.sticker_id && initialData.sticker_id.startsWith('{')) {
           try {
             const p = JSON.parse(initialData.sticker_id);
-            setAttachedFile({ uri: p.uri, type: p.type, name: 'media', width: p.width, height: p.height });
+            setAttachedFile({ uri: p.uri || p.thumbnail || '', type: p.type, name: p.name || 'media', width: p.width, height: p.height });
             setThumbnailTime(p.thumbTime ?? null);
+            setCapturedThumbnail(p.thumbnail ?? null);
           } catch {}
         }
       } else {
         setTaskDetails(''); setTags(''); setCategory('task'); setReminderOffset('none');
         setDetailsFocused(false); setSelectedChipTime(null); setAttachedFile(null); setUploadSuccess(false);
-        setThumbnailTime(null);
+        setThumbnailTime(null); setCapturedThumbnail(null);
         setPickedDate(initDate()); setPickedTime(new Date());
       }
     }
@@ -244,13 +246,39 @@ export default function ScheduleModal({
     ].join('-');
     const timeStr = `${String(pickedTime.getHours()).padStart(2, '0')}:${String(pickedTime.getMinutes()).padStart(2, '0')}`;
     
-    const sticker_id = attachedFile ? JSON.stringify({
-      uri: attachedFile.uri,
-      type: attachedFile.type,
-      width: attachedFile.width,
-      height: attachedFile.height,
-      thumbTime: thumbnailTime
-    }) : null;
+    // Build compact sticker_id:
+    // - video: store only the canvas-captured thumbnail JPEG (not the blob URL, which expires)
+    // - document: store base64 only if ≤ 400 KB to avoid DB column truncation
+    // - image: store base64 URI as before
+    let sticker_id: string | null = null;
+    if (attachedFile) {
+      if (attachedFile.type === 'video') {
+        sticker_id = JSON.stringify({
+          type: 'video',
+          thumbnail: capturedThumbnail,   // canvas-captured JPEG frame (persists)
+          thumbTime: thumbnailTime,
+          name: attachedFile.name,
+        });
+      } else if (attachedFile.type === 'document') {
+        const MAX_DOC_CHARS = 400 * 1024; // ~300 KB base64 → safe for DB
+        sticker_id = JSON.stringify({
+          type: 'document',
+          name: attachedFile.name,
+          thumbTime: thumbnailTime,
+          ...(attachedFile.uri && attachedFile.uri.length <= MAX_DOC_CHARS
+            ? { uri: attachedFile.uri }
+            : {}),
+        });
+      } else {
+        sticker_id = JSON.stringify({
+          uri: attachedFile.uri,
+          type: attachedFile.type,
+          width: attachedFile.width,
+          height: attachedFile.height,
+          thumbTime: thumbnailTime,
+        });
+      }
+    }
 
     const taskInput = {
       title: taskDetails.trim(),
@@ -361,22 +389,21 @@ export default function ScheduleModal({
         };
         reader.readAsDataURL(blob);
       } else if (isVideo && Platform.OS === 'web') {
-        // Convert video to base64 so thumbnail persists after re-login
+        // Use a blob URL for playback — base64 is too large for <video> elements.
+        // Only the canvas-captured thumbnail frame is persisted to the DB.
         const resp = await fetch(asset.uri);
         const blob = await resp.blob();
-        const reader = new FileReader();
-        reader.onload = (ev: any) => {
-          setAttachedFile({
-            uri: ev.target.result as string,
-            name: cleanFileName(asset.fileName ?? 'video'),
-            mimeType: asset.mimeType,
-            type: 'video',
-            width: asset.width,
-            height: asset.height,
-          });
-          setUploadSuccess(true);
-        };
-        reader.readAsDataURL(blob);
+        const blobUrl = URL.createObjectURL(blob);
+        setAttachedFile({
+          uri: blobUrl,
+          name: cleanFileName(asset.fileName ?? 'video'),
+          mimeType: asset.mimeType,
+          type: 'video',
+          width: asset.width,
+          height: asset.height,
+        });
+        setCapturedThumbnail(null);
+        setUploadSuccess(true);
       } else {
         setAttachedFile({
           uri: asset.uri,
@@ -419,18 +446,16 @@ export default function ScheduleModal({
           };
           reader.readAsDataURL(file);
         } else if (isVideo) {
-          // Convert video to base64 so thumbnail persists after re-login
-          const reader = new FileReader();
-          reader.onload = (ev: any) => {
-            setAttachedFile({
-              uri: ev.target.result as string,
-              name: cleanFileName(nm),
-              mimeType: mime,
-              type: 'video',
-            });
-            setUploadSuccess(true);
-          };
-          reader.readAsDataURL(file);
+          // Use a blob URL for playback — only the canvas thumbnail is persisted.
+          const blobUrl = URL.createObjectURL(file);
+          setAttachedFile({
+            uri: blobUrl,
+            name: cleanFileName(nm),
+            mimeType: mime,
+            type: 'video',
+          });
+          setCapturedThumbnail(null);
+          setUploadSuccess(true);
         } else {
           // Convert document to base64 so the preview/thumbnail persists after re-login.
           // Blob URLs expire when the session ends.
@@ -530,76 +555,123 @@ export default function ScheduleModal({
                           </TouchableOpacity>
                         </TouchableOpacity>
                       ) : attachedFile.type === 'video' ? (
-                        <View style={{ flex: 1, backgroundColor: '#000', position: 'relative' }}>
-                          {/* Capture Scene Button — ABOVE video, only visible when scrubbing */}
-                          {isScrubbing && (
-                            <TouchableOpacity
-                              onPress={() => {
-                                if (Platform.OS === 'web' && videoRef.current) {
-                                  const ct = (videoRef.current.currentTime || 0) * 1000;
-                                  setThumbnailTime(ct);
-                                  setVideoPosition(ct);
-                                } else {
-                                  setThumbnailTime(videoPosition);
-                                }
-                                setIsScrubbing(false);
-                                fireCaptureToast();
-                              }}
-                              style={ms.thumbBtnTop}
-                              activeOpacity={0.85}
-                            >
-                              <Text style={ms.thumbBtnText}>📸 Capture This Scene</Text>
-                            </TouchableOpacity>
-                          )}
+                        (() => {
+                          // A blob: URI means a freshly-uploaded video (playable).
+                          // Anything else (e.g. data:image/ from sticker_id) means stored-thumbnail-only.
+                          const isPlayable = attachedFile.uri.startsWith('blob:') || attachedFile.uri.startsWith('data:video/');
+                          if (!isPlayable) {
+                            // Stored entry: show captured thumbnail or placeholder
+                            return (
+                              <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                                {capturedThumbnail ? (
+                                  <Image source={{ uri: capturedThumbnail }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                                ) : (
+                                  <Text style={{ fontSize: 48 }}>🎬</Text>
+                                )}
+                                <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.75)', padding: 10, alignItems: 'center' }}>
+                                  <Text style={{ color: '#ccc', fontSize: 11, fontWeight: '600' }}>Re-upload to replace video</Text>
+                                </View>
+                              </View>
+                            );
+                          }
+                          return (
+                            <View style={{ flex: 1, backgroundColor: '#000', position: 'relative' }}>
+                              {/* Capture Scene Button — visible when scrubbing */}
+                              {isScrubbing && (
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    if (Platform.OS === 'web' && videoRef.current) {
+                                      // Canvas-capture the current video frame as a JPEG
+                                      const vid = videoRef.current as HTMLVideoElement;
+                                      const canvas = document.createElement('canvas');
+                                      canvas.width = vid.videoWidth || 320;
+                                      canvas.height = vid.videoHeight || 180;
+                                      const ctx = canvas.getContext('2d');
+                                      if (ctx) {
+                                        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+                                        setCapturedThumbnail(canvas.toDataURL('image/jpeg', 0.7));
+                                      }
+                                      const ct = (vid.currentTime || 0) * 1000;
+                                      setThumbnailTime(ct);
+                                      setVideoPosition(ct);
+                                    } else {
+                                      setThumbnailTime(videoPosition);
+                                    }
+                                    setIsScrubbing(false);
+                                    fireCaptureToast();
+                                  }}
+                                  style={ms.thumbBtnTop}
+                                  activeOpacity={0.85}
+                                >
+                                  <Text style={ms.thumbBtnText}>📸 Capture This Scene</Text>
+                                </TouchableOpacity>
+                              )}
 
-                          <NativeWebVideo
-                            uri={attachedFile.uri}
-                            videoElRef={videoRef}
-                            onTimeUpdate={Object.assign(
-                              (posMs: number, durMs: number) => {
-                                setVideoPosition(posMs);
-                                if (durMs) setVideoDuration(durMs);
-                              },
-                              {
-                                _onScrubStart: () => {
-                                  if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
-                                  setIsScrubbing(true);
-                                },
-                                _onScrubEnd: () => {
-                                  if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
-                                  scrubTimerRef.current = setTimeout(() => {}, 5000);
-                                },
-                              }
-                            )}
-                          />
-                        </View>
+                              <NativeWebVideo
+                                uri={attachedFile.uri}
+                                videoElRef={videoRef}
+                                onTimeUpdate={Object.assign(
+                                  (posMs: number, durMs: number) => {
+                                    setVideoPosition(posMs);
+                                    if (durMs) setVideoDuration(durMs);
+                                  },
+                                  {
+                                    _onScrubStart: () => {
+                                      if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
+                                      setIsScrubbing(true);
+                                    },
+                                    _onScrubEnd: () => {
+                                      if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current);
+                                      scrubTimerRef.current = setTimeout(() => {}, 5000);
+                                    },
+                                  }
+                                )}
+                              />
+                            </View>
+                          );
+                        })()
                       ) : attachedFile.type === 'document' ? (
                         <View style={{ flex: 1, minHeight: 320 }}>
                           {Platform.OS === 'web' ? (
                             // Web: use iframe for ALL document types — browser handles PDF, images,
                             // text, HTML natively. For unsupported types the browser shows a download prompt.
-                            <View style={{ flex: 1, position: 'relative', minHeight: 320 }}>
-                              {React.createElement('iframe', {
-                                src: attachedFile.uri,
-                                title: attachedFile.name,
-                                style: {
-                                  width: '100%',
-                                  height: '100%',
-                                  minHeight: 320,
-                                  border: 'none',
-                                  borderRadius: 8,
-                                  backgroundColor: '#fff',
-                                  display: 'block',
-                                },
-                              })}
-                              <TouchableOpacity
-                                onPress={() => { setThumbnailTime(0); fireCaptureToast(); }}
-                                style={ms.thumbBtnTop}
-                                activeOpacity={0.85}
-                              >
-                                <Text style={ms.thumbBtnText}>📸 Capture as Thumbnail</Text>
-                              </TouchableOpacity>
-                            </View>
+                            attachedFile.uri ? (
+                              <View style={{ flex: 1, position: 'relative', minHeight: 320 }}>
+                                {React.createElement('iframe', {
+                                  src: attachedFile.uri,
+                                  title: attachedFile.name,
+                                  style: {
+                                    width: '100%',
+                                    height: '100%',
+                                    minHeight: 320,
+                                    border: 'none',
+                                    borderRadius: 8,
+                                    backgroundColor: '#fff',
+                                    display: 'block',
+                                  },
+                                })}
+                                <TouchableOpacity
+                                  onPress={() => { setThumbnailTime(0); fireCaptureToast(); }}
+                                  style={ms.thumbBtnTop}
+                                  activeOpacity={0.85}
+                                >
+                                  <Text style={ms.thumbBtnText}>📸 Capture as Thumbnail</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ) : (
+                              <View style={{ flex: 1, minHeight: 320, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1a2e', borderRadius: 8 }}>
+                                <Text style={{ fontSize: 48, marginBottom: 12 }}>📄</Text>
+                                <Text style={{ color: '#ccc', fontSize: 14, textAlign: 'center', paddingHorizontal: 24 }}>{attachedFile.name}</Text>
+                                <Text style={{ color: '#888', fontSize: 12, textAlign: 'center', marginTop: 8, paddingHorizontal: 24 }}>Document saved. Re-upload to preview.</Text>
+                                <TouchableOpacity
+                                  onPress={() => { setThumbnailTime(0); fireCaptureToast(); }}
+                                  style={[ms.thumbBtnTop, { position: 'relative', marginTop: 16 }]}
+                                  activeOpacity={0.85}
+                                >
+                                  <Text style={ms.thumbBtnText}>📸 Set as Thumbnail</Text>
+                                </TouchableOpacity>
+                              </View>
+                            )
                           ) : (
                             <TouchableOpacity onPress={() => setLightbox({ visible: true, file: attachedFile })} activeOpacity={0.85} style={{ flex: 1, justifyContent: 'center' }}>
                               <View style={[ms.docPreview, { flex: 1, justifyContent: 'center' }]}>
@@ -612,7 +684,7 @@ export default function ScheduleModal({
                         </View>
                       ) : null}
                       
-                      <TouchableOpacity onPress={() => { setAttachedFile(null); setThumbnailTime(null); }} style={ms.fileDeleteBtn}>
+                      <TouchableOpacity onPress={() => { setAttachedFile(null); setThumbnailTime(null); setCapturedThumbnail(null); }} style={ms.fileDeleteBtn}>
                         <Text style={ms.fileDeleteText}>🗑 Delete</Text>
                       </TouchableOpacity>
                     </View>
@@ -870,13 +942,23 @@ export default function ScheduleModal({
                       <TouchableOpacity
                         onPress={() => {
                           if (Platform.OS === 'web' && videoRef.current) {
-                            const ct = (videoRef.current.currentTime || 0) * 1000;
+                            const vid = videoRef.current as HTMLVideoElement;
+                            const canvas = document.createElement('canvas');
+                            canvas.width = vid.videoWidth || 320;
+                            canvas.height = vid.videoHeight || 180;
+                            const ctx = canvas.getContext('2d');
+                            if (ctx) {
+                              ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+                              setCapturedThumbnail(canvas.toDataURL('image/jpeg', 0.7));
+                            }
+                            const ct = (vid.currentTime || 0) * 1000;
                             setThumbnailTime(ct);
                             setVideoPosition(ct);
                           } else {
                             setThumbnailTime(videoPosition);
                           }
                           setIsScrubbing(false);
+                          fireCaptureToast();
                         }}
                         style={ms.thumbBtnTopLightbox}
                         activeOpacity={0.85}
