@@ -51,11 +51,16 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   }, [profileId]);
 
   useEffect(() => {
-    loadFromCache();
     if (!user) {
+      // User signed out — clear everything so stale entries don't appear on next login
+      setTasks([]);
+      setProfileId(null);
+      AsyncStorage.removeItem('@neuroflow_tasks').catch(() => {});
       setLoading(false);
       return;
     }
+    // User signed in — load cache first for instant display, then fetch fresh from server
+    loadFromCache();
     getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
       .then((p) => {
         setProfileId(p.id);
