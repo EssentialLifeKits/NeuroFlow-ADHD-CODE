@@ -120,16 +120,8 @@ function DayCell({
   const onOut = () => Animated.spring(scale, { toValue: 1, friction: 8, tension: 100, useNativeDriver: true }).start();
 
   const MAX = 2;
-  // Deduplicate by category key so each category shows at most one color bar (max 5)
-  const seenCats = new Set<string>();
-  const bars: string[] = [];
-  for (const t of tasks) {
-    const cat = t.chore_category?.toLowerCase() ?? 'task';
-    if (!seenCats.has(cat)) {
-      seenCats.add(cat);
-      bars.push(getCategoryColor(t));
-    }
-  }
+  // One color bar per entry (max 5), each bar is that entry's category color
+  const bars: string[] = tasks.slice(0, 5).map((t) => getCategoryColor(t));
   const visible = expanded ? tasks : tasks.slice(0, MAX);
   const extra = tasks.length - MAX;
 
