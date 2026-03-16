@@ -88,6 +88,10 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
 }
 
 module.exports = async function handler(req, res) {
+  try { return await run(req, res); } catch(e) { console.error('[cron] FATAL:', e); return res.status(500).json({ error: String(e) }); }
+};
+
+async function run(req, res) {
   if (!INSFORGE_URL || !INSFORGE_KEY || !RESEND_API_KEY) {
     console.error('[cron] Missing env vars:', { INSFORGE_URL: !!INSFORGE_URL, INSFORGE_KEY: !!INSFORGE_KEY, RESEND_API_KEY: !!RESEND_API_KEY });
     return res.status(500).json({ error: 'Missing required environment variables' });
