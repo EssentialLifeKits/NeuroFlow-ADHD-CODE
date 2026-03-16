@@ -26,7 +26,6 @@ const CRON_SECRET    = process.env.CRON_SECRET ?? '';
 // Lightweight postgrest fetch helper (InsForge REST API)
 async function dbSelect(table: string, select: string, eqFilters: Record<string, string> = {}) {
   const params = new URLSearchParams({ select });
-  // Simple equality filters: ?column=value
   for (const [k, v] of Object.entries(eqFilters)) params.append(k, v);
   const url = `${INSFORGE_URL}/api/database/records/${table}?${params}`;
   console.log(`[cron] dbSelect ${table}: ${url}`);
@@ -41,6 +40,17 @@ async function dbSelect(table: string, select: string, eqFilters: Record<string,
   const json = await res.json() as any;
   const data = Array.isArray(json) ? json : (json.data ?? []);
   return { data: data as any[], error: null };
+}
+
+async function dbUpdate(table: string, id: string, body: Record<string, any>) {
+  const url = `${INSFORGE_URL}/api/database/records/${table}/${id}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${INSFORGE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) console.error(`[cron] dbUpdate ${table}/${id} failed ${res.status}: ${await res.text()}`);
+  return res.ok;
 }
 
 const CATEGORY_META: Record<string, { color: string; emoji: string; label: string }> = {
@@ -144,13 +154,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Build the exact event datetime
     const eventDt = new Date(`${task.due_date}T${task.due_time}:00`);
 
-    // Try users table for email (simple equality filter)
+    // Try users table — match on id or auth_user_id
     let userRow: { email?: string; display_name?: string } | undefined;
-    const { data: users } = await dbSelect('users', '*', { id: task.user_id });
-    userRow = users?.[0];
+    const { data: byId } = await dbSelect('users', '*', { id: task.user_id });
+    userRow = byId?.[0];
     if (!userRow?.email) {
-      const { data: profiles } = await dbSelect('profiles', '*', { id: task.user_id });
-      userRow = profiles?.[0];
+      const { data: byAuth } = await dbSelect('users', '*', { auth_user_id: task.user_id });
+      userRow = byAuth?.[0];
     }
 
     if (!userRow?.email) {
@@ -180,6 +190,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (emailRes.ok) {
         sent++;
         results.push(`at_time:${task.id}`);
+        // Mark task completed so it disappears from the calendar
+        await dbUpdate('tasks', task.id, { status: 'completed', completed_at: new Date().toISOString() });
       } else {
         const body = await emailRes.text();
         console.error(`[cron] Resend error for at_time ${task.id}: ${emailRes.status} ${body}`);
@@ -216,6 +228,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (emailRes.ok) {
             sent++;
             results.push(`reminder:${task.id}`);
+            // Mark task completed so it disappears from the calendar
+            await dbUpdate('tasks', task.id, { status: 'completed', completed_at: new Date().toISOString() });
           } else {
             const body = await emailRes.text();
             console.error(`[cron] Resend error for reminder ${task.id}: ${emailRes.status} ${body}`);
