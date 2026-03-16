@@ -95,16 +95,6 @@ function buildEmailHtml(params: {
 </table></td></tr></table></body></html>`;
 }
 
-async function sendEmail(params: {
-  to: string; subject: string; html: string;
-}) {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM_EMAIL, to: [params.to], subject: params.subject, html: params.html }),
-  });
-  return res.ok;
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
 
@@ -120,17 +110,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const now = new Date();
   const windowStart = new Date(now.getTime() - 2 * 60 * 1000); // 2 min window
+  console.log(`[cron] Running at ${now.toISOString()}, window: ${windowStart.toISOString()} → ${now.toISOString()}`);
 
-  // Fetch pending tasks that have a due_date and due_time
+  // Fetch all non-completed tasks that have a due_date and due_time
   const { data: tasks, error } = await dbSelect('tasks',
     'id,title,due_date,due_time,chore_category,recurrence_rule,user_id,status',
     { 'status=neq': 'completed', 'due_date=not.is': 'null', 'due_time=not.is': 'null' },
   );
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('[cron] DB error fetching tasks:', error.message);
+    return res.status(500).json({ error: error.message });
+  }
+
+  console.log(`[cron] Found ${tasks?.length ?? 0} tasks to check`);
 
   let sent = 0;
   const results: string[] = [];
+  const skipped: string[] = [];
 
   for (const task of (tasks ?? [])) {
     if (!task.due_date || !task.due_time) continue;
@@ -138,30 +135,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Build the exact event datetime
     const eventDt = new Date(`${task.due_date}T${task.due_time}:00`);
 
-    // Fetch user email
-    const { data: users } = await dbSelect('users', 'email,display_name', { 'id=eq': task.user_id });
-    const userRow = users?.[0];
+    // Try profiles table first, fall back to users table
+    let userRow: { email?: string; display_name?: string } | undefined;
+    const { data: profiles } = await dbSelect('profiles', 'email,display_name', { 'id=eq': task.user_id });
+    userRow = profiles?.[0];
+    if (!userRow?.email) {
+      const { data: users } = await dbSelect('users', 'email,display_name', { 'id=eq': task.user_id });
+      userRow = users?.[0];
+    }
 
-    if (!userRow?.email) continue;
+    if (!userRow?.email) {
+      skipped.push(`no_email:${task.id}`);
+      console.warn(`[cron] No email found for user ${task.user_id} (task ${task.id})`);
+      continue;
+    }
 
     // Check if at-time email is due (event time within the 2-min window)
     if (eventDt >= windowStart && eventDt <= now) {
-      const ok = await sendEmail({
-        to: userRow.email,
-        subject: `🎯 Now: ${task.title}`,
-        html: buildEmailHtml({
-          title: task.title, dueDate: task.due_date, dueTime: task.due_time,
-          category: task.chore_category ?? 'task',
-          userName: userRow.display_name ?? '',
-          type: 'at_time',
+      console.log(`[cron] Sending at_time email for task ${task.id} to ${userRow.email}`);
+      const emailRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: FROM_EMAIL,
+          to: [userRow.email],
+          subject: `🎯 Now: ${task.title}`,
+          html: buildEmailHtml({
+            title: task.title, dueDate: task.due_date, dueTime: task.due_time,
+            category: task.chore_category ?? 'task',
+            userName: userRow.display_name ?? '',
+            type: 'at_time',
+          }),
         }),
       });
-      if (ok) { sent++; results.push(`at_time:${task.id}`); }
+      if (emailRes.ok) {
+        sent++;
+        results.push(`at_time:${task.id}`);
+      } else {
+        const body = await emailRes.text();
+        console.error(`[cron] Resend error for at_time ${task.id}: ${emailRes.status} ${body}`);
+        skipped.push(`resend_err:${task.id}:${emailRes.status}`);
+      }
     }
 
     // Check if reminder email is due (stored in recurrence_rule)
     const reminderOffset = task.recurrence_rule;
-    if (reminderOffset && reminderOffset !== 'none') {
+    if (reminderOffset && reminderOffset !== 'none' && reminderOffset !== 'at_time') {
       let offsetMs = 0;
       if (reminderOffset === '1h_before') offsetMs = 60 * 60 * 1000;
       if (reminderOffset === '1d_before') offsetMs = 24 * 60 * 60 * 1000;
@@ -169,21 +188,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (offsetMs > 0) {
         const reminderDt = new Date(eventDt.getTime() - offsetMs);
         if (reminderDt >= windowStart && reminderDt <= now) {
-          const ok = await sendEmail({
-            to: userRow.email,
-            subject: `⏰ Reminder: ${task.title}`,
-            html: buildEmailHtml({
-              title: task.title, dueDate: task.due_date, dueTime: task.due_time,
-              category: task.chore_category ?? 'task',
-              userName: userRow.display_name ?? '',
-              type: 'reminder',
+          console.log(`[cron] Sending reminder email for task ${task.id} to ${userRow.email}`);
+          const emailRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: FROM_EMAIL,
+              to: [userRow.email],
+              subject: `⏰ Reminder: ${task.title}`,
+              html: buildEmailHtml({
+                title: task.title, dueDate: task.due_date, dueTime: task.due_time,
+                category: task.chore_category ?? 'task',
+                userName: userRow.display_name ?? '',
+                type: 'reminder',
+              }),
             }),
           });
-          if (ok) { sent++; results.push(`reminder:${task.id}`); }
+          if (emailRes.ok) {
+            sent++;
+            results.push(`reminder:${task.id}`);
+          } else {
+            const body = await emailRes.text();
+            console.error(`[cron] Resend error for reminder ${task.id}: ${emailRes.status} ${body}`);
+            skipped.push(`resend_err:${task.id}:${emailRes.status}`);
+          }
         }
       }
     }
   }
 
-  return res.status(200).json({ sent, results });
+  console.log(`[cron] Done. sent=${sent}, skipped=${skipped.length}`);
+  return res.status(200).json({ sent, results, skipped, checkedAt: now.toISOString() });
 }
