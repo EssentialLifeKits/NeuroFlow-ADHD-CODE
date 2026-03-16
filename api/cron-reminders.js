@@ -1,30 +1,14 @@
 /**
  * NeuroFlow — Cron Job: Check & Send Due Reminders
  * GET /api/cron-reminders
- *
- * Runs every minute via Vercel Cron (vercel.json).
- * Checks for tasks whose at-time or reminder email is due and sends them via Resend.
- *
- * A task email is due when:
- *   - at_time:   due_date + due_time <= now (within the last 2 minutes)
- *   - 1h_before: due_date + due_time - 1h <= now (within the last 2 minutes)
- *   - 1d_before: due_date + due_time - 24h <= now (within the last 2 minutes)
- *
- * Uses a `email_sent_at` timestamp on the task to prevent duplicate sends.
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-// EXPO_PUBLIC_ vars are build-time only; for serverless functions Vercel also needs
-// the plain INSFORGE_URL var. Fall back to the EXPO_PUBLIC_ variant as a safety net.
-const INSFORGE_URL   = (process.env.INSFORGE_URL ?? process.env.EXPO_PUBLIC_INSFORGE_URL)!;
-const INSFORGE_KEY   = process.env.INSFORGE_API_KEY!;
-const RESEND_API_KEY = process.env.RESEND_API_KEY!;
+const INSFORGE_URL   = process.env.INSFORGE_URL ?? process.env.EXPO_PUBLIC_INSFORGE_URL ?? '';
+const INSFORGE_KEY   = process.env.INSFORGE_API_KEY ?? '';
+const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
 const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <onboarding@resend.dev>';
-const CRON_SECRET    = process.env.CRON_SECRET ?? '';
 
-// Lightweight postgrest fetch helper (InsForge REST API)
-async function dbSelect(table: string, select: string, eqFilters: Record<string, string> = {}) {
+async function dbSelect(table, select, eqFilters = {}) {
   const params = new URLSearchParams({ select });
   for (const [k, v] of Object.entries(eqFilters)) params.append(k, v);
   const url = `${INSFORGE_URL}/api/database/records/${table}?${params}`;
@@ -37,12 +21,12 @@ async function dbSelect(table: string, select: string, eqFilters: Record<string,
     console.error(`[cron] dbSelect ${table} failed ${res.status}: ${body}`);
     return { data: null, error: { message: body } };
   }
-  const json = await res.json() as any;
+  const json = await res.json();
   const data = Array.isArray(json) ? json : (json.data ?? []);
-  return { data: data as any[], error: null };
+  return { data, error: null };
 }
 
-async function dbUpdate(table: string, id: string, body: Record<string, any>) {
+async function dbUpdate(table, id, body) {
   const url = `${INSFORGE_URL}/api/database/records/${table}/${id}`;
   const res = await fetch(url, {
     method: 'PATCH',
@@ -53,27 +37,18 @@ async function dbUpdate(table: string, id: string, body: Record<string, any>) {
   return res.ok;
 }
 
-const CATEGORY_META: Record<string, { color: string; emoji: string; label: string }> = {
-  task:      { color: '#4A90E2', emoji: '📋', label: 'Task' },
-  health:    { color: '#34D399', emoji: '🏃', label: 'Health' },
-  work:      { color: '#6366F1', emoji: '💼', label: 'Work' },
-  personal:  { color: '#A78BFA', emoji: '🌿', label: 'Personal' },
-  creative:  { color: '#F59E0B', emoji: '🎨', label: 'Creative' },
-  social:    { color: '#EC4899', emoji: '👥', label: 'Social' },
-  finance:   { color: '#10B981', emoji: '💰', label: 'Finance' },
-  selfcare:  { color: '#8B5CF6', emoji: '💆', label: 'Self Care' },
-  learning:  { color: '#3B82F6', emoji: '📚', label: 'Learning' },
-  chore:     { color: '#F97316', emoji: '🧹', label: 'Chore' },
+const CATEGORY_META = {
+  task:        { color: '#4A90E2', emoji: '📋', label: 'Task' },
+  appointment: { color: '#34D399', emoji: '📅', label: 'Appointment' },
+  selfcare:    { color: '#F87171', emoji: '💆', label: 'Self-Care' },
+  'self-care': { color: '#F87171', emoji: '💆', label: 'Self-Care' },
+  routine:     { color: '#4A90E2', emoji: '🔄', label: 'Routine' },
+  deadline:    { color: '#FB923C', emoji: '⏰', label: 'Deadline' },
 };
 
-function buildEmailHtml(params: {
-  title: string; dueDate: string; dueTime: string;
-  category: string; userName: string; type: 'reminder' | 'at_time';
-}): string {
-  const { title, dueDate, dueTime, category, userName, type } = params;
+function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
   const cat = CATEGORY_META[category?.toLowerCase()] ?? CATEGORY_META['task'];
   const isReminder = type === 'reminder';
-
   const formattedDate = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
@@ -112,50 +87,34 @@ function buildEmailHtml(params: {
 </table></td></tr></table></body></html>`;
 }
 
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-
-  // Guard: ensure required env vars are present
+export default async function handler(req, res) {
   if (!INSFORGE_URL || !INSFORGE_KEY || !RESEND_API_KEY) {
-    console.error('[cron] Missing env vars:', {
-      INSFORGE_URL: !!INSFORGE_URL,
-      INSFORGE_KEY: !!INSFORGE_KEY,
-      RESEND_API_KEY: !!RESEND_API_KEY,
-    });
+    console.error('[cron] Missing env vars:', { INSFORGE_URL: !!INSFORGE_URL, INSFORGE_KEY: !!INSFORGE_KEY, RESEND_API_KEY: !!RESEND_API_KEY });
     return res.status(500).json({ error: 'Missing required environment variables' });
   }
 
   const now = new Date();
-  const windowStart = new Date(now.getTime() - 5 * 60 * 1000); // 5 min window
-  console.log(`[cron] Running at ${now.toISOString()}, window: ${windowStart.toISOString()} → ${now.toISOString()}`);
+  const windowStart = new Date(now.getTime() - 5 * 60 * 1000);
+  console.log(`[cron] Running at ${now.toISOString()}`);
 
-  // Fetch all tasks (filter in JS to avoid InsForge query param issues)
   const { data: allTasks, error } = await dbSelect('tasks', '*');
-
   if (error) {
-    console.error('[cron] DB error fetching tasks:', error.message);
+    console.error('[cron] DB error:', error.message);
     return res.status(500).json({ error: error.message });
   }
 
-  // Filter: non-completed, must have due_date and due_time
-  const tasks = (allTasks ?? []).filter(
-    (t: any) => t.status !== 'completed' && t.due_date && t.due_time,
-  );
-
+  const tasks = (allTasks ?? []).filter(t => t.status !== 'completed' && t.due_date && t.due_time);
   console.log(`[cron] Found ${tasks.length} tasks to check (from ${allTasks?.length ?? 0} total)`);
 
   let sent = 0;
-  const results: string[] = [];
-  const skipped: string[] = [];
+  const results = [];
+  const skipped = [];
 
-  for (const task of (tasks ?? [])) {
-    if (!task.due_date || !task.due_time) continue;
-
-    // Build the exact event datetime
+  for (const task of tasks) {
     const eventDt = new Date(`${task.due_date}T${task.due_time}:00`);
 
-    // Try users table — match on id or auth_user_id
-    let userRow: { email?: string; display_name?: string } | undefined;
+    // Find user email — try id first, then auth_user_id
+    let userRow;
     const { data: byId } = await dbSelect('users', '*', { id: task.user_id });
     userRow = byId?.[0];
     if (!userRow?.email) {
@@ -165,13 +124,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!userRow?.email) {
       skipped.push(`no_email:${task.id}`);
-      console.warn(`[cron] No email found for user ${task.user_id} (task ${task.id})`);
+      console.warn(`[cron] No email for user ${task.user_id} (task ${task.id})`);
       continue;
     }
 
-    // Check if at-time email is due (event time within the 2-min window)
+    // Send at-time email if task is due within the window
     if (eventDt >= windowStart && eventDt <= now) {
-      console.log(`[cron] Sending at_time email for task ${task.id} to ${userRow.email}`);
+      console.log(`[cron] Sending email for task ${task.id} to ${userRow.email}`);
       const emailRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -190,26 +149,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (emailRes.ok) {
         sent++;
         results.push(`at_time:${task.id}`);
-        // Mark task completed so it disappears from the calendar
-        await dbUpdate('tasks', task.id, { status: 'completed', completed_at: new Date().toISOString() });
+        // Mark completed so it disappears from the calendar
+        await dbUpdate('tasks', task.id, { status: 'completed', completed_at: now.toISOString() });
       } else {
         const body = await emailRes.text();
-        console.error(`[cron] Resend error for at_time ${task.id}: ${emailRes.status} ${body}`);
-        skipped.push(`resend_err:${task.id}:${emailRes.status}`);
+        console.error(`[cron] Resend error ${task.id}: ${emailRes.status} ${body}`);
+        skipped.push(`resend_err:${task.id}`);
       }
     }
 
-    // Check if reminder email is due (stored in recurrence_rule)
+    // Send reminder email if a reminder offset is stored in recurrence_rule
     const reminderOffset = task.recurrence_rule;
     if (reminderOffset && reminderOffset !== 'none' && reminderOffset !== 'at_time') {
       let offsetMs = 0;
       if (reminderOffset === '1h_before') offsetMs = 60 * 60 * 1000;
       if (reminderOffset === '1d_before') offsetMs = 24 * 60 * 60 * 1000;
-
       if (offsetMs > 0) {
         const reminderDt = new Date(eventDt.getTime() - offsetMs);
         if (reminderDt >= windowStart && reminderDt <= now) {
-          console.log(`[cron] Sending reminder email for task ${task.id} to ${userRow.email}`);
           const emailRes = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -228,12 +185,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (emailRes.ok) {
             sent++;
             results.push(`reminder:${task.id}`);
-            // Mark task completed so it disappears from the calendar
-            await dbUpdate('tasks', task.id, { status: 'completed', completed_at: new Date().toISOString() });
+            await dbUpdate('tasks', task.id, { status: 'completed', completed_at: now.toISOString() });
           } else {
             const body = await emailRes.text();
-            console.error(`[cron] Resend error for reminder ${task.id}: ${emailRes.status} ${body}`);
-            skipped.push(`resend_err:${task.id}:${emailRes.status}`);
+            console.error(`[cron] Resend reminder error ${task.id}: ${emailRes.status} ${body}`);
+            skipped.push(`resend_err:${task.id}`);
           }
         }
       }
