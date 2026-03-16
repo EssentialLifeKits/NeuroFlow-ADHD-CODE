@@ -87,7 +87,7 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
 </table></td></tr></table></body></html>`;
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (!INSFORGE_URL || !INSFORGE_KEY || !RESEND_API_KEY) {
     console.error('[cron] Missing env vars:', { INSFORGE_URL: !!INSFORGE_URL, INSFORGE_KEY: !!INSFORGE_KEY, RESEND_API_KEY: !!RESEND_API_KEY });
     return res.status(500).json({ error: 'Missing required environment variables' });
