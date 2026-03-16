@@ -23,6 +23,7 @@ import { WebView } from 'react-native-webview';
 import { colors, radius, spacing, typography } from '../constants/theme';
 import { type Task } from '../lib/db';
 import { useTasks } from '../lib/TasksContext';
+import { useAuth } from '../lib/auth';
 import {
   type ADHDCategory,
   ADHD_CATEGORIES,
@@ -155,6 +156,7 @@ export default function ScheduleModal({
   const isDesktop = width > DESKTOP_BREAKPOINT;
 
   const { addTask, editTask } = useTasks();
+  const { user } = useAuth();
 
   const [taskDetails, setTaskDetails] = useState('');
   const [tags, setTags] = useState('');
@@ -265,6 +267,27 @@ export default function ScheduleModal({
 
     if (initialData?.id) { await editTask(initialData.id, taskInput); }
     else { await addTask(taskInput); }
+
+    // Schedule email reminder via Resend (skips InsForge entirely)
+    if (user?.email && reminderOffset !== 'none') {
+      try {
+        await fetch('/api/schedule-reminder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: taskDetails.trim(),
+            dueDate: dateStr,
+            dueTime: timeStr,
+            category,
+            userName: (user as any).displayName || user.email,
+            email: user.email,
+            reminderOffset,
+          }),
+        });
+      } catch (e) {
+        console.warn('[ScheduleModal] schedule-reminder failed:', e);
+      }
+    }
 
     handleClose();
     if (onToast) onToast();
