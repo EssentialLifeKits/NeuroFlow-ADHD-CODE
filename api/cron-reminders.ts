@@ -116,7 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const now = new Date();
-  const windowStart = new Date(now.getTime() - 2 * 60 * 1000); // 2 min window
+  const windowStart = new Date(now.getTime() - 5 * 60 * 1000); // 5 min window
   console.log(`[cron] Running at ${now.toISOString()}, window: ${windowStart.toISOString()} → ${now.toISOString()}`);
 
   // Fetch all tasks (filter in JS to avoid InsForge query param issues)
