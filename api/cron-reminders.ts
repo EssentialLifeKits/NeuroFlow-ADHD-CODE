@@ -120,9 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log(`[cron] Running at ${now.toISOString()}, window: ${windowStart.toISOString()} → ${now.toISOString()}`);
 
   // Fetch all tasks (filter in JS to avoid InsForge query param issues)
-  const { data: allTasks, error } = await dbSelect('tasks',
-    'id,title,due_date,due_time,chore_category,recurrence_rule,user_id,status',
-  );
+  const { data: allTasks, error } = await dbSelect('tasks', '*');
 
   if (error) {
     console.error('[cron] DB error fetching tasks:', error.message);
@@ -148,10 +146,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Try users table for email (simple equality filter)
     let userRow: { email?: string; display_name?: string } | undefined;
-    const { data: users } = await dbSelect('users', 'email,display_name', { id: task.user_id });
+    const { data: users } = await dbSelect('users', '*', { id: task.user_id });
     userRow = users?.[0];
     if (!userRow?.email) {
-      const { data: profiles } = await dbSelect('profiles', 'email,display_name', { id: task.user_id });
+      const { data: profiles } = await dbSelect('profiles', '*', { id: task.user_id });
       userRow = profiles?.[0];
     }
 
