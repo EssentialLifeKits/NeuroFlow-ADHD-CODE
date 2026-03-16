@@ -88,7 +88,7 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
 }
 
 module.exports = async function handler(req, res) {
-  try { return await run(req, res); } catch(e) { console.error('[cron] FATAL:', e); return res.status(500).json({ error: String(e) }); }
+  try { return await run(req, res); } catch(e) { console.error('[cron] FATAL:', e); return res.status(500).json({ error: String(e), cause: String(e?.cause ?? ''), url: INSFORGE_URL?.slice(0,30) }); }
 };
 
 async function run(req, res) {
