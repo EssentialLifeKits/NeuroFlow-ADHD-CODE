@@ -110,7 +110,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
           return updated;
         });
       } catch (e) {
-        // If DB fails (like Dev Bypass RLS issue), task remains locally in AsyncStorage!
+        console.error('[NeuroFlow] DB save FAILED — entry NOT persisted:', e);
       }
     }
   };
