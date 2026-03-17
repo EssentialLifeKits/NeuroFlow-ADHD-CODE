@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './auth';
 import { getOrCreateProfile, fetchTasks as dbFetchTasks, createTask as dbCreateTask, deleteTask as dbDeleteTask, toggleTask as dbToggleTask, type Task } from './db';
@@ -19,32 +19,29 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profileId, setProfileId] = useState<string | null>(null);
+  // Ref instead of state — addTask/editTask always get latest value without stale closures
+  const profileIdRef = useRef<string | null>(null);
 
-  const saveToCache = async (newTasks: Task[]) => {
-    try {
-      await AsyncStorage.setItem('@neuroflow_tasks', JSON.stringify(newTasks));
-    } catch {}
+  const saveToCache = (newTasks: Task[]) => {
+    AsyncStorage.setItem('@neuroflow_tasks', JSON.stringify(newTasks)).catch(() => {});
   };
 
-  const loadFromServer = useCallback(async (pid?: string) => {
-    const id = pid ?? profileId;
-    if (!id) return;
+  const fetchAndSetTasks = async (pid: string) => {
     const [d, w, m] = await Promise.all([
-      dbFetchTasks(id, 'daily'),
-      dbFetchTasks(id, 'weekly'),
-      dbFetchTasks(id, 'monthly'),
+      dbFetchTasks(pid, 'daily'),
+      dbFetchTasks(pid, 'weekly'),
+      dbFetchTasks(pid, 'monthly'),
     ]);
     const combined = [...d, ...w, ...m];
     setTasks(combined);
     saveToCache(combined);
-  }, [profileId]);
+  };
 
   useEffect(() => {
     if (!user) {
-      // User signed out — clear everything so stale entries never appear on next login
+      // User signed out — wipe everything
       setTasks([]);
-      setProfileId(null);
+      profileIdRef.current = null;
       AsyncStorage.removeItem('@neuroflow_tasks').catch(() => {});
       setLoading(false);
       return;
@@ -53,47 +50,48 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
       .then(async (p) => {
-        setProfileId(p.id);
-        // Always load fresh from server on login — never rely solely on cache
+        profileIdRef.current = p.id;
         try {
-          await loadFromServer(p.id);
+          await fetchAndSetTasks(p.id);
         } catch {
-          // Server failed — try loading from cache as fallback
+          // Server failed — load cache as fallback so user sees something
           try {
             const cached = await AsyncStorage.getItem('@neuroflow_tasks');
             if (cached) setTasks(JSON.parse(cached));
           } catch {}
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[TasksContext] getOrCreateProfile failed:', err);
+      })
       .finally(() => setLoading(false));
   }, [user]);
 
-  const refreshTasks = async () => {
-    try {
-      await loadFromServer();
-    } catch {}
-  };
+  const refreshTasks = useCallback(async () => {
+    const pid = profileIdRef.current;
+    if (!pid) return;
+    try { await fetchAndSetTasks(pid); } catch {}
+  }, []);
 
-  // addTask throws if the database save fails — caller must handle and alert the user
-  const addTask = async (taskInput: any) => {
-    if (!profileId) throw new Error('Not signed in — please sign in and try again.');
-
-    const saved = await dbCreateTask({ ...taskInput, user_id: profileId });
+  // addTask throws on failure so the caller can alert the user
+  const addTask = useCallback(async (taskInput: any) => {
+    const pid = profileIdRef.current;
+    if (!pid) throw new Error('Profile not ready — please wait a moment and try again.');
+    const saved = await dbCreateTask({ ...taskInput, user_id: pid });
     setTasks((prev) => {
       const updated = [...prev, saved];
       saveToCache(updated);
       return updated;
     });
-  };
+  }, []);
 
-  // editTask throws if the database save fails — caller must handle and alert the user
-  const editTask = async (taskId: string, taskInput: any) => {
-    if (!profileId) throw new Error('Not signed in — please sign in and try again.');
+  // editTask throws on failure so the caller can alert the user
+  const editTask = useCallback(async (taskId: string, taskInput: any) => {
+    const pid = profileIdRef.current;
+    if (!pid) throw new Error('Profile not ready — please wait a moment and try again.');
 
     if (taskId.startsWith('local-')) {
-      // This was a locally-only task — save it properly to DB now
-      const saved = await dbCreateTask({ ...taskInput, user_id: profileId });
+      const saved = await dbCreateTask({ ...taskInput, user_id: pid });
       setTasks(prev => {
         const updated = prev.map(t => t.id === taskId ? saved : t);
         saveToCache(updated);
@@ -102,35 +100,36 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Delete old record and insert updated one (preserves existing behaviour)
     await dbDeleteTask(taskId);
-    const saved = await dbCreateTask({ ...taskInput, user_id: profileId });
+    const saved = await dbCreateTask({ ...taskInput, user_id: pid });
     setTasks(prev => {
       const updated = prev.map(t => t.id === taskId ? saved : t);
       saveToCache(updated);
       return updated;
     });
-  };
+  }, []);
 
-  const updateTaskState = async (taskId: string, newStatus: any) => {
-    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null } : t);
+  const updateTaskState = useCallback(async (taskId: string, newStatus: any) => {
+    const updatedTasks = tasks.map(t => t.id === taskId
+      ? { ...t, status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null }
+      : t);
     setTasks(updatedTasks);
     saveToCache(updatedTasks);
-
-    if (profileId && !taskId.startsWith('local-')) {
+    const pid = profileIdRef.current;
+    if (pid && !taskId.startsWith('local-')) {
       try { await dbToggleTask(taskId, newStatus === 'completed' ? 'pending' : 'completed'); } catch {}
     }
-  };
+  }, [tasks]);
 
-  const removeTask = async (taskId: string) => {
+  const removeTask = useCallback(async (taskId: string) => {
     const updatedTasks = tasks.filter(t => t.id !== taskId);
     setTasks(updatedTasks);
     saveToCache(updatedTasks);
-
-    if (profileId && !taskId.startsWith('local-')) {
+    const pid = profileIdRef.current;
+    if (pid && !taskId.startsWith('local-')) {
       try { await dbDeleteTask(taskId); } catch {}
     }
-  };
+  }, [tasks]);
 
   return (
     <TasksContext.Provider value={{ tasks, loading, refreshTasks, addTask, editTask, updateTaskState, removeTask }}>
