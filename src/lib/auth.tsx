@@ -161,13 +161,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await insforge.auth.signOut();
     } catch {}
-    // Clear all stored tokens so the next Google login always requires fresh authentication
-    if (Platform.OS === 'web') {
-      // Remove every key the InsForge SDK may have written to localStorage
-      Object.keys(localStorage)
-        .filter(k => k.startsWith('insforge') || k.startsWith('sb-') || k.includes('auth'))
-        .forEach(k => localStorage.removeItem(k));
-    }
     setUser(null);
   }, []);
 

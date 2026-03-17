@@ -13,8 +13,7 @@ function RootNavigator() {
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Wait until auth is resolved AND segments are populated
-    if (isLoading || !segments[0]) return;
+    if (isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
     const inCallbackRoute = segments[0] === 'auth'; // /auth/callback — let it finish
