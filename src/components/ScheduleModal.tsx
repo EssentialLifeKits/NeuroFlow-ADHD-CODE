@@ -293,8 +293,16 @@ export default function ScheduleModal({
       recurrence_rule: reminderOffset, // store reminder offset in recurrence_rule column
     };
 
-    if (initialData?.id) { await editTask(initialData.id, taskInput); }
-    else { await addTask(taskInput); }
+    try {
+      if (initialData?.id) { await editTask(initialData.id, taskInput); }
+      else { await addTask(taskInput); }
+    } catch (saveErr: any) {
+      Alert.alert(
+        '❌ Entry Not Saved',
+        `Could not save to the database: ${saveErr?.message ?? 'Unknown error'}. Please check your connection and try again.`,
+      );
+      return;
+    }
 
     // Schedule email reminder via Resend (skips InsForge entirely)
     if (user?.email && reminderOffset !== 'none') {
@@ -354,8 +362,16 @@ export default function ScheduleModal({
       recurrence_rule: reminderOffset,
     };
 
-    if (initialData?.id) { await editTask(initialData.id, taskInput); }
-    else { await addTask(taskInput); }
+    try {
+      if (initialData?.id) { await editTask(initialData.id, taskInput); }
+      else { await addTask(taskInput); }
+    } catch (saveErr: any) {
+      Alert.alert(
+        '❌ Draft Not Saved',
+        `Could not save to the database: ${saveErr?.message ?? 'Unknown error'}. Please check your connection and try again.`,
+      );
+      return;
+    }
 
     handleClose();
     Alert.alert(
