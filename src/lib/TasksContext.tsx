@@ -51,11 +51,14 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   }, [profileId]);
 
   useEffect(() => {
-    loadFromCache();
     if (!user) {
+      setTasks([]);
+      setProfileId(null);
+      AsyncStorage.removeItem('@neuroflow_tasks').catch(() => {});
       setLoading(false);
       return;
     }
+    loadFromCache();
     getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
       .then((p) => {
         setProfileId(p.id);

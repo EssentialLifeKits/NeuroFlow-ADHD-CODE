@@ -161,6 +161,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await insforge.auth.signOut();
     } catch {}
+    if (Platform.OS === 'web') {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('insforge') || k.startsWith('sb-') || k.includes('auth'))
+        .forEach(k => localStorage.removeItem(k));
+    }
     setUser(null);
   }, []);
 
