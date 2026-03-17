@@ -84,10 +84,11 @@ export async function getOrCreateProfile(
   if (fetchErr) throw new Error(fetchErr.message);
   if (existing) return existing as UserProfile;
 
-  // Create profile on first login
+  // Create profile on first login — id MUST equal authUserId so tasks RLS (auth.uid() = user_id) works
   const { data: created, error: insertErr } = await insforge.database
     .from('users')
     .insert({
+      id: authUserId,
       auth_user_id: authUserId,
       email: email ?? '',
       display_name: displayName ?? null,
