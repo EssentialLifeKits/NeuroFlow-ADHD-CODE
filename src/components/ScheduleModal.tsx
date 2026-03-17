@@ -195,43 +195,46 @@ export default function ScheduleModal({
   const [pickedTime, setPickedTime] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const prevVisibleRef = useRef(false);
 
   useEffect(() => {
-    if (visible) {
-      if (initialData) {
-        setTaskDetails(initialData.title ?? '');
-        setTags(initialData.description ?? '');
-        const cat = (initialData.chore_category?.toLowerCase() ?? 'task') as ADHDCategory;
-        setCategory(ADHD_CATEGORIES[cat] ? cat : 'task');
-        // reminder_offset is stored in recurrence_rule (no new column needed)
-        const ro = initialData.recurrence_rule;
-        setReminderOffset((['none','at_time','1h_before','1d_before'].includes(ro ?? '') ? ro : 'none') as any);
-        setDetailsFocused(false);
-        setSelectedChipTime(null);
-        setAttachedFile(null);
-        if (initialData.due_date) setPickedDate(new Date(initialData.due_date + 'T00:00:00'));
-        else setPickedDate(initDate());
-        if (initialData.due_time) {
-          const d = new Date();
-          const [h, m] = initialData.due_time.split(':').map(Number);
-          d.setHours(h, m, 0, 0);
-          setPickedTime(d);
-        } else setPickedTime(new Date());
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    // Only initialise form state when modal opens (false → true), never while already open
+    if (!visible || wasVisible) return;
 
-        if (initialData.sticker_id && initialData.sticker_id.startsWith('{')) {
-          try {
-            const p = JSON.parse(initialData.sticker_id);
-            setAttachedFile({ uri: p.uri || p.thumbnail || '', type: p.type, name: p.name || 'media', width: p.width, height: p.height });
-            setThumbnailTime(p.thumbTime ?? null);
-            setCapturedThumbnail(p.thumbnail ?? null);
-          } catch {}
-        }
-      } else {
-        setTaskDetails(''); setTags(''); setCategory('task'); setReminderOffset('none');
-        setDetailsFocused(false); setSelectedChipTime(null); setAttachedFile(null); setUploadSuccess(false);
-        setThumbnailTime(null); setCapturedThumbnail(null);
-        setPickedDate(initDate()); setPickedTime(new Date());
+    if (initialData) {
+      setTaskDetails(initialData.title ?? '');
+      setTags(initialData.description ?? '');
+      const cat = (initialData.chore_category?.toLowerCase() ?? 'task') as ADHDCategory;
+      setCategory(ADHD_CATEGORIES[cat] ? cat : 'task');
+      const ro = initialData.recurrence_rule;
+      setReminderOffset((['none','at_time','1h_before','1d_before'].includes(ro ?? '') ? ro : 'none') as any);
+      setDetailsFocused(false);
+      setSelectedChipTime(null);
+      setAttachedFile(null);
+      if (initialData.due_date) setPickedDate(new Date(initialData.due_date + 'T00:00:00'));
+      else setPickedDate(initDate());
+      if (initialData.due_time) {
+        const d = new Date();
+        const [h, m] = initialData.due_time.split(':').map(Number);
+        d.setHours(h, m, 0, 0);
+        setPickedTime(d);
+      } else setPickedTime(new Date());
+
+      if (initialData.sticker_id && initialData.sticker_id.startsWith('{')) {
+        try {
+          const p = JSON.parse(initialData.sticker_id);
+          setAttachedFile({ uri: p.uri || p.thumbnail || '', type: p.type, name: p.name || 'media', width: p.width, height: p.height });
+          setThumbnailTime(p.thumbTime ?? null);
+          setCapturedThumbnail(p.thumbnail ?? null);
+        } catch {}
       }
+    } else {
+      setTaskDetails(''); setTags(''); setCategory('task'); setReminderOffset('none');
+      setDetailsFocused(false); setSelectedChipTime(null); setAttachedFile(null); setUploadSuccess(false);
+      setThumbnailTime(null); setCapturedThumbnail(null);
+      setPickedDate(initDate()); setPickedTime(new Date());
     }
   }, [visible, selectedDate, initialData]);
 
