@@ -34,6 +34,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Play, Pause, Square, Trash2 } from 'lucide-react-native';
 import { useAuth } from '../../src/lib/auth';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
@@ -191,6 +192,7 @@ const hr = StyleSheet.create({
 // ─── Hyperfocus Lotus ─────────────────────────────────────────────────────────
 export default function FocusScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Timer state
@@ -223,6 +225,7 @@ export default function FocusScreen() {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<Date | null>(null);
+  const endReasonRef = useRef<'complete' | 'abandon'>('complete');
 
   const cfg = SESSIONS[selectedIdx];
 
@@ -377,37 +380,9 @@ export default function FocusScreen() {
   const handlePause = () => setTimerState((p) => (p === 'running' ? 'paused' : 'running'));
 
   const handleStop = () => {
-    Alert.alert('End session?', 'Your progress will be saved.', [
-      { text: 'Keep going', style: 'cancel' },
-      {
-        text: 'End session', style: 'destructive',
-        onPress: async () => {
-          setTimerState('idle');
-          const elapsed = startTimeRef.current
-            ? Math.round((Date.now() - startTimeRef.current.getTime()) / 60000)
-            : 0;
-          if (activeSession) {
-            try {
-              await abandonFocusSession(activeSession.id, elapsed);
-              const updated = { ...activeSession, status: 'abandoned' as const, actual_duration_min: elapsed };
-              setSessions((p) => [updated, ...p]);
-              // Save to Productivity Insights
-              setInsights((p) => [{
-                id: activeSession.id,
-                sessionType: activeSession.session_type,
-                plannedMin: activeSession.planned_duration_min,
-                actualMin: elapsed,
-                mood: null,
-                completedAt: new Date().toISOString(),
-              }, ...p]);
-            } catch { }
-          }
-          setActiveSession(null);
-          startTimeRef.current = null;
-          setSecondsLeft(cfg.duration * 60);
-        },
-      },
-    ]);
+    endReasonRef.current = 'abandon';
+    setTimerState('idle');
+    setShowMood(true);
   };
 
   const handleMoodSubmit = async (mood: number) => {
@@ -417,20 +392,34 @@ export default function FocusScreen() {
       : cfg.duration;
     if (activeSession) {
       try {
-        await completeFocusSession(activeSession.id, elapsed, mood);
-        const updated = { ...activeSession, status: 'completed' as const, actual_duration_min: elapsed, mood_after: mood };
-        setSessions((p) => [updated, ...p]);
-        // ── Save to Productivity Insights ──
-        setInsights((p) => [{
-          id: activeSession.id,
-          sessionType: activeSession.session_type,
-          plannedMin: activeSession.planned_duration_min,
-          actualMin: elapsed,
-          mood,
-          completedAt: new Date().toISOString(),
-        }, ...p]);
+        if (endReasonRef.current === 'abandon') {
+          await abandonFocusSession(activeSession.id, elapsed, mood);
+          const updated = { ...activeSession, status: 'abandoned' as const, actual_duration_min: elapsed, mood_after: mood };
+          setSessions((p) => [updated, ...p]);
+          setInsights((p) => [{
+            id: activeSession.id,
+            sessionType: activeSession.session_type,
+            plannedMin: activeSession.planned_duration_min,
+            actualMin: elapsed,
+            mood,
+            completedAt: new Date().toISOString(),
+          }, ...p]);
+        } else {
+          await completeFocusSession(activeSession.id, elapsed, mood);
+          const updated = { ...activeSession, status: 'completed' as const, actual_duration_min: elapsed, mood_after: mood };
+          setSessions((p) => [updated, ...p]);
+          setInsights((p) => [{
+            id: activeSession.id,
+            sessionType: activeSession.session_type,
+            plannedMin: activeSession.planned_duration_min,
+            actualMin: elapsed,
+            mood,
+            completedAt: new Date().toISOString(),
+          }, ...p]);
+        }
       } catch { }
     }
+    endReasonRef.current = 'complete';
     setActiveSession(null);
     startTimeRef.current = null;
     setSecondsLeft(cfg.duration * 60);
@@ -656,6 +645,15 @@ export default function FocusScreen() {
             {sessions.slice(0, 8).map((sess) => <HistoryRow key={sess.id} session={sess} />)}
           </View>
         )}
+
+        {/* ── View All Session Logs link ── */}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/session-log')}
+          activeOpacity={0.7}
+          style={s.viewLogsBtn}
+        >
+          <Text style={s.viewLogsBtnText}>📋 View All Session Logs</Text>
+        </TouchableOpacity>
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -901,4 +899,8 @@ const s = StyleSheet.create({
   audioControlIcon: { fontSize: 18 },
   audioPlayBtn: { width: 48, height: 48, borderRadius: radius.full, backgroundColor: NF_BLUE, alignItems: 'center', justifyContent: 'center', shadowColor: NF_BLUE, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
   audioPlayIcon: { fontSize: 20, color: '#fff' },
+
+  // View All Logs button
+  viewLogsBtn: { alignItems: 'center', paddingVertical: spacing.sm },
+  viewLogsBtnText: { fontSize: typography.fontSizeSm, color: NF_BLUE, fontWeight: '600' },
 });

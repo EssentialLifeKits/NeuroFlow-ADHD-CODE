@@ -105,8 +105,9 @@ export default function AppLayout() {
           <Tabs.Screen name="calendar" options={{ title: 'Calendar', tabBarIcon: ({ color, size }) => <CalendarDays color={color} size={size} strokeWidth={2} /> }} />
           <Tabs.Screen name="focus" options={{ title: 'Focus', tabBarIcon: ({ color, size }) => <Zap color={color} size={size} strokeWidth={2} /> }} />
           <Tabs.Screen name="resources" options={{ title: 'Resources', tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} strokeWidth={2} /> }} />
-          {/* Hidden screen — not in tab bar, accessible via router.push */}
+          {/* Hidden screens — not in tab bar, accessible via router.push */}
           <Tabs.Screen name="all-actions" options={{ href: null, title: 'All Actions' }} />
+          <Tabs.Screen name="session-log" options={{ href: null, title: 'Session Log' }} />
         </Tabs>
       </View>
 

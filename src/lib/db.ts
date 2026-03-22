@@ -187,14 +187,36 @@ export async function completeFocusSession(
 export async function abandonFocusSession(
   sessionId: string,
   actualDurationMin: number,
+  moodAfter?: number,
 ): Promise<void> {
   const { error } = await insforge.database
     .from('focus_sessions')
     .update({
       status: 'abandoned',
       actual_duration_min: actualDurationMin,
+      mood_after: moodAfter ?? null,
       ended_at: new Date().toISOString(),
     })
+    .eq('id', sessionId);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function fetchAllSessions(profileId: string): Promise<FocusSession[]> {
+  const { data, error } = await insforge.database
+    .from('focus_sessions')
+    .select('*')
+    .eq('user_id', profileId)
+    .order('started_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as FocusSession[];
+}
+
+export async function deleteFocusSession(sessionId: string): Promise<void> {
+  const { error } = await insforge.database
+    .from('focus_sessions')
+    .delete()
     .eq('id', sessionId);
 
   if (error) throw new Error(error.message);
