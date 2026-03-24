@@ -18,6 +18,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 
 const NF_BLUE = '#4A90E2';
@@ -183,6 +184,7 @@ function ResourceCard({ resource, delay, cardWidth }: { resource: Resource; dela
 // ─── Resources Screen ─────────────────────────────────────────────────────────
 export default function ResourcesScreen() {
   const { width } = useWindowDimensions();
+  const router = useRouter();
   const headerOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -212,9 +214,14 @@ export default function ResourcesScreen() {
 
         {/* Header — Fix #7: NF Blue, no Instagram */}
         <Animated.View style={[styles.header, { opacity: headerOpacity }]}>
-          <View>
-            <Text style={styles.pageTitle}>Resources</Text>
-            <Text style={styles.pageSub}>Tools & guides for focus masters</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Pressable onPress={() => router.push('/(app)/focus')} style={styles.backBtn}>
+              <Text style={styles.backBtnText}>‹</Text>
+            </Pressable>
+            <View>
+              <Text style={styles.pageTitle}>Resources</Text>
+              <Text style={styles.pageSub}>Tools & guides for focus masters</Text>
+            </View>
           </View>
           <View style={styles.todayIndicator}>
             <PulsingDot />
@@ -286,4 +293,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 17, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.3 },
   cardDesc: { fontSize: 14, color: colors.textSecondary, lineHeight: 22 },
   cardLink: { fontSize: 14, fontWeight: '700', marginTop: 6 },
+  backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,144,226,0.12)', justifyContent: 'center', alignItems: 'center' },
+  backBtnText: { fontSize: 22, color: NF_BLUE, lineHeight: 28, fontWeight: '600' },
 });

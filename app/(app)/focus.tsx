@@ -33,7 +33,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Play, Pause, Square, Trash2 } from 'lucide-react-native';
+import { Play, Pause, Square, Trash2, ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '../../src/lib/auth';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import {
@@ -746,9 +746,14 @@ export default function FocusScreen() {
 
         {/* ── Header ── */}
         <Animated.View style={[s.header, { opacity: headerOpacity, transform: [{ translateY: headerTranslateY }] }]}>
-          <View>
-            <Text style={s.title}>Hyperfocus Lotus</Text>
-            <Text style={s.subtitle}>Deep work, ADHD-friendly</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity onPress={() => router.push('/(app)/calendar')} style={s.backBtn} activeOpacity={0.7}>
+              <ArrowLeft size={16} color={NF_BLUE} />
+            </TouchableOpacity>
+            <View>
+              <Text style={s.title}>Hyperfocus Lotus</Text>
+              <Text style={s.subtitle}>Deep work, ADHD-friendly</Text>
+            </View>
           </View>
           <View style={s.headerRight}>
             <View style={s.todayBadge}>
@@ -1132,6 +1137,7 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
   title: { fontSize: typography.fontSizeXxl, fontWeight: '700', color: NF_BLUE },
   subtitle: { fontSize: typography.fontSizeSm, color: colors.textSecondary, marginTop: 2 },
+  backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,144,226,0.12)', justifyContent: 'center', alignItems: 'center', marginTop: 4 },
   headerRight: { alignItems: 'flex-end', gap: 8 },
   todayBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(52, 211, 153, 0.25)' },
   todayBadgeText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
