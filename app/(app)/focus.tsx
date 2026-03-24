@@ -145,6 +145,46 @@ function MoodModal({
         Animated.spring(scale, { toValue: 1, friction: 7, tension: 45, useNativeDriver: true }),
         Animated.spring(celebScale, { toValue: 1, friction: 5, tension: 60, useNativeDriver: true }),
       ]).start();
+
+      // Fire confetti for completions (not abandon)
+      if (!isAbandon && typeof window !== 'undefined') {
+        import('canvas-confetti').then((mod) => {
+          const confetti = mod.default;
+          // Parse hex color to rgb for confetti
+          const hex = sessionColor.replace('#', '');
+          const r = parseInt(hex.slice(0, 2), 16) / 255;
+          const g = parseInt(hex.slice(2, 4), 16) / 255;
+          const b = parseInt(hex.slice(4, 6), 16) / 255;
+          const lighter = sessionColor;
+          // Burst from center-top
+          confetti({
+            particleCount: 90,
+            spread: 70,
+            origin: { x: 0.5, y: 0.35 },
+            colors: [sessionColor, '#ffffff', sessionColor + 'cc', '#ffffffaa'],
+            scalar: 1.1,
+            gravity: 0.9,
+            drift: 0.1,
+          });
+          // Second burst slightly delayed for extra punch
+          setTimeout(() => confetti({
+            particleCount: 50,
+            spread: 50,
+            angle: 60,
+            origin: { x: 0.15, y: 0.4 },
+            colors: [sessionColor, '#ffffff'],
+            scalar: 0.9,
+          }), 150);
+          setTimeout(() => confetti({
+            particleCount: 50,
+            spread: 50,
+            angle: 120,
+            origin: { x: 0.85, y: 0.4 },
+            colors: [sessionColor, '#ffffff'],
+            scalar: 0.9,
+          }), 200);
+        }).catch(() => { });
+      }
     } else {
       opacity.setValue(0);
       scale.setValue(0.88);
