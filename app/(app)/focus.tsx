@@ -442,6 +442,24 @@ const dm = StyleSheet.create({
   saveText: { fontSize: typography.fontSizeSm, color: '#fff', fontWeight: '700' },
 });
 
+// ─── View Logs Button (hover effect on web) ───────────────────────────────────
+function ViewLogsButton({ onPress, style, textStyle }: { onPress: () => void; style: any; textStyle: any }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[style, hovered && { backgroundColor: '#3578c8', shadowOpacity: 0.75, shadowRadius: 20 }]}
+      {...(typeof window !== 'undefined' ? {
+        onMouseEnter: () => setHovered(true),
+        onMouseLeave: () => setHovered(false),
+      } : {})}
+    >
+      <Text style={textStyle}>📋 View All Session Logs</Text>
+    </TouchableOpacity>
+  );
+}
+
 // ─── Hyperfocus Lotus ─────────────────────────────────────────────────────────
 export default function FocusScreen() {
   const { user } = useAuth();
@@ -954,13 +972,7 @@ export default function FocusScreen() {
         </View>
 
         {/* ── View All Session Logs link ── */}
-        <TouchableOpacity
-          onPress={() => router.push('/(app)/session-log')}
-          activeOpacity={0.7}
-          style={s.viewLogsBtn}
-        >
-          <Text style={s.viewLogsBtnText}>📋 View All Session Logs</Text>
-        </TouchableOpacity>
+        <ViewLogsButton onPress={() => router.push('/(app)/session-log')} style={s.viewLogsBtn} textStyle={s.viewLogsBtnText} />
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
