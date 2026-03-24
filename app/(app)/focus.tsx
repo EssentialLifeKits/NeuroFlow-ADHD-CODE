@@ -119,31 +119,87 @@ const MOODS = [
   { emoji: '😊', label: 'Great' },
 ];
 
-function MoodModal({ visible, onSubmit }: { visible: boolean; onSubmit: (m: number) => void }) {
-  const scale = useRef(new Animated.Value(0.92)).current;
+function MoodModal({
+  visible,
+  onSubmit,
+  sessionColor,
+  sessionEmoji,
+  sessionLabel: sLabel,
+  isAbandon,
+}: {
+  visible: boolean;
+  onSubmit: (m: number) => void;
+  sessionColor: string;
+  sessionEmoji: string;
+  sessionLabel: string;
+  isAbandon: boolean;
+}) {
+  const scale = useRef(new Animated.Value(0.88)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const celebScale = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.spring(scale, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 7, tension: 45, useNativeDriver: true }),
+        Animated.spring(celebScale, { toValue: 1, friction: 5, tension: 60, useNativeDriver: true }),
       ]).start();
-    } else { opacity.setValue(0); scale.setValue(0.92); }
+    } else {
+      opacity.setValue(0);
+      scale.setValue(0.88);
+      celebScale.setValue(0.6);
+    }
   }, [visible]);
 
+  const headline = isAbandon
+    ? '⏹ Session ended'
+    : sLabel.includes('Focus')
+      ? '🎉 You crushed it!'
+      : sLabel.includes('Short')
+        ? '🌿 Break complete!'
+        : '🌙 Long break done!';
+
+  const sub = isAbandon
+    ? 'Good effort — every minute counts.'
+    : 'Amazing work. How are you feeling?';
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={md.overlay}>
-        <Animated.View style={[md.sheet, { opacity, transform: [{ scale }] }]}>
-          <Text style={md.emoji}>✨</Text>
-          <Text style={md.title}>Session complete!</Text>
-          <Text style={md.sub}>How do you feel right now?</Text>
+    <Modal visible={visible} transparent animationType="none">
+      <View style={[md.overlay, { backgroundColor: `${sessionColor}18` }]}>
+        {/* Glow backdrop */}
+        <View style={[md.glowCircle, { backgroundColor: sessionColor + '22', shadowColor: sessionColor }]} />
+        <Animated.View style={[
+          md.sheet,
+          {
+            opacity,
+            transform: [{ scale }],
+            borderColor: sessionColor + '55',
+            borderTopWidth: 3,
+            borderTopColor: sessionColor,
+          },
+        ]}>
+          {/* Celebration icon */}
+          <Animated.Text style={[md.emoji, { transform: [{ scale: celebScale }] }]}>
+            {isAbandon ? '⏹' : sessionEmoji}
+          </Animated.Text>
+
+          {/* Colored headline */}
+          <Text style={[md.title, { color: sessionColor }]}>{headline}</Text>
+          <Text style={md.sessionTag}>{sLabel}</Text>
+          <Text style={md.sub}>{sub}</Text>
+
+          {/* Mood row */}
           <View style={md.row}>
             {MOODS.map((m, i) => (
-              <TouchableOpacity key={i} onPress={() => onSubmit(i + 1)} style={md.btn} activeOpacity={0.75}>
+              <TouchableOpacity
+                key={i}
+                onPress={() => onSubmit(i + 1)}
+                style={[md.btn, { borderColor: sessionColor + '44' }]}
+                activeOpacity={0.7}
+              >
                 <Text style={md.moodEmoji}>{m.emoji}</Text>
-                <Text style={md.moodLabel}>{m.label}</Text>
+                <Text style={[md.moodLabel, { color: sessionColor }]}>{m.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -154,15 +210,39 @@ function MoodModal({ visible, onSubmit }: { visible: boolean; onSubmit: (m: numb
 }
 
 const md = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
-  sheet: { backgroundColor: colors.bgCard, borderRadius: radius.xl, padding: spacing.xl, width: '100%', alignItems: 'center', gap: spacing.md },
-  emoji: { fontSize: 40 },
-  title: { fontSize: typography.fontSizeXl, fontWeight: '700', color: colors.textPrimary },
-  sub: { fontSize: typography.fontSizeSm, color: colors.textSecondary },
-  row: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  btn: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.bgElevated },
-  moodEmoji: { fontSize: 26 },
-  moodLabel: { fontSize: typography.fontSizeXs, color: colors.textSecondary, fontWeight: '600' },
+  overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  glowCircle: {
+    position: 'absolute',
+    width: 320, height: 320,
+    borderRadius: 160,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 60,
+    elevation: 0,
+  },
+  sheet: {
+    backgroundColor: colors.bgCard,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 420,
+    alignItems: 'center',
+    gap: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  emoji: { fontSize: 48, marginBottom: 2 },
+  title: { fontSize: typography.fontSizeXl, fontWeight: '800', textAlign: 'center' },
+  sessionTag: { fontSize: typography.fontSizeXs, color: colors.textTertiary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
+  sub: { fontSize: typography.fontSizeSm, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xs },
+  row: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs, width: '100%' },
+  btn: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: colors.bgElevated, borderWidth: 1 },
+  moodEmoji: { fontSize: 24 },
+  moodLabel: { fontSize: 9, fontWeight: '700' },
 });
 
 // ─── History row ──────────────────────────────────────────────────────────────
@@ -835,7 +915,14 @@ export default function FocusScreen() {
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
 
-      <MoodModal visible={showMood} onSubmit={handleMoodSubmit} />
+      <MoodModal
+        visible={showMood}
+        onSubmit={handleMoodSubmit}
+        sessionColor={cfg.color}
+        sessionEmoji={cfg.emoji}
+        sessionLabel={cfg.label}
+        isAbandon={endReasonRef.current === 'abandon'}
+      />
       <DiaryModal
         visible={showDiary}
         text={diaryText}
