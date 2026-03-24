@@ -1266,6 +1266,18 @@ const s = StyleSheet.create({
   audioPlayIcon: { fontSize: 20, color: '#fff' },
 
   // View All Logs button
-  viewLogsBtn: { alignItems: 'center', paddingVertical: spacing.sm },
-  viewLogsBtnText: { fontSize: typography.fontSizeSm, color: NF_BLUE, fontWeight: '600' },
+  viewLogsBtn: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: NF_BLUE,
+    alignItems: 'center',
+    shadowColor: NF_BLUE,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  viewLogsBtnText: { fontSize: 15, color: '#fff', fontWeight: '700', letterSpacing: 0.3 },
 });
