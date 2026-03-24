@@ -264,7 +264,7 @@ export default function SessionLogScreen() {
         <ScrollView
           style={s.scroll}
           contentContainerStyle={s.scrollContent}
-          showsVerticalScrollIndicator={false}
+          showsVerticalScrollIndicator
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

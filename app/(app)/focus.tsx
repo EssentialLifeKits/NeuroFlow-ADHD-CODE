@@ -32,7 +32,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Play, Pause, Square, Trash2 } from 'lucide-react-native';
 import { useAuth } from '../../src/lib/auth';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
@@ -168,11 +168,14 @@ const md = StyleSheet.create({
 function HistoryRow({ session, onRemove }: { session: FocusSession; onRemove: (id: string) => void }) {
   const dot = session.status === 'completed' ? colors.success : session.status === 'abandoned' ? colors.error : colors.textMuted;
   const mood = session.mood_after ? MOODS[session.mood_after - 1]?.emoji : null;
-  const durationLabel = session.actual_duration_min ? `${session.actual_duration_min}m` : '<1m';
+  const mins = session.actual_duration_min ?? 0;
+  const minLabel = mins > 0 ? `${mins}m` : '<1m';
+  const statusSuffix = session.status === 'completed' ? 'Completed' : session.status === 'abandoned' ? 'Ended early' : '';
+  const durationLabel = statusSuffix ? `${minLabel} ${statusSuffix}` : minLabel;
   return (
     <View style={hr.row}>
       <View style={[hr.dot, { backgroundColor: dot }]} />
-      <Text style={hr.label}>{sessionLabel(session.session_type)} · {durationLabel}</Text>
+      <Text style={hr.label} numberOfLines={1}>{sessionLabel(session.session_type)} · {durationLabel}</Text>
       {mood && <Text style={hr.mood}>{mood}</Text>}
       <Text style={hr.time}>
         {new Date(session.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
@@ -398,10 +401,13 @@ export default function FocusScreen() {
       });
   }, [user]);
 
-  useEffect(() => {
-    if (!profile) return;
-    fetchTodaysSessions(profile.id).then(setSessions).catch(() => { });
-  }, [profile]);
+  // Reload today's sessions every time this screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile) return;
+      fetchTodaysSessions(profile.id).then(setSessions).catch(() => { });
+    }, [profile]),
+  );
 
   // ─── Countdown ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -726,18 +732,20 @@ export default function FocusScreen() {
         )}
 
         {/* ── Today's session history (from DB) ── */}
-        {sessions.length > 0 && (
-          <View style={s.historyCard}>
-            <Text style={s.historyTitle}>
-              Today · {sessions.length} session{sessions.length !== 1 ? 's' : ''}
-            </Text>
-            <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+        <View style={s.historyCard}>
+          <Text style={s.historyTitle}>
+            Today · {sessions.length} session{sessions.length !== 1 ? 's' : ''}
+          </Text>
+          {sessions.length === 0 ? (
+            <Text style={s.historyEmpty}>No sessions yet today. Start one above!</Text>
+          ) : (
+            <ScrollView style={s.historyScroll} nestedScrollEnabled showsVerticalScrollIndicator>
               {sessions.map((sess) => (
                 <HistoryRow key={sess.id} session={sess} onRemove={handleRemoveSession} />
               ))}
             </ScrollView>
-          </View>
-        )}
+          )}
+        </View>
 
         {/* ── View All Session Logs link ── */}
         <TouchableOpacity
@@ -952,6 +960,8 @@ const s = StyleSheet.create({
   // History
   historyCard: { backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: spacing.xs },
   historyTitle: { fontSize: typography.fontSizeSm, fontWeight: '700', color: colors.textSecondary, marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.8 },
+  historyScroll: { maxHeight: 260 },
+  historyEmpty: { fontSize: typography.fontSizeXs, color: colors.textTertiary, fontStyle: 'italic', textAlign: 'center', paddingVertical: spacing.sm },
 
   // PDF popup
   pdfOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },

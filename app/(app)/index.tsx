@@ -6,7 +6,7 @@
  * ✅ All state, data syncing, and animations unchanged
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
@@ -20,7 +20,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../src/lib/auth';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import {
@@ -177,18 +177,20 @@ export default function DashboardScreen() {
   const greetingEmoji = hour < 12 ? '🌸' : hour < 17 ? '☀️' : '🌙';
   const greetingName = displayName;
 
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
-      .then((p) => fetchTodaysSessions(p.id))
-      .then((sessionData) => {
-        if (!cancelled) setSessions(sessionData ?? []);
-      })
-      .catch(() => { })
-      .finally(() => { if (!cancelled) setSessionLoading(false); });
-    return () => { cancelled = true; };
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      let cancelled = false;
+      getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
+        .then((p) => fetchTodaysSessions(p.id))
+        .then((sessionData) => {
+          if (!cancelled) setSessions(sessionData ?? []);
+        })
+        .catch(() => { })
+        .finally(() => { if (!cancelled) setSessionLoading(false); });
+      return () => { cancelled = true; };
+    }, [user]),
+  );
 
   const today = new Date();
   const todayStr = [
