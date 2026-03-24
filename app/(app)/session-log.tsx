@@ -63,7 +63,7 @@ function groupByDate(sessions: FocusSession[]): { label: string; sessions: Focus
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(s);
   }
-  return Array.from(map.entries()).map(([key, items]) => ({
+  return Array.from(map.entries()).map(([, items]) => ({
     label: formatDate(items[0].started_at),
     sessions: items,
   }));
@@ -115,6 +115,9 @@ function SessionRow({
           <Text style={row.timeText}>{formatTime(session.started_at)}</Text>
           {mood && <Text style={row.moodLabel}>{mood.label}</Text>}
         </View>
+        {session.notes ? (
+          <Text style={row.notesText}>📝 {session.notes}</Text>
+        ) : null}
       </View>
       {/* Delete button */}
       <TouchableOpacity onPress={handleDelete} style={row.deleteBtn} activeOpacity={0.7}>
@@ -146,6 +149,7 @@ const row = StyleSheet.create({
   statusText: { fontSize: typography.fontSizeXs, color: colors.textTertiary },
   timeText: { fontSize: typography.fontSizeXs, color: colors.textTertiary },
   moodLabel: { fontSize: typography.fontSizeXs, color: NF_BLUE, fontWeight: '600' },
+  notesText: { fontSize: typography.fontSizeXs, color: colors.textSecondary, fontStyle: 'italic', marginTop: 2 },
   deleteBtn: {
     padding: spacing.md,
     alignSelf: 'stretch',
@@ -215,7 +219,9 @@ export default function SessionLogScreen() {
           <Text style={s.title}>Session Logs</Text>
           <Text style={s.subtitle}>Your full focus history</Text>
         </View>
-        <View style={s.backBtn} />
+        <TouchableOpacity onPress={() => router.push('/(app)/calendar')} style={s.calBtn} activeOpacity={0.7}>
+          <Text style={s.calBtnText}>📅 Calendar</Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── Summary Stats ── */}
@@ -296,6 +302,8 @@ const s = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  calBtn: { paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radius.full, borderWidth: 1, borderColor: NF_BLUE + '55' },
+  calBtnText: { fontSize: 11, fontWeight: '700', color: NF_BLUE },
   headerCenter: { flex: 1, alignItems: 'center' },
   title: { fontSize: typography.fontSizeLg, fontWeight: '700', color: NF_BLUE },
   subtitle: { fontSize: typography.fontSizeXs, color: colors.textSecondary, marginTop: 2 },

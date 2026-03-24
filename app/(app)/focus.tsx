@@ -20,10 +20,8 @@ import React, {
   useCallback,
 } from 'react';
 import {
-  Alert,
   Animated,
   ActivityIndicator,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -43,6 +41,7 @@ import {
   createFocusSession,
   completeFocusSession,
   abandonFocusSession,
+  deleteFocusSession,
   fetchTodaysSessions,
   type FocusSession,
   type SessionType,
@@ -166,17 +165,21 @@ const md = StyleSheet.create({
 });
 
 // ─── History row ──────────────────────────────────────────────────────────────
-function HistoryRow({ session }: { session: FocusSession }) {
+function HistoryRow({ session, onRemove }: { session: FocusSession; onRemove: (id: string) => void }) {
   const dot = session.status === 'completed' ? colors.success : session.status === 'abandoned' ? colors.error : colors.textMuted;
   const mood = session.mood_after ? MOODS[session.mood_after - 1]?.emoji : null;
+  const durationLabel = session.actual_duration_min ? `${session.actual_duration_min}m` : '<1m';
   return (
     <View style={hr.row}>
       <View style={[hr.dot, { backgroundColor: dot }]} />
-      <Text style={hr.label}>{sessionLabel(session.session_type)}{session.actual_duration_min ? ` · ${session.actual_duration_min}m` : ''}</Text>
+      <Text style={hr.label}>{sessionLabel(session.session_type)} · {durationLabel}</Text>
       {mood && <Text style={hr.mood}>{mood}</Text>}
       <Text style={hr.time}>
         {new Date(session.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
       </Text>
+      <TouchableOpacity onPress={() => onRemove(session.id)} style={hr.delBtn} activeOpacity={0.7}>
+        <Trash2 size={13} color={colors.error} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -187,6 +190,81 @@ const hr = StyleSheet.create({
   label: { flex: 1, fontSize: typography.fontSizeSm, color: colors.textPrimary, fontWeight: '500' },
   mood: { fontSize: 16 },
   time: { fontSize: typography.fontSizeXs, color: colors.textMuted },
+  delBtn: { padding: 4 },
+});
+
+// ─── Diary Modal ──────────────────────────────────────────────────────────────
+function DiaryModal({ visible, text, onChangeText, onSave, onSkip }: {
+  visible: boolean;
+  text: string;
+  onChangeText: (t: string) => void;
+  onSave: () => void;
+  onSkip: () => void;
+}) {
+  const scale = useRef(new Animated.Value(0.92)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }),
+      ]).start();
+    } else { opacity.setValue(0); scale.setValue(0.92); }
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="none">
+      <View style={dm.overlay}>
+        <Animated.View style={[dm.sheet, { opacity, transform: [{ scale }] }]}>
+          <Text style={dm.emoji}>📝</Text>
+          <Text style={dm.title}>Session Diary</Text>
+          <Text style={dm.sub}>Optional — jot down any thoughts from this session</Text>
+          <TextInput
+            style={dm.input}
+            multiline
+            numberOfLines={4}
+            placeholder="How did it go? What did you accomplish?"
+            placeholderTextColor={colors.textTertiary}
+            value={text}
+            onChangeText={onChangeText}
+            textAlignVertical="top"
+          />
+          <View style={dm.btnRow}>
+            <TouchableOpacity onPress={onSkip} style={dm.skipBtn} activeOpacity={0.75}>
+              <Text style={dm.skipText}>Skip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onSave} style={dm.saveBtn} activeOpacity={0.85}>
+              <Text style={dm.saveText}>💾 Save Note</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+const dm = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  sheet: { backgroundColor: colors.bgCard, borderRadius: radius.xl, padding: spacing.xl, width: '100%', maxWidth: 480, gap: spacing.md },
+  emoji: { fontSize: 36, textAlign: 'center' },
+  title: { fontSize: typography.fontSizeXl, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' },
+  sub: { fontSize: typography.fontSizeSm, color: colors.textSecondary, textAlign: 'center' },
+  input: {
+    backgroundColor: colors.bgElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: typography.fontSizeSm,
+    color: colors.textPrimary,
+    minHeight: 100,
+  },
+  btnRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  skipBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  skipText: { fontSize: typography.fontSizeSm, color: colors.textSecondary, fontWeight: '600' },
+  saveBtn: { flex: 2, paddingVertical: spacing.sm, borderRadius: radius.md, backgroundColor: NF_BLUE, alignItems: 'center' },
+  saveText: { fontSize: typography.fontSizeSm, color: '#fff', fontWeight: '700' },
 });
 
 // ─── Hyperfocus Lotus ─────────────────────────────────────────────────────────
@@ -203,6 +281,11 @@ export default function FocusScreen() {
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [showMood, setShowMood] = useState(false);
   const [starting, setStarting] = useState(false);
+
+  // Session Diary
+  const [showDiary, setShowDiary] = useState(false);
+  const [diaryText, setDiaryText] = useState('');
+  const pendingRef = useRef<{ session: FocusSession; elapsed: number; mood: number; isAbandon: boolean } | null>(null);
 
   // Distraction Parking Lot
   const [distractionInput, setDistractionInput] = useState('');
@@ -385,37 +468,37 @@ export default function FocusScreen() {
     setShowMood(true);
   };
 
-  const handleMoodSubmit = async (mood: number) => {
+  // Mood selected → store pending data, show diary
+  const handleMoodSubmit = (mood: number) => {
     setShowMood(false);
     const elapsed = startTimeRef.current
       ? Math.round((Date.now() - startTimeRef.current.getTime()) / 60000)
       : cfg.duration;
     if (activeSession) {
+      pendingRef.current = { session: activeSession, elapsed, mood, isAbandon: endReasonRef.current === 'abandon' };
+    }
+    setDiaryText('');
+    setShowDiary(true);
+  };
+
+  // Diary saved or skipped → finalize session in DB, reset timer
+  const handleDiaryFinish = async (notes: string | null) => {
+    setShowDiary(false);
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    if (pending) {
+      const { session, elapsed, mood, isAbandon } = pending;
       try {
-        if (endReasonRef.current === 'abandon') {
-          await abandonFocusSession(activeSession.id, elapsed, mood);
-          const updated = { ...activeSession, status: 'abandoned' as const, actual_duration_min: elapsed, mood_after: mood };
+        if (isAbandon) {
+          await abandonFocusSession(session.id, elapsed, mood, notes);
+          const updated = { ...session, status: 'abandoned' as const, actual_duration_min: elapsed, mood_after: mood, notes: notes ?? null };
           setSessions((p) => [updated, ...p]);
-          setInsights((p) => [{
-            id: activeSession.id,
-            sessionType: activeSession.session_type,
-            plannedMin: activeSession.planned_duration_min,
-            actualMin: elapsed,
-            mood,
-            completedAt: new Date().toISOString(),
-          }, ...p]);
+          setInsights((p) => [{ id: session.id, sessionType: session.session_type, plannedMin: session.planned_duration_min, actualMin: elapsed, mood, completedAt: new Date().toISOString() }, ...p]);
         } else {
-          await completeFocusSession(activeSession.id, elapsed, mood);
-          const updated = { ...activeSession, status: 'completed' as const, actual_duration_min: elapsed, mood_after: mood };
+          await completeFocusSession(session.id, elapsed, mood, notes);
+          const updated = { ...session, status: 'completed' as const, actual_duration_min: elapsed, mood_after: mood, notes: notes ?? null };
           setSessions((p) => [updated, ...p]);
-          setInsights((p) => [{
-            id: activeSession.id,
-            sessionType: activeSession.session_type,
-            plannedMin: activeSession.planned_duration_min,
-            actualMin: elapsed,
-            mood,
-            completedAt: new Date().toISOString(),
-          }, ...p]);
+          setInsights((p) => [{ id: session.id, sessionType: session.session_type, plannedMin: session.planned_duration_min, actualMin: elapsed, mood, completedAt: new Date().toISOString() }, ...p]);
         }
       } catch { }
     }
@@ -423,6 +506,12 @@ export default function FocusScreen() {
     setActiveSession(null);
     startTimeRef.current = null;
     setSecondsLeft(cfg.duration * 60);
+  };
+
+  // Delete a session from today's history
+  const handleRemoveSession = async (sessionId: string) => {
+    setSessions((p) => p.filter((s) => s.id !== sessionId));
+    try { await deleteFocusSession(sessionId); } catch { }
   };
 
   const handleSelectSession = (i: number) => {
@@ -640,9 +729,13 @@ export default function FocusScreen() {
         {sessions.length > 0 && (
           <View style={s.historyCard}>
             <Text style={s.historyTitle}>
-              Today · {completedFocus.length} session{completedFocus.length !== 1 ? 's' : ''}
+              Today · {sessions.length} session{sessions.length !== 1 ? 's' : ''}
             </Text>
-            {sessions.slice(0, 8).map((sess) => <HistoryRow key={sess.id} session={sess} />)}
+            <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+              {sessions.map((sess) => (
+                <HistoryRow key={sess.id} session={sess} onRemove={handleRemoveSession} />
+              ))}
+            </ScrollView>
           </View>
         )}
 
@@ -659,6 +752,13 @@ export default function FocusScreen() {
       </ScrollView>
 
       <MoodModal visible={showMood} onSubmit={handleMoodSubmit} />
+      <DiaryModal
+        visible={showDiary}
+        text={diaryText}
+        onChangeText={setDiaryText}
+        onSave={() => handleDiaryFinish(diaryText.trim() || null)}
+        onSkip={() => handleDiaryFinish(null)}
+      />
 
       {/* ── PDF Popup Modal ── */}
       <Modal visible={pdfOpen} transparent animationType="fade" onRequestClose={() => setPdfOpen(false)}>

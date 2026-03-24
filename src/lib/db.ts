@@ -170,6 +170,7 @@ export async function completeFocusSession(
   sessionId: string,
   actualDurationMin: number,
   moodAfter?: number,
+  notes?: string | null,
 ): Promise<void> {
   const { error } = await insforge.database
     .from('focus_sessions')
@@ -177,6 +178,7 @@ export async function completeFocusSession(
       status: 'completed',
       actual_duration_min: actualDurationMin,
       mood_after: moodAfter ?? null,
+      notes: notes ?? null,
       ended_at: new Date().toISOString(),
     })
     .eq('id', sessionId);
@@ -188,6 +190,7 @@ export async function abandonFocusSession(
   sessionId: string,
   actualDurationMin: number,
   moodAfter?: number,
+  notes?: string | null,
 ): Promise<void> {
   const { error } = await insforge.database
     .from('focus_sessions')
@@ -195,6 +198,7 @@ export async function abandonFocusSession(
       status: 'abandoned',
       actual_duration_min: actualDurationMin,
       mood_after: moodAfter ?? null,
+      notes: notes ?? null,
       ended_at: new Date().toISOString(),
     })
     .eq('id', sessionId);
