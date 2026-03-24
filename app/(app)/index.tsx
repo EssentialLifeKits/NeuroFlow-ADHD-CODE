@@ -26,6 +26,7 @@ import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import {
   getOrCreateProfile,
   fetchTodaysSessions,
+  fetchWeekSessions,
   type Task,
   type FocusSession,
 } from '../../src/lib/db';
@@ -162,6 +163,7 @@ export default function DashboardScreen() {
 
   const { tasks, loading: tasksLoading, removeTask } = useTasks();
   const [sessions, setSessions] = useState<FocusSession[]>([]);
+  const [weekSessions, setWeekSessions] = useState<FocusSession[]>([]);
   const [sessionLoading, setSessionLoading] = useState(true);
 
   const loading = tasksLoading || sessionLoading;
@@ -182,9 +184,12 @@ export default function DashboardScreen() {
       if (!user) return;
       let cancelled = false;
       getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
-        .then((p) => fetchTodaysSessions(p.id))
-        .then((sessionData) => {
-          if (!cancelled) setSessions(sessionData ?? []);
+        .then((p) => Promise.all([fetchTodaysSessions(p.id), fetchWeekSessions(p.id)]))
+        .then(([todayData, weekData]) => {
+          if (!cancelled) {
+            setSessions(todayData ?? []);
+            setWeekSessions(weekData ?? []);
+          }
         })
         .catch(() => { })
         .finally(() => { if (!cancelled) setSessionLoading(false); });
@@ -199,17 +204,27 @@ export default function DashboardScreen() {
     String(today.getDate()).padStart(2, '0'),
   ].join('-');
   const todayTasks = tasks.filter((t) => t.due_date === todayStr);
-  const completedToday = todayTasks.filter((t) => t.status === 'completed').length;
   const pendingToday = todayTasks.filter((t) => t.status === 'pending').length;
 
+  // All session minutes logged today (any type, any status with actual time)
+  const doneMinToday = sessions
+    .filter((s) => s.actual_duration_min != null && s.actual_duration_min > 0)
+    .reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
+
+  // Focus-only minutes this week (Mon–Sun)
+  const focusMinWeek = weekSessions
+    .filter((s) => s.session_type === 'focus' && s.actual_duration_min != null)
+    .reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
+
+  // Keep focusMinToday for the Quick Start card subtitle
   const focusMinToday = sessions
-    .filter((s) => s.session_type === 'focus' && s.status === 'completed')
+    .filter((s) => s.session_type === 'focus' && s.actual_duration_min != null)
     .reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
 
   const statCards = [
-    { label: 'Done Today', value: loading ? '…' : String(completedToday), accent: colors.success },
+    { label: 'Done Today', value: loading ? '…' : doneMinToday ? `${doneMinToday}m` : '—', accent: colors.success },
     { label: 'Remaining', value: loading ? '…' : String(pendingToday), accent: NF_BLUE },
-    { label: 'Focus Time', value: loading ? '…' : focusMinToday ? `${focusMinToday}m` : '—', accent: colors.info },
+    { label: 'Focus Time\nThis Week', value: loading ? '…' : focusMinWeek ? `${focusMinWeek}m` : '—', accent: colors.info },
   ];
 
   const topPending = tasks

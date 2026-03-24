@@ -249,3 +249,23 @@ export async function fetchTodaysSessions(profileId: string): Promise<FocusSessi
   if (error) throw new Error(error.message);
   return (data ?? []) as FocusSession[];
 }
+
+export async function fetchWeekSessions(profileId: string): Promise<FocusSession[]> {
+  // Start of current week (Monday 00:00:00 local time)
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun, 1=Mon...
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  const { data, error } = await insforge.database
+    .from('focus_sessions')
+    .select('*')
+    .eq('user_id', profileId)
+    .gte('started_at', monday.toISOString())
+    .order('started_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as FocusSession[];
+}
