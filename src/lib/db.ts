@@ -217,6 +217,15 @@ export async function fetchAllSessions(profileId: string): Promise<FocusSession[
   return (data ?? []) as FocusSession[];
 }
 
+export async function updateSessionNote(sessionId: string, notes: string | null): Promise<void> {
+  const { error } = await insforge.database
+    .from('focus_sessions')
+    .update({ notes: notes ?? null })
+    .eq('id', sessionId);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteFocusSession(sessionId: string): Promise<void> {
   const { error } = await insforge.database
     .from('focus_sessions')

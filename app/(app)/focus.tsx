@@ -42,6 +42,7 @@ import {
   completeFocusSession,
   abandonFocusSession,
   deleteFocusSession,
+  updateSessionNote,
   fetchTodaysSessions,
   type FocusSession,
   type SessionType,
@@ -165,7 +166,15 @@ const md = StyleSheet.create({
 });
 
 // ─── History row ──────────────────────────────────────────────────────────────
-function HistoryRow({ session, onRemove }: { session: FocusSession; onRemove: (id: string) => void }) {
+function HistoryRow({
+  session,
+  onRemove,
+  onEditNote,
+}: {
+  session: FocusSession;
+  onRemove: (id: string) => void;
+  onEditNote: (session: FocusSession) => void;
+}) {
   const dot = session.status === 'completed' ? colors.success : session.status === 'abandoned' ? colors.error : colors.textMuted;
   const mood = session.mood_after ? MOODS[session.mood_after - 1]?.emoji : null;
   const mins = session.actual_duration_min ?? 0;
@@ -173,13 +182,27 @@ function HistoryRow({ session, onRemove }: { session: FocusSession; onRemove: (i
   const statusSuffix = session.status === 'completed' ? 'Completed' : session.status === 'abandoned' ? 'Ended early' : '';
   const durationLabel = statusSuffix ? `${minLabel} ${statusSuffix}` : minLabel;
   return (
-    <View style={hr.row}>
-      <View style={[hr.dot, { backgroundColor: dot }]} />
-      <Text style={hr.label} numberOfLines={1}>{sessionLabel(session.session_type)} · {durationLabel}</Text>
-      {mood && <Text style={hr.mood}>{mood}</Text>}
-      <Text style={hr.time}>
-        {new Date(session.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-      </Text>
+    <View style={hr.card}>
+      <View style={[hr.colorBar, { backgroundColor: dot }]} />
+      <View style={hr.body}>
+        <View style={hr.topRow}>
+          <View style={[hr.dot, { backgroundColor: dot }]} />
+          <Text style={hr.label} numberOfLines={1}>{sessionLabel(session.session_type)} · {durationLabel}</Text>
+          {mood && <Text style={hr.mood}>{mood}</Text>}
+          <Text style={hr.time}>
+            {new Date(session.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+          </Text>
+        </View>
+        {session.notes ? (
+          <TouchableOpacity onPress={() => onEditNote(session)} activeOpacity={0.7}>
+            <Text style={hr.notesText} numberOfLines={2}>📝 {session.notes}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => onEditNote(session)} activeOpacity={0.7}>
+            <Text style={hr.addNoteText}>+ Add note</Text>
+          </TouchableOpacity>
+        )}
+      </View>
       <TouchableOpacity onPress={() => onRemove(session.id)} style={hr.delBtn} activeOpacity={0.7}>
         <Trash2 size={13} color={colors.error} />
       </TouchableOpacity>
@@ -188,12 +211,33 @@ function HistoryRow({ session, onRemove }: { session: FocusSession; onRemove: (i
 }
 
 const hr = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgElevated,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+  },
+  colorBar: { width: 3, alignSelf: 'stretch' },
+  body: { flex: 1, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, gap: 2 },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   dot: { width: 8, height: 8, borderRadius: radius.full },
   label: { flex: 1, fontSize: typography.fontSizeSm, color: colors.textPrimary, fontWeight: '500' },
-  mood: { fontSize: 16 },
+  mood: { fontSize: 14 },
   time: { fontSize: typography.fontSizeXs, color: colors.textMuted },
-  delBtn: { padding: 4 },
+  notesText: { fontSize: typography.fontSizeXs, color: colors.textSecondary, fontStyle: 'italic' },
+  addNoteText: { fontSize: typography.fontSizeXs, color: NF_BLUE, fontWeight: '600' },
+  delBtn: {
+    padding: spacing.md,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+  },
 });
 
 // ─── Diary Modal ──────────────────────────────────────────────────────────────
@@ -290,6 +334,10 @@ export default function FocusScreen() {
   const [diaryText, setDiaryText] = useState('');
   const pendingRef = useRef<{ session: FocusSession; elapsed: number; mood: number; isAbandon: boolean } | null>(null);
 
+  // Note editing (for existing sessions)
+  const [editingNoteSession, setEditingNoteSession] = useState<FocusSession | null>(null);
+  const [editNoteText, setEditNoteText] = useState('');
+
   // Distraction Parking Lot
   const [distractionInput, setDistractionInput] = useState('');
   const [distractions, setDistractions] = useState<Distraction[]>([]);
@@ -385,28 +433,29 @@ export default function FocusScreen() {
     };
   }, [timerState]);
 
-  // ─── Data ─────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
-      .then(setProfile)
-      .catch(() => {
-        setProfile({
-          id: user.id, auth_user_id: user.id,
-          email: (user as any).email ?? '',
-          display_name: (user as any).displayName ?? 'User',
-          avatar_url: null, timezone: 'UTC', onboarded: false,
-          created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-        });
-      });
-  }, [user]);
-
-  // Reload today's sessions every time this screen comes into focus
+  // ─── Data — load profile + sessions every time screen is focused ──────────
   useFocusEffect(
     useCallback(() => {
-      if (!profile) return;
-      fetchTodaysSessions(profile.id).then(setSessions).catch(() => { });
-    }, [profile]),
+      if (!user) return;
+      let cancelled = false;
+      const fallbackProfile: UserProfile = {
+        id: user.id, auth_user_id: user.id,
+        email: (user as any).email ?? '',
+        display_name: (user as any).displayName ?? 'User',
+        avatar_url: null, timezone: 'UTC', onboarded: false,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      };
+      getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
+        .catch(() => fallbackProfile)
+        .then((p) => {
+          if (cancelled) return;
+          setProfile(p);
+          return fetchTodaysSessions(p.id);
+        })
+        .then((data) => { if (!cancelled && data) setSessions(data); })
+        .catch(() => { });
+      return () => { cancelled = true; };
+    }, [user]),
   );
 
   // ─── Countdown ────────────────────────────────────────────────────────────
@@ -518,6 +567,24 @@ export default function FocusScreen() {
   const handleRemoveSession = async (sessionId: string) => {
     setSessions((p) => p.filter((s) => s.id !== sessionId));
     try { await deleteFocusSession(sessionId); } catch { }
+  };
+
+  // Open note editor for an existing session
+  const handleEditNote = (sess: FocusSession) => {
+    setEditingNoteSession(sess);
+    setEditNoteText(sess.notes ?? '');
+  };
+
+  // Save edited note to DB + local state
+  const handleSaveEditedNote = async (notes: string | null) => {
+    const sess = editingNoteSession;
+    setEditingNoteSession(null);
+    setEditNoteText('');
+    if (!sess) return;
+    try {
+      await updateSessionNote(sess.id, notes);
+      setSessions((p) => p.map((s) => s.id === sess.id ? { ...s, notes: notes ?? null } : s));
+    } catch { }
   };
 
   const handleSelectSession = (i: number) => {
@@ -741,7 +808,7 @@ export default function FocusScreen() {
           ) : (
             <ScrollView style={s.historyScroll} nestedScrollEnabled showsVerticalScrollIndicator>
               {sessions.map((sess) => (
-                <HistoryRow key={sess.id} session={sess} onRemove={handleRemoveSession} />
+                <HistoryRow key={sess.id} session={sess} onRemove={handleRemoveSession} onEditNote={handleEditNote} />
               ))}
             </ScrollView>
           )}
@@ -767,6 +834,47 @@ export default function FocusScreen() {
         onSave={() => handleDiaryFinish(diaryText.trim() || null)}
         onSkip={() => handleDiaryFinish(null)}
       />
+
+      {/* ── Note Edit Modal — tap "Add note" or existing note to open ── */}
+      <Modal visible={!!editingNoteSession} transparent animationType="fade" onRequestClose={() => setEditingNoteSession(null)}>
+        <View style={dm.overlay}>
+          <Animated.View style={dm.sheet}>
+            <Text style={dm.emoji}>📝</Text>
+            <Text style={dm.title}>Session Note</Text>
+            <Text style={dm.sub}>Edit or delete your note for this session</Text>
+            <TextInput
+              style={dm.input}
+              multiline
+              numberOfLines={4}
+              placeholder="Jot down any thoughts from this session..."
+              placeholderTextColor={colors.textTertiary}
+              value={editNoteText}
+              onChangeText={setEditNoteText}
+              textAlignVertical="top"
+              autoFocus
+            />
+            <View style={dm.btnRow}>
+              <TouchableOpacity
+                onPress={() => handleSaveEditedNote(null)}
+                style={[dm.skipBtn, { borderColor: colors.error + '55' }]}
+                activeOpacity={0.75}
+              >
+                <Text style={[dm.skipText, { color: colors.error }]}>🗑 Delete</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleSaveEditedNote(editNoteText.trim() || null)}
+                style={dm.saveBtn}
+                activeOpacity={0.85}
+              >
+                <Text style={dm.saveText}>💾 Save</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={() => setEditingNoteSession(null)} activeOpacity={0.7} style={{ alignItems: 'center', paddingVertical: 4 }}>
+              <Text style={{ fontSize: typography.fontSizeXs, color: colors.textTertiary }}>Cancel</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
 
       {/* ── PDF Popup Modal ── */}
       <Modal visible={pdfOpen} transparent animationType="fade" onRequestClose={() => setPdfOpen(false)}>
