@@ -247,7 +247,7 @@ export default function SessionLogScreen() {
     <SafeAreaView style={s.safe}>
       {/* ── Header ── */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => router.push('/(app)/focus')} style={s.backBtn} activeOpacity={0.7}>
           <ArrowLeft size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
@@ -312,7 +312,7 @@ export default function SessionLogScreen() {
         >
           {groups.map((group) => (
             <View key={group.label}>
-              <Text style={s.dateHeader}>{group.label}</Text>
+              <Text style={[s.dateHeader, group.label === 'Today' && s.dateHeaderToday]}>{group.label}</Text>
               {group.sessions.map((sess) => (
                 <SessionRow key={sess.id} session={sess} onDelete={handleDelete} onEditNote={handleEditNote} />
               ))}
@@ -409,6 +409,13 @@ const s = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: spacing.sm,
     marginTop: spacing.md,
+  },
+  dateHeaderToday: {
+    color: '#34D399',
+    fontWeight: '800',
+    textShadowColor: 'rgba(52,211,153,0.55)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
 
   centerState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.md },
