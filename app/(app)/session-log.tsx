@@ -120,15 +120,16 @@ function SessionRow({
           <Text style={row.timeText}>{formatTime(session.started_at)}</Text>
           {mood && <Text style={row.moodLabel}>{mood.label}</Text>}
         </View>
-        {session.notes ? (
-          <TouchableOpacity onPress={() => onEditNote(session)} activeOpacity={0.7}>
-            <Text style={row.notesText}>📝 {session.notes}</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={() => onEditNote(session)} activeOpacity={0.7}>
-            <Text style={row.addNoteText}>+ Add note</Text>
-          </TouchableOpacity>
+        {/* Note preview snippet */}
+        {session.notes && (
+          <Text style={row.notesText}>📝 {session.notes}</Text>
         )}
+        {/* Note action button */}
+        <TouchableOpacity onPress={() => onEditNote(session)} activeOpacity={0.7} style={row.noteBtn}>
+          <Text style={session.notes ? row.noteBtnTextHas : row.noteBtnTextAdd}>
+            {session.notes ? '📝 View Note' : '+ Add note'}
+          </Text>
+        </TouchableOpacity>
       </View>
       {/* Delete button */}
       <TouchableOpacity onPress={handleDelete} style={row.deleteBtn} activeOpacity={0.7}>
@@ -161,7 +162,9 @@ const row = StyleSheet.create({
   timeText: { fontSize: typography.fontSizeXs, color: colors.textTertiary },
   moodLabel: { fontSize: typography.fontSizeXs, color: NF_BLUE, fontWeight: '600' },
   notesText: { fontSize: typography.fontSizeXs, color: colors.textSecondary, fontStyle: 'italic', marginTop: 2 },
-  addNoteText: { fontSize: typography.fontSizeXs, color: NF_BLUE, fontWeight: '600', marginTop: 2 },
+  noteBtn: { alignSelf: 'flex-start', marginTop: 3, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 999, borderWidth: 1, borderColor: NF_BLUE + '55', backgroundColor: NF_BLUE + '12' },
+  noteBtnTextHas: { fontSize: 10, fontWeight: '700', color: NF_BLUE },
+  noteBtnTextAdd: { fontSize: 10, fontWeight: '600', color: colors.textTertiary },
   deleteBtn: {
     padding: spacing.md,
     alignSelf: 'stretch',
@@ -279,6 +282,7 @@ export default function SessionLogScreen() {
       )}
 
       {/* ── List ── */}
+      <View style={{ flex: 1 }}>
       {loading ? (
         <View style={s.centerState}>
           <ActivityIndicator color={NF_BLUE} size="large" />
@@ -317,6 +321,7 @@ export default function SessionLogScreen() {
           <View style={{ height: spacing.xxl }} />
         </ScrollView>
       )}
+      </View>
 
       {/* ── Note Edit Modal ── */}
       <Modal visible={!!editingNoteSession} transparent animationType="fade" onRequestClose={() => setEditingNoteSession(null)}>

@@ -193,15 +193,16 @@ function HistoryRow({
             {new Date(session.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
           </Text>
         </View>
-        {session.notes ? (
-          <TouchableOpacity onPress={() => onEditNote(session)} activeOpacity={0.7}>
-            <Text style={hr.notesText} numberOfLines={2}>📝 {session.notes}</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity onPress={() => onEditNote(session)} activeOpacity={0.7}>
-            <Text style={hr.addNoteText}>+ Add note</Text>
-          </TouchableOpacity>
+        {/* Note preview snippet — always visible */}
+        {session.notes && (
+          <Text style={hr.notesText} numberOfLines={1}>📝 {session.notes}</Text>
         )}
+        {/* Note action button — "📝 View Note" or "+ Add note" */}
+        <TouchableOpacity onPress={() => onEditNote(session)} activeOpacity={0.7} style={hr.noteBtn}>
+          <Text style={session.notes ? hr.noteBtnTextHas : hr.noteBtnTextAdd}>
+            {session.notes ? '📝 View Note' : '+ Add note'}
+          </Text>
+        </TouchableOpacity>
       </View>
       <TouchableOpacity onPress={() => onRemove(session.id)} style={hr.delBtn} activeOpacity={0.7}>
         <Trash2 size={13} color={colors.error} />
@@ -229,7 +230,9 @@ const hr = StyleSheet.create({
   mood: { fontSize: 14 },
   time: { fontSize: typography.fontSizeXs, color: colors.textMuted },
   notesText: { fontSize: typography.fontSizeXs, color: colors.textSecondary, fontStyle: 'italic' },
-  addNoteText: { fontSize: typography.fontSizeXs, color: NF_BLUE, fontWeight: '600' },
+  noteBtn: { alignSelf: 'flex-start', marginTop: 2, paddingVertical: 2, paddingHorizontal: 8, borderRadius: radius.full, borderWidth: 1, borderColor: NF_BLUE + '55', backgroundColor: NF_BLUE + '12' },
+  noteBtnTextHas: { fontSize: 10, fontWeight: '700', color: NF_BLUE },
+  noteBtnTextAdd: { fontSize: 10, fontWeight: '600', color: colors.textTertiary },
   delBtn: {
     padding: spacing.md,
     alignSelf: 'stretch',
@@ -806,7 +809,13 @@ export default function FocusScreen() {
           {sessions.length === 0 ? (
             <Text style={s.historyEmpty}>No sessions yet today. Start one above!</Text>
           ) : (
-            <ScrollView style={s.historyScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+            <ScrollView
+              style={s.historyScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              scrollEnabled
+              bounces={false}
+            >
               {sessions.map((sess) => (
                 <HistoryRow key={sess.id} session={sess} onRemove={handleRemoveSession} onEditNote={handleEditNote} />
               ))}
@@ -1067,8 +1076,8 @@ const s = StyleSheet.create({
 
   // History
   historyCard: { backgroundColor: colors.bgCard, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: spacing.xs },
-  historyTitle: { fontSize: typography.fontSizeSm, fontWeight: '700', color: colors.textSecondary, marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.8 },
-  historyScroll: { maxHeight: 260 },
+  historyTitle: { fontSize: typography.fontSizeSm, fontWeight: '800', color: '#34D399', marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.8, textShadowColor: 'rgba(52,211,153,0.55)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 },
+  historyScroll: { maxHeight: 280, overflow: 'scroll' as any },
   historyEmpty: { fontSize: typography.fontSizeXs, color: colors.textTertiary, fontStyle: 'italic', textAlign: 'center', paddingVertical: spacing.sm },
 
   // PDF popup
