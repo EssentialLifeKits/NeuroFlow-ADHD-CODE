@@ -37,6 +37,16 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const loadFromServer = useCallback(async () => {
     if (!profileId) return;
     try {
+      // First, retry saving any local-* tasks that failed to persist previously
+      const cached = await AsyncStorage.getItem('@neuroflow_tasks').catch(() => null);
+      const cachedTasks: Task[] = cached ? JSON.parse(cached) : [];
+      const unsynced = cachedTasks.filter((t) => t.id.startsWith('local-'));
+      for (const t of unsynced) {
+        try {
+          await dbCreateTask({ ...t, user_id: profileId });
+        } catch {}
+      }
+
       const [d, w, m] = await Promise.all([
         dbFetchTasks(profileId, 'daily'),
         dbFetchTasks(profileId, 'weekly'),
@@ -46,18 +56,19 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
       setTasks(combined);
       saveToCache(combined);
     } catch {
-       // if server fails, keep cache
+      // If server fails, keep showing cached tasks
     }
   }, [profileId]);
 
   useEffect(() => {
     if (!user) {
+      // Sign-out: clear state but keep the cache so data is visible immediately on next login
       setTasks([]);
       setProfileId(null);
-      AsyncStorage.removeItem('@neuroflow_tasks').catch(() => {});
       setLoading(false);
       return;
     }
+    // Show cached tasks immediately while server fetch runs
     loadFromCache();
     getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
       .then((p) => {
