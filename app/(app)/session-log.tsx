@@ -28,6 +28,15 @@ import { useAuth } from '../../src/lib/auth';
 
 const NF_BLUE = '#4A90E2';
 
+/** Shows exact duration: 45s · 1m 30s · 5m */
+function formatDuration(mins: number): string {
+  const totalSec = Math.round(mins * 60);
+  if (totalSec < 60) return `${totalSec}s`;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const MOODS = [
   { emoji: '😞', label: 'Rough' },
@@ -85,7 +94,7 @@ function SessionRow({
   const dotColor = session.status === 'completed' ? colors.success : colors.error;
   const mood = session.mood_after ? MOODS[session.mood_after - 1] : null;
   const mins = session.actual_duration_min != null ? session.actual_duration_min : session.planned_duration_min;
-  const minLabel = mins > 0 ? `${mins}m` : '<1m';
+  const minLabel = formatDuration(mins);
   const statusLabel = session.status === 'completed' ? 'Completed' : 'Ended early';
 
   const handleDelete = () => {
@@ -268,7 +277,7 @@ export default function SessionLogScreen() {
           </View>
           <View style={s.statDivider} />
           <View style={s.statItem}>
-            <Text style={[s.statValue, { color: colors.success }]}>{totalMin}m</Text>
+            <Text style={[s.statValue, { color: colors.success }]}>{formatDuration(totalMin)}</Text>
             <Text style={s.statLabel}>Focus Time</Text>
           </View>
           <View style={s.statDivider} />

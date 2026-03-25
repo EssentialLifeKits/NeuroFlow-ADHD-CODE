@@ -53,6 +53,15 @@ import {
 const NF_BLUE = '#4A90E2';
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
+/** Shows exact duration: 45s · 1m 30s · 5m */
+function formatDuration(mins: number): string {
+  const totalSec = Math.round(mins * 60);
+  if (totalSec < 60) return `${totalSec}s`;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
 function PulsingDot() {
   const scale = useRef(new Animated.Value(0.7)).current;
   const opac = useRef(new Animated.Value(0.5)).current;
@@ -303,7 +312,7 @@ function HistoryRow({
   const dot = session.status === 'completed' ? colors.success : session.status === 'abandoned' ? colors.error : colors.textMuted;
   const mood = session.mood_after ? MOODS[session.mood_after - 1]?.emoji : null;
   const mins = session.actual_duration_min ?? 0;
-  const minLabel = mins > 0 ? `${mins}m` : '<1m';
+  const minLabel = mins > 0 ? formatDuration(mins) : '0s';
   const statusSuffix = session.status === 'completed' ? 'Completed' : session.status === 'abandoned' ? 'Ended early' : '';
   const durationLabel = statusSuffix ? `${minLabel} ${statusSuffix}` : minLabel;
   return (
@@ -672,9 +681,9 @@ export default function FocusScreen() {
   // Mood selected → store pending data, show diary
   const handleMoodSubmit = (mood: number) => {
     setShowMood(false);
-    // Use actual elapsed seconds, floor to minutes, minimum 1 minute so every session is counted
+    // Store exact elapsed time as fractional minutes (e.g. 0.75 = 45s) — no rounding, no minimum
     const elapsedMs = startTimeRef.current ? Date.now() - startTimeRef.current.getTime() : cfg.duration * 60000;
-    const elapsed = Math.max(1, Math.round(elapsedMs / 60000));
+    const elapsed = Math.max(elapsedMs / 60000, 1 / 60); // at least 1 second
     if (activeSession) {
       pendingRef.current = { session: activeSession, elapsed, mood, isAbandon: endReasonRef.current === 'abandon' };
     }
@@ -692,7 +701,7 @@ export default function FocusScreen() {
       const isLocal = session.id.startsWith('local-');
       const updated = {
         ...session,
-        status: (isAbandon ? 'abandoned' : 'completed') as const,
+        status: (isAbandon ? 'abandoned' as const : 'completed' as const),
         actual_duration_min: elapsed,
         mood_after: mood,
         notes: notes ?? null,
@@ -937,7 +946,7 @@ export default function FocusScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={s.insightLabel}>{sess?.label ?? ins.sessionType}</Text>
                     <Text style={s.insightMeta}>
-                      {ins.actualMin}m of {ins.plannedMin}m planned
+                      {formatDuration(ins.actualMin)} of {ins.plannedMin}m planned
                       {moodEm ? `  ${moodEm}` : ''}
                     </Text>
                   </View>
@@ -952,7 +961,7 @@ export default function FocusScreen() {
             <View style={s.insightSummary}>
               <Text style={s.insightSummaryText}>
                 🔥 {insights.filter((i) => i.sessionType === 'focus').length} focus sessions ·{' '}
-                {insights.filter((i) => i.sessionType === 'focus').reduce((a, b) => a + b.actualMin, 0)}m total
+                {formatDuration(insights.filter((i) => i.sessionType === 'focus').reduce((a, b) => a + b.actualMin, 0))} total
               </Text>
             </View>
           </View>
