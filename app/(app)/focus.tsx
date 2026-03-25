@@ -672,9 +672,9 @@ export default function FocusScreen() {
   // Mood selected → store pending data, show diary
   const handleMoodSubmit = (mood: number) => {
     setShowMood(false);
-    const elapsed = startTimeRef.current
-      ? Math.round((Date.now() - startTimeRef.current.getTime()) / 60000)
-      : cfg.duration;
+    // Use actual elapsed seconds, floor to minutes, minimum 1 minute so every session is counted
+    const elapsedMs = startTimeRef.current ? Date.now() - startTimeRef.current.getTime() : cfg.duration * 60000;
+    const elapsed = Math.max(1, Math.round(elapsedMs / 60000));
     if (activeSession) {
       pendingRef.current = { session: activeSession, elapsed, mood, isAbandon: endReasonRef.current === 'abandon' };
     }
@@ -689,19 +689,28 @@ export default function FocusScreen() {
     pendingRef.current = null;
     if (pending) {
       const { session, elapsed, mood, isAbandon } = pending;
-      try {
-        if (isAbandon) {
-          await abandonFocusSession(session.id, elapsed, mood, notes);
-          const updated = { ...session, status: 'abandoned' as const, actual_duration_min: elapsed, mood_after: mood, notes: notes ?? null };
-          setSessions((p) => [updated, ...p]);
-          setInsights((p) => [{ id: session.id, sessionType: session.session_type, plannedMin: session.planned_duration_min, actualMin: elapsed, mood, completedAt: new Date().toISOString() }, ...p]);
-        } else {
-          await completeFocusSession(session.id, elapsed, mood, notes);
-          const updated = { ...session, status: 'completed' as const, actual_duration_min: elapsed, mood_after: mood, notes: notes ?? null };
-          setSessions((p) => [updated, ...p]);
-          setInsights((p) => [{ id: session.id, sessionType: session.session_type, plannedMin: session.planned_duration_min, actualMin: elapsed, mood, completedAt: new Date().toISOString() }, ...p]);
-        }
-      } catch { }
+      const isLocal = session.id.startsWith('local-');
+      const updated = {
+        ...session,
+        status: (isAbandon ? 'abandoned' : 'completed') as const,
+        actual_duration_min: elapsed,
+        mood_after: mood,
+        notes: notes ?? null,
+        ended_at: new Date().toISOString(),
+      };
+      // Always update local state immediately so it shows in Today's Sessions
+      setSessions((p) => [updated, ...p]);
+      setInsights((p) => [{ id: session.id, sessionType: session.session_type, plannedMin: session.planned_duration_min, actualMin: elapsed, mood, completedAt: new Date().toISOString() }, ...p]);
+      // Persist to DB only for real sessions (not local fallback IDs)
+      if (!isLocal) {
+        try {
+          if (isAbandon) {
+            await abandonFocusSession(session.id, elapsed, mood, notes);
+          } else {
+            await completeFocusSession(session.id, elapsed, mood, notes);
+          }
+        } catch { }
+      }
     }
     endReasonRef.current = 'complete';
     setActiveSession(null);

@@ -235,19 +235,26 @@ export async function deleteFocusSession(sessionId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// Returns "YYYY-MM-DD" in local time
+function localDateString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export async function fetchTodaysSessions(profileId: string): Promise<FocusSession[]> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Filter by local date string so timezone-stored ISO dates are compared correctly
+  const todayStr = localDateString(new Date());
 
   const { data, error } = await insforge.database
     .from('focus_sessions')
     .select('*')
     .eq('user_id', profileId)
-    .gte('started_at', today.toISOString())
     .order('started_at', { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as FocusSession[];
+  // Filter client-side by local date to avoid UTC midnight timezone mismatch
+  return ((data ?? []) as FocusSession[]).filter(
+    (s) => localDateString(new Date(s.started_at)) === todayStr,
+  );
 }
 
 export async function fetchWeekSessions(profileId: string): Promise<FocusSession[]> {
@@ -258,14 +265,17 @@ export async function fetchWeekSessions(profileId: string): Promise<FocusSession
   const monday = new Date(now);
   monday.setDate(now.getDate() + diffToMonday);
   monday.setHours(0, 0, 0, 0);
+  const mondayStr = localDateString(monday);
 
   const { data, error } = await insforge.database
     .from('focus_sessions')
     .select('*')
     .eq('user_id', profileId)
-    .gte('started_at', monday.toISOString())
     .order('started_at', { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as FocusSession[];
+  // Filter client-side by local date to avoid UTC midnight timezone mismatch
+  return ((data ?? []) as FocusSession[]).filter(
+    (s) => localDateString(new Date(s.started_at)) >= mondayStr,
+  );
 }

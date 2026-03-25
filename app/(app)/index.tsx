@@ -206,14 +206,14 @@ export default function DashboardScreen() {
   const todayTasks = tasks.filter((t) => t.due_date === todayStr);
   const pendingToday = todayTasks.filter((t) => t.status === 'pending').length;
 
-  // All session minutes logged today (any type, any status with actual time)
+  // All session minutes logged today (any type, any status with actual time recorded)
   const doneMinToday = sessions
-    .filter((s) => s.actual_duration_min != null && s.actual_duration_min > 0)
+    .filter((s) => s.actual_duration_min != null)
     .reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
 
-  // Focus-only minutes this week (Mon–Sun)
+  // All session minutes this week (Mon–Sun), all types
   const focusMinWeek = weekSessions
-    .filter((s) => s.session_type === 'focus' && s.actual_duration_min != null)
+    .filter((s) => s.actual_duration_min != null)
     .reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
 
   // Keep focusMinToday for the Quick Start card subtitle
