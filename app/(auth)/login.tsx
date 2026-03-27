@@ -107,8 +107,8 @@ const badgeS = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 16,
+    paddingVertical: 9,
+    paddingHorizontal: 20,
     borderRadius: 100,
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderWidth: 1,
@@ -131,7 +131,7 @@ const badgeS = StyleSheet.create({
           shadowRadius: 3,
         }),
   },
-  text: { fontSize: 12.5, fontWeight: '500', color: 'rgba(255,255,255,0.65)' },
+  text: { fontSize: 14.5, fontWeight: '500', color: 'rgba(255,255,255,0.65)' },
 });
 
 // ─── Web-only shimmer keyframe injection ───────────────────────────────────────
@@ -792,35 +792,35 @@ const styles = StyleSheet.create({
 
   // ── Headline (G-Logic .hp-headline) ───────────────────────────────────────
   headline: {
-    // clamp(2rem, 5vw, 3.2rem) → 32px–51px
-    fontSize:      40,
+    // clamp(2rem, 5vw, 3.2rem) → 32px–51px — bumped to match G-Logic scale
+    fontSize:      50,
     fontWeight:    '900',
-    letterSpacing: -0.04 * 40,
-    lineHeight:    44,
+    letterSpacing: -0.04 * 50,
+    lineHeight:    54,
     color:         '#ffffff',
     textAlign:     'center',
     marginBottom:  4,
   },
   headlineAccent: {
     // G-Logic: same size as headline, gradient, shimmer
-    fontSize:      40,
+    fontSize:      50,
     fontWeight:    '900',
-    letterSpacing: -0.04 * 40,
-    lineHeight:    44,
+    letterSpacing: -0.04 * 50,
+    lineHeight:    54,
     textAlign:     'center',
-    marginBottom:  16,
+    marginBottom:  20,
   },
 
   // ── Tagline (G-Logic .hp-tagline) ─────────────────────────────────────────
   tagline: {
-    // clamp(0.95rem, 2vw, 1.1rem) → ~15–18px
-    fontSize:     16,
+    // clamp(0.95rem, 2vw, 1.1rem) → bumped to match G-Logic
+    fontSize:     19,
     color:        'rgba(255,255,255,0.50)',
     fontWeight:   '400',
-    lineHeight:   25.6,
-    maxWidth:     500,
+    lineHeight:   30,
+    maxWidth:     560,
     textAlign:    'center',
-    marginBottom: 32,
+    marginBottom: 36,
   },
 
   // ── Badges row (G-Logic .hp-badges) ───────────────────────────────────────
