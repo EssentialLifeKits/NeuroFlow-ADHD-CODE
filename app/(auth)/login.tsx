@@ -185,7 +185,7 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 // ─── Main screen ───────────────────────────────────────────────────────────────
 export default function LoginScreen() {
   const { signInWithEmail, signUp, resetPassword, signInWithGoogle, devBypass } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width, height: windowHeight } = useWindowDimensions();
 
   const [mode,          setMode]          = useState<Mode>('signin');
   const [email,         setEmail]         = useState('');
@@ -408,14 +408,17 @@ export default function LoginScreen() {
         style={{ flex: 1, zIndex: 10 }}
       >
         <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            // G-Logic .hp-content: padding 120px top (for fixed nav), 60px bottom
-            { paddingTop: 120, paddingBottom: 60, paddingHorizontal: 24 },
-          ]}
+          contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+
+          {/* ══ HERO SECTION — fills full viewport (G-Logic .hp-page: min-height 100vh, justify-content center) ══ */}
+          {/* Everything inside here is vertically centered. Card lives BELOW this in the scroll. */}
+          <View style={[
+            styles.heroSection,
+            { minHeight: windowHeight, paddingTop: 80 /* nav height */ },
+          ]}>
 
           {/* ── G-Logic .hp-orb-wrap: 140×140px + entrance anim ── */}
           <Animated.View
@@ -535,7 +538,10 @@ export default function LoginScreen() {
             </View>
           </Animated.View>
 
-          {/* ── G-Logic .hp-glass-card ──────────────────────────────────────── */}
+          </View>
+          {/* ══ END HERO SECTION ══ */}
+
+          {/* ── G-Logic .hp-glass-card — lives below (scroll to reveal) ── */}
           <Animated.View
             style={[
               styles.card,
@@ -763,9 +769,19 @@ const styles = StyleSheet.create({
 
   // ── Scroll ─────────────────────────────────────────────────────────────────
   scroll: {
-    flexGrow:   1,
-    alignItems: 'center',
-    width:      '100%',
+    flexGrow:        1,
+    alignItems:      'center',
+    width:           '100%',
+    paddingBottom:   60,
+    paddingHorizontal: 24,
+  },
+
+  // G-Logic .hp-page: min-height 100vh, flex-col, align center, justify center
+  heroSection: {
+    width:           '100%',
+    alignItems:      'center',
+    justifyContent:  'center',
+    paddingBottom:   40,
   },
 
   // ── Orb ring (G-Logic .hp-orb-ring) ───────────────────────────────────────
