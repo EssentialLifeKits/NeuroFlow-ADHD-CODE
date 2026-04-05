@@ -108,6 +108,7 @@ export default function AppLayout() {
           {/* Hidden screens — not in tab bar, accessible via router.push */}
           <Tabs.Screen name="all-actions" options={{ href: null, title: 'All Actions' }} />
           <Tabs.Screen name="session-log" options={{ href: null, title: 'Session Log' }} />
+          <Tabs.Screen name="admin" options={{ href: null, title: 'Admin' }} />
         </Tabs>
       </View>
 

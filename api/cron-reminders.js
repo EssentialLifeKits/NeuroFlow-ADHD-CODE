@@ -37,6 +37,7 @@ async function dbUpdate(table, id, body) {
   return res.ok;
 }
 
+
 const CATEGORY_META = {
   task:        { color: '#4A90E2', emoji: '📋', label: 'Task' },
   appointment: { color: '#34D399', emoji: '📅', label: 'Appointment' },
@@ -98,7 +99,7 @@ async function run(req, res) {
   }
 
   const now = new Date();
-  const windowStart = new Date(now.getTime() - 5 * 60 * 1000);
+  const windowStart = new Date(now.getTime() - 1 * 60 * 1000); // 1-minute window matches every-minute cron
   console.log(`[cron] Running at ${now.toISOString()}`);
 
   const { data: allTasks, error } = await dbSelect('tasks', '*');
@@ -153,8 +154,8 @@ async function run(req, res) {
       if (emailRes.ok) {
         sent++;
         results.push(`at_time:${task.id}`);
-        // Mark completed so it disappears from the calendar
-        await dbUpdate('tasks', task.id, { status: 'completed', completed_at: now.toISOString() });
+        // Mark as completed (NOT deleted) so the task stays visible in the user's history
+        await dbUpdate('tasks', task.id, { status: 'completed', recurrence_rule: 'sent' });
       } else {
         const body = await emailRes.text();
         console.error(`[cron] Resend error ${task.id}: ${emailRes.status} ${body}`);
@@ -164,8 +165,12 @@ async function run(req, res) {
 
     // Send reminder email if a reminder offset is stored in recurrence_rule
     const reminderOffset = task.recurrence_rule;
-    if (reminderOffset && reminderOffset !== 'none' && reminderOffset !== 'at_time') {
+    if (reminderOffset && reminderOffset !== 'none' && reminderOffset !== 'at_time' && reminderOffset !== 'sent') {
       let offsetMs = 0;
+      // New format: "30min_before", "60min_before", "1440min_before", etc.
+      const minMatch = reminderOffset.match(/^(\d+)min_before$/);
+      if (minMatch) offsetMs = parseInt(minMatch[1], 10) * 60 * 1000;
+      // Legacy format support
       if (reminderOffset === '1h_before') offsetMs = 60 * 60 * 1000;
       if (reminderOffset === '1d_before') offsetMs = 24 * 60 * 60 * 1000;
       if (offsetMs > 0) {
@@ -189,7 +194,9 @@ async function run(req, res) {
           if (emailRes.ok) {
             sent++;
             results.push(`reminder:${task.id}`);
-            await dbUpdate('tasks', task.id, { status: 'completed', completed_at: now.toISOString() });
+            // Flag reminder as sent, but DO NOT delete or complete it yet
+            // This ensures the at_time email will still fire and then delete it
+            await dbUpdate('tasks', task.id, { recurrence_rule: 'sent' });
           } else {
             const body = await emailRes.text();
             console.error(`[cron] Resend reminder error ${task.id}: ${emailRes.status} ${body}`);

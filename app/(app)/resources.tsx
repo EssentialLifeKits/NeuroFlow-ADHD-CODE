@@ -8,6 +8,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Linking,
   Pressable,
@@ -20,9 +21,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
+import { fetchResourceCards } from '../../src/lib/adminDb';
 
 const NF_BLUE = '#4A90E2';
-const NF_BLUE_DARK = '#0056b3';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
@@ -57,7 +58,7 @@ function PulsingDot() {
   );
 }
 
-// ─── Resource Data (NeuroFlow ADHD focus) ─────────────────────────────────────
+// ─── Resource type (matches DB schema) ────────────────────────────────────────
 interface Resource {
   title: string;
   description: string;
@@ -67,63 +68,6 @@ interface Resource {
   linkLabel: string;
   accent: string;
 }
-
-const RESOURCES: Resource[] = [
-  {
-    title: 'Deep Work Blueprint',
-    description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
-    icon: '📘',
-    iconBg: NF_BLUE + '18',
-    link: 'https://neuroflow.app/deep-work-blueprint',
-    linkLabel: 'Download Free →',
-    accent: NF_BLUE,
-  },
-  {
-    title: 'Focus Timer Templates',
-    description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
-    icon: '⏱',
-    iconBg: 'rgba(52, 211, 153, 0.12)',
-    link: '#',
-    linkLabel: 'Explore Templates →',
-    accent: '#34D399',
-  },
-  {
-    title: 'Task Batching System',
-    description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
-    icon: '📋',
-    iconBg: 'rgba(251, 146, 60, 0.12)',
-    link: '#',
-    linkLabel: 'Get the System →',
-    accent: '#FB923C',
-  },
-  {
-    title: 'ADHD Habit Stacker',
-    description: 'Anchor new routines to existing ones — build habits without constant reminders.',
-    icon: '🔗',
-    iconBg: 'rgba(248, 113, 113, 0.12)',
-    link: '#',
-    linkLabel: 'Learn More →',
-    accent: '#F87171',
-  },
-  {
-    title: 'Brain Dump Toolkit',
-    description: 'Capture every thought, idea, and obligation into a trusted external system.',
-    icon: '🧠',
-    iconBg: NF_BLUE + '14',
-    link: '#',
-    linkLabel: 'Get Toolkit →',
-    accent: NF_BLUE,
-  },
-  {
-    title: 'Productivity Analytics',
-    description: 'Track focus streaks, energy patterns, and see your real daily output.',
-    icon: '📊',
-    iconBg: 'rgba(96, 165, 250, 0.12)',
-    link: '#',
-    linkLabel: 'Track Progress →',
-    accent: '#60A5FA',
-  },
-];
 
 // ─── Resource Card ────────────────────────────────────────────────────────────
 function ResourceCard({ resource, delay, cardWidth }: { resource: Resource; delay: number; cardWidth: any }) {
@@ -186,15 +130,30 @@ export default function ResourcesScreen() {
   const { width } = useWindowDimensions();
   const router = useRouter();
   const headerOpacity = useRef(new Animated.Value(0)).current;
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [loadingCards, setLoadingCards] = useState(true);
 
   useEffect(() => {
     Animated.timing(headerOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start();
+    fetchResourceCards()
+      .then(cards => {
+        setResources(cards.map(c => ({
+          title: c.title,
+          description: c.description,
+          icon: c.icon,
+          iconBg: c.icon_bg,
+          link: c.link,
+          linkLabel: c.link_label,
+          accent: c.accent_color,
+        })));
+      })
+      .catch(() => {/* silently fall through — empty list shown */})
+      .finally(() => setLoadingCards(false));
   }, []);
 
   const isDesktop = width > 1024;
   const isTablet = width > 768 && width <= 1024;
-  
-  // Calculate card width based on available space minus sidebar roughly
+
   let columns = 1;
   if (isDesktop) columns = 3;
   else if (isTablet) columns = 2;
@@ -203,16 +162,16 @@ export default function ResourcesScreen() {
   const totalGapWidth = gap * (columns - 1);
   const containerPadding = spacing.lg * 2;
   const sidebarWidth = isDesktop ? 240 : 0;
-  
-  const cardWidth = columns === 1 
-    ? '100%' 
+
+  const cardWidth = columns === 1
+    ? '100%'
     : (width - sidebarWidth - containerPadding - totalGapWidth) / columns;
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Header — Fix #7: NF Blue, no Instagram */}
+        {/* Header */}
         <Animated.View style={[styles.header, { opacity: headerOpacity }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Pressable onPress={() => router.push('/(app)/focus')} style={styles.backBtn}>
@@ -230,11 +189,15 @@ export default function ResourcesScreen() {
         </Animated.View>
 
         {/* Resource Cards Grid */}
-        <View style={styles.gridContainer}>
-          {RESOURCES.map((resource, i) => (
-            <ResourceCard key={resource.title} resource={resource} delay={i * 80} cardWidth={cardWidth} />
-          ))}
-        </View>
+        {loadingCards ? (
+          <ActivityIndicator color={NF_BLUE} style={{ marginTop: 32 }} />
+        ) : (
+          <View style={styles.gridContainer}>
+            {resources.map((resource, i) => (
+              <ResourceCard key={resource.title} resource={resource} delay={i * 80} cardWidth={cardWidth} />
+            ))}
+          </View>
+        )}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>

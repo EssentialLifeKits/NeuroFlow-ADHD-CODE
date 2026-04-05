@@ -160,7 +160,10 @@ export default function ScheduleModal({
 
   const [taskDetails, setTaskDetails] = useState('');
   const [tags, setTags] = useState('');
-  const [reminderOffset, setReminderOffset] = useState<'none' | '1h_before' | '1d_before'>('none');
+  // reminderOffset stored as minutes string e.g. "30" = 30 min before, "0" = at time, "none" = no reminder
+  const [reminderOffset, setReminderOffset] = useState<string>('none');
+  const [customMinutes, setCustomMinutes] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
   const [category, setCategory] = useState<ADHDCategory>('task');
   const [detailsFocused, setDetailsFocused] = useState(false);
   const [selectedChipTime, setSelectedChipTime] = useState<string | null>(null);
@@ -205,7 +208,10 @@ export default function ScheduleModal({
         setCategory(ADHD_CATEGORIES[cat] ? cat : 'task');
         // reminder_offset is stored in recurrence_rule (no new column needed)
         const ro = initialData.recurrence_rule;
-        setReminderOffset((['none','at_time','1h_before','1d_before'].includes(ro ?? '') ? ro : 'none') as any);
+        // Support legacy values and new minute-based format
+        const legacyMap: Record<string, string> = { '1h_before': '60', '1d_before': '1440', 'at_time': '0' };
+        const resolved = ro ? (legacyMap[ro] ?? (ro === 'none' || ro === 'sent' ? 'none' : ro)) : 'none';
+        setReminderOffset(resolved);
         setDetailsFocused(false);
         setSelectedChipTime(null);
         setAttachedFile(null);
@@ -227,7 +233,7 @@ export default function ScheduleModal({
           } catch {}
         }
       } else {
-        setTaskDetails(''); setTags(''); setCategory('task'); setReminderOffset('none');
+        setTaskDetails(''); setTags(''); setCategory('task'); setReminderOffset('none'); setCustomMinutes(''); setShowCustomInput(false);
         setDetailsFocused(false); setSelectedChipTime(null); setAttachedFile(null); setUploadSuccess(false);
         setThumbnailTime(null); setCapturedThumbnail(null);
         setPickedDate(initDate()); setPickedTime(new Date());
@@ -290,7 +296,7 @@ export default function ScheduleModal({
       due_time: timeStr,
       chore_category: category,
       sticker_id: sticker_id,
-      recurrence_rule: reminderOffset, // store reminder offset in recurrence_rule column
+      recurrence_rule: reminderOffset === 'none' ? 'none' : `${reminderOffset}min_before`, // minutes-based format
     };
 
     if (initialData?.id) { await editTask(initialData.id, taskInput); }
@@ -351,7 +357,7 @@ export default function ScheduleModal({
       due_time: timeStr,
       chore_category: category,
       sticker_id: sticker_id,
-      recurrence_rule: reminderOffset,
+      recurrence_rule: reminderOffset === 'none' ? 'none' : `${reminderOffset}min_before`,
     };
 
     if (initialData?.id) { await editTask(initialData.id, taskInput); }
@@ -884,20 +890,56 @@ export default function ScheduleModal({
                 <View style={ms.formGroup}>
                   <Text style={ms.formLabel}>🔔 REMIND ME</Text>
                   <View style={ms.reminderRow}>
-                    {(['none', '1h_before', '1d_before'] as const).map((opt) => {
-                      const labels = { none: 'No Reminder', '1h_before': '1 Hour Before', '1d_before': '1 Day Before' };
-                      const active = reminderOffset === opt;
+                    {([
+                      { value: 'none',  label: 'None' },
+                      { value: '5',     label: '5 min' },
+                      { value: '15',    label: '15 min' },
+                      { value: '30',    label: '30 min' },
+                      { value: '60',    label: '1 hour' },
+                      { value: '120',   label: '2 hours' },
+                      { value: '1440',  label: '1 day' },
+                      { value: 'custom', label: 'Custom' },
+                    ]).map(({ value, label }) => {
+                      const active = value === 'custom'
+                        ? showCustomInput
+                        : reminderOffset === value && !showCustomInput;
                       return (
                         <Pressable
-                          key={opt}
-                          onPress={() => setReminderOffset(opt)}
+                          key={value}
+                          onPress={() => {
+                            if (value === 'custom') {
+                              setShowCustomInput(true);
+                              setReminderOffset('none');
+                            } else {
+                              setShowCustomInput(false);
+                              setCustomMinutes('');
+                              setReminderOffset(value);
+                            }
+                          }}
                           style={[ms.reminderChip, active && ms.reminderChipActive]}
                         >
-                          <Text style={[ms.reminderChipText, active && ms.reminderChipTextActive]}>{labels[opt]}</Text>
+                          <Text style={[ms.reminderChipText, active && ms.reminderChipTextActive]}>{label}</Text>
                         </Pressable>
                       );
                     })}
                   </View>
+                  {showCustomInput && (
+                    <View style={ms.customReminderRow}>
+                      <TextInput
+                        style={ms.customReminderInput}
+                        placeholder="Enter minutes (e.g. 45)"
+                        placeholderTextColor={colors.textTertiary}
+                        keyboardType="numeric"
+                        value={customMinutes}
+                        onChangeText={(v) => {
+                          setCustomMinutes(v);
+                          const mins = parseInt(v, 10);
+                          if (!isNaN(mins) && mins > 0) setReminderOffset(String(mins));
+                        }}
+                      />
+                      <Text style={ms.customReminderLabel}>minutes before</Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Category */}
@@ -1181,6 +1223,9 @@ const ms = StyleSheet.create({
   reminderChipActive: { borderColor: '#F59E0B', backgroundColor: '#F59E0B18' },
   reminderChipText: { fontSize: 12, fontWeight: '500', color: colors.textSecondary },
   reminderChipTextActive: { color: '#F59E0B', fontWeight: '700' },
+  customReminderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  customReminderInput: { flex: 1, height: 40, backgroundColor: colors.bgInput, borderWidth: 1, borderColor: '#F59E0B55', borderRadius: radius.sm, paddingHorizontal: 12, color: colors.textPrimary, fontSize: 14 },
+  customReminderLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
 
   catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   catBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: colors.bgInput, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm },

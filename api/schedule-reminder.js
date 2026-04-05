@@ -78,13 +78,19 @@ module.exports = async function handler(req, res) {
   const scheduled = [];
 
   if (!reminderOffset || reminderOffset === 'at_time' || reminderOffset === 'none') {
-    // Send at the exact due time
+    // No advance reminder — send at the exact due time only
     scheduled.push({ sendAt: eventDt, type: 'at_time' });
-  } else if (reminderOffset === '1h_before') {
-    scheduled.push({ sendAt: new Date(eventDt.getTime() - 60 * 60 * 1000), type: 'reminder' });
-    scheduled.push({ sendAt: eventDt, type: 'at_time' });
-  } else if (reminderOffset === '1d_before') {
-    scheduled.push({ sendAt: new Date(eventDt.getTime() - 24 * 60 * 60 * 1000), type: 'reminder' });
+  } else {
+    // Parse new format "30min_before", "60min_before" etc. + legacy "1h_before" / "1d_before"
+    let offsetMs = 0;
+    const minMatch = reminderOffset.match(/^(\d+)min_before$/);
+    if (minMatch) offsetMs = parseInt(minMatch[1], 10) * 60 * 1000;
+    if (reminderOffset === '1h_before') offsetMs = 60 * 60 * 1000;
+    if (reminderOffset === '1d_before') offsetMs = 24 * 60 * 60 * 1000;
+
+    if (offsetMs > 0) {
+      scheduled.push({ sendAt: new Date(eventDt.getTime() - offsetMs), type: 'reminder' });
+    }
     scheduled.push({ sendAt: eventDt, type: 'at_time' });
   }
 
