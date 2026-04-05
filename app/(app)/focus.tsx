@@ -507,7 +507,7 @@ export default function FocusScreen() {
 
   // Audio player PiP
   const [audioOpen, setAudioOpen] = useState(false);
-  const [audioWide, setAudioWide] = useState(false);
+  const [audioFullscreen, setAudioFullscreen] = useState(false);
   // Drag state — starts fixed bottom-right, switches to left/top when dragged
   const [audioPos, setAudioPos] = useState<{ left: number; top: number } | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; startLeft: number; startTop: number } | null>(null);
@@ -1085,15 +1085,15 @@ export default function FocusScreen() {
       </Modal>
 
 
-      {/* ── Audio Player PiP — fixed to viewport, draggable ── */}
-      {audioOpen && React.createElement('div', {
+      {/* ── Audio Player — PiP or Fullscreen ── */}
+      {audioOpen && !audioFullscreen && React.createElement('div', {
         style: {
           position: 'fixed',
           right: audioPos ? undefined : 20,
           bottom: audioPos ? undefined : 100,
           left: audioPos?.left,
           top: audioPos?.top,
-          width: audioWide ? 480 : 300,
+          width: 300,
           backgroundColor: colors.bgCard,
           borderRadius: 20,
           border: `1px solid ${NF_BLUE}44`,
@@ -1134,25 +1134,66 @@ export default function FocusScreen() {
             ]),
           ]),
           React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 4, flexShrink: 0, marginLeft: 8 } }, [
-            React.createElement('button', { key: 'wide', onClick: (e: any) => { e.stopPropagation(); setAudioWide(!audioWide); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, audioWide ? '⊡' : '⛶'),
+            React.createElement('button', { key: 'fs', onClick: (e: any) => { e.stopPropagation(); setAudioFullscreen(true); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '⛶'),
             React.createElement('button', { key: 'close', onClick: (e: any) => { e.stopPropagation(); setAudioOpen(false); setAudioPos(null); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '✕'),
           ]),
         ]),
-
-        // Google Drive audio preview iframe — plays natively without CORS issues
         React.createElement('iframe', {
           key: 'audio-iframe',
           src: 'https://drive.google.com/file/d/1yEcTiYAp-rPW61fwIJL8JfVH5QMhzby7/preview',
-          style: {
-            width: '100%',
-            height: audioWide ? 100 : 80,
-            border: 'none',
-            borderRadius: '0 0 16px 16px',
-            backgroundColor: colors.bgCard,
-          },
+          style: { width: '100%', height: 80, border: 'none', borderRadius: '0 0 16px 16px', backgroundColor: colors.bgCard },
           allow: 'autoplay',
           title: 'Deep Work Audio Blueprint',
         }),
+      ])}
+
+      {/* ── Audio Fullscreen Overlay ── */}
+      {audioOpen && audioFullscreen && React.createElement('div', {
+        style: {
+          position: 'fixed', inset: 0, zIndex: 99999,
+          background: 'radial-gradient(ellipse at 50% 30%, #1a2a4a 0%, #0e0e1a 65%)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 0,
+        },
+      }, [
+        // Top bar
+        React.createElement('div', { key: 'topbar', style: { position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px' } }, [
+          React.createElement('div', { key: 'brand', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
+            React.createElement('div', { key: 'dot', style: { width: 28, height: 28, borderRadius: 8, background: `${NF_BLUE}33`, border: `1px solid ${NF_BLUE}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 } }, '🧠'),
+            React.createElement('span', { key: 'name', style: { fontSize: 15, fontWeight: 800, color: NF_BLUE, letterSpacing: -0.3 } }, 'NeuroFlow'),
+            React.createElement('span', { key: 'sub', style: { fontSize: 11, color: '#6b7280', marginLeft: 2 } }, 'Focus Series'),
+          ]),
+          React.createElement('div', { key: 'actions', style: { display: 'flex', gap: 8 } }, [
+            React.createElement('button', { key: 'pip', onClick: () => setAudioFullscreen(false), style: { padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.border}`, backgroundColor: colors.bgCard, color: colors.textSecondary, cursor: 'pointer', fontSize: 12, fontWeight: 600 } }, '⊡ Mini'),
+            React.createElement('button', { key: 'close', onClick: () => { setAudioOpen(false); setAudioFullscreen(false); setAudioPos(null); }, style: { padding: '6px 14px', borderRadius: 8, border: `1px solid #F8717144`, backgroundColor: '#F8717111', color: '#F87171', cursor: 'pointer', fontSize: 12, fontWeight: 600 } }, '✕ Close'),
+          ]),
+        ]),
+
+        // Artwork orb
+        React.createElement('div', { key: 'orb', style: { width: 160, height: 160, borderRadius: '50%', background: `radial-gradient(circle, ${NF_BLUE}44 0%, ${NF_BLUE}11 60%, transparent 100%)`, border: `2px solid ${NF_BLUE}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 64, marginBottom: 32, boxShadow: `0 0 60px ${NF_BLUE}33` } }, '🎧'),
+
+        // Title block
+        React.createElement('div', { key: 'title', style: { textAlign: 'center', marginBottom: 8 } }, [
+          React.createElement('div', { key: 't', style: { fontSize: 26, fontWeight: 800, color: '#f0f0f5', letterSpacing: -0.5 } }, 'Deep Work Audio Blueprint'),
+          React.createElement('div', { key: 's', style: { fontSize: 14, color: NF_BLUE, marginTop: 6, fontWeight: 600 } }, 'NeuroFlow · ADHD Focus Series'),
+        ]),
+
+        // Tagline
+        React.createElement('div', { key: 'tag', style: { fontSize: 13, color: '#6b7280', marginBottom: 36, textAlign: 'center', maxWidth: 380, lineHeight: 1.6 } }, 'Science-backed protocols for deep focus — no willpower required.'),
+
+        // iframe player
+        React.createElement('div', { key: 'player-wrap', style: { width: '100%', maxWidth: 560, borderRadius: 16, overflow: 'hidden', border: `1px solid ${NF_BLUE}33`, boxShadow: `0 0 40px ${NF_BLUE}22` } },
+          React.createElement('iframe', {
+            key: 'audio-iframe-fs',
+            src: 'https://drive.google.com/file/d/1yEcTiYAp-rPW61fwIJL8JfVH5QMhzby7/preview',
+            style: { width: '100%', height: 100, border: 'none', display: 'block', backgroundColor: '#0e0e1a' },
+            allow: 'autoplay',
+            title: 'Deep Work Audio Blueprint',
+          }),
+        ),
+
+        // Bottom badge
+        React.createElement('div', { key: 'badge', style: { position: 'absolute', bottom: 24, fontSize: 11, color: '#4b5563' } }, 'Built for your brain ✨ · NeuroFlow ADHD Focus Planner'),
       ])}
     </SafeAreaView>
   );
