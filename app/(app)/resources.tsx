@@ -8,7 +8,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Linking,
   Pressable,
@@ -58,7 +57,7 @@ function PulsingDot() {
   );
 }
 
-// ─── Resource type (matches DB schema) ────────────────────────────────────────
+// ─── Resource type ────────────────────────────────────────────────────────────
 interface Resource {
   title: string;
   description: string;
@@ -68,6 +67,64 @@ interface Resource {
   linkLabel: string;
   accent: string;
 }
+
+// Default cards — always shown immediately; DB data overlays on top when it loads
+const DEFAULT_RESOURCES: Resource[] = [
+  {
+    title: 'Deep Work Blueprint',
+    description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
+    icon: '📘',
+    iconBg: NF_BLUE + '18',
+    link: 'https://neuroflow.app/deep-work-blueprint',
+    linkLabel: 'Download Free →',
+    accent: NF_BLUE,
+  },
+  {
+    title: 'Focus Timer Templates',
+    description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
+    icon: '⏱',
+    iconBg: 'rgba(52, 211, 153, 0.12)',
+    link: '#',
+    linkLabel: 'Explore Templates →',
+    accent: '#34D399',
+  },
+  {
+    title: 'Task Batching System',
+    description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
+    icon: '📋',
+    iconBg: 'rgba(251, 146, 60, 0.12)',
+    link: '#',
+    linkLabel: 'Get the System →',
+    accent: '#FB923C',
+  },
+  {
+    title: 'ADHD Habit Stacker',
+    description: 'Anchor new routines to existing ones — build habits without constant reminders.',
+    icon: '🔗',
+    iconBg: 'rgba(248, 113, 113, 0.12)',
+    link: '#',
+    linkLabel: 'Learn More →',
+    accent: '#F87171',
+  },
+  {
+    title: 'Brain Dump Toolkit',
+    description: 'Capture every thought, idea, and obligation into a trusted external system.',
+    icon: '🧠',
+    iconBg: NF_BLUE + '14',
+    link: '#',
+    linkLabel: 'Get Toolkit →',
+    accent: NF_BLUE,
+  },
+  {
+    title: 'Productivity Analytics',
+    description: 'Track focus streaks, energy patterns, and see your real daily output.',
+    icon: '📊',
+    iconBg: 'rgba(96, 165, 250, 0.12)',
+    link: '#',
+    linkLabel: 'Track Progress →',
+    accent: '#60A5FA',
+  },
+];
 
 // ─── Resource Card ────────────────────────────────────────────────────────────
 function ResourceCard({ resource, delay, cardWidth }: { resource: Resource; delay: number; cardWidth: any }) {
@@ -130,25 +187,27 @@ export default function ResourcesScreen() {
   const { width } = useWindowDimensions();
   const router = useRouter();
   const headerOpacity = useRef(new Animated.Value(0)).current;
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [loadingCards, setLoadingCards] = useState(true);
+  // Start with hardcoded defaults — always visible instantly
+  const [resources, setResources] = useState<Resource[]>(DEFAULT_RESOURCES);
 
   useEffect(() => {
     Animated.timing(headerOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start();
+    // Overlay DB data when it arrives — falls back to defaults silently on error
     fetchResourceCards()
       .then(cards => {
-        setResources(cards.map(c => ({
-          title: c.title,
-          description: c.description,
-          icon: c.icon,
-          iconBg: c.icon_bg,
-          link: c.link,
-          linkLabel: c.link_label,
-          accent: c.accent_color,
-        })));
+        if (cards.length > 0) {
+          setResources(cards.map(c => ({
+            title: c.title,
+            description: c.description,
+            icon: c.icon,
+            iconBg: c.icon_bg,
+            link: c.link,
+            linkLabel: c.link_label,
+            accent: c.accent_color,
+          })));
+        }
       })
-      .catch(() => {/* silently fall through — empty list shown */})
-      .finally(() => setLoadingCards(false));
+      .catch(() => {/* keep defaults */});
   }, []);
 
   const isDesktop = width > 1024;
@@ -188,16 +247,12 @@ export default function ResourcesScreen() {
           </View>
         </Animated.View>
 
-        {/* Resource Cards Grid */}
-        {loadingCards ? (
-          <ActivityIndicator color={NF_BLUE} style={{ marginTop: 32 }} />
-        ) : (
-          <View style={styles.gridContainer}>
-            {resources.map((resource, i) => (
-              <ResourceCard key={resource.title} resource={resource} delay={i * 80} cardWidth={cardWidth} />
-            ))}
-          </View>
-        )}
+        {/* Resource Cards Grid — defaults show immediately, DB data overlays when loaded */}
+        <View style={styles.gridContainer}>
+          {resources.map((resource, i) => (
+            <ResourceCard key={resource.title} resource={resource} delay={i * 80} cardWidth={cardWidth} />
+          ))}
+        </View>
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>

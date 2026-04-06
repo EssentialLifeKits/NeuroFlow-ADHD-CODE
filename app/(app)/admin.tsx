@@ -1,13 +1,12 @@
 /**
  * NeuroFlow — Admin Portal
- * Hidden screen accessible only to essentiallifekits@gmail.com
- * Navigate to via router.push('/(app)/admin') — not shown in tab bar
+ * Hidden screen — only essentiallifekits@gmail.com can access.
  *
  * Sections:
- *   1. Email Config  — from_email, subject templates
- *   2. Resources     — add / edit / delete resource cards
- *   3. App Settings  — blueprint link, audio link
- *   4. User Monitor  — view all registered users
+ *   1. Email Template Editor  — live preview + full color/content editing
+ *   2. Resources Manager      — visual card previews with inline editing
+ *   3. App Settings           — blueprint link, audio link
+ *   4. User Monitor           — scrollable list, green glow for active users
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -21,6 +20,7 @@ import {
   TextInput,
   View,
   Switch,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -35,15 +35,15 @@ import {
   type ResourceCard,
 } from '../../src/lib/adminDb';
 import { insforge } from '../../src/lib/insforge';
-import { colors, radius, spacing, typography } from '../../src/constants/theme';
+import { colors, radius, spacing } from '../../src/constants/theme';
 
-const NF_BLUE    = '#4A90E2';
-const NF_RED     = '#F87171';
-const NF_GREEN   = '#34D399';
-const NF_ORANGE  = '#FB923C';
+const NF_BLUE   = '#4A90E2';
+const NF_RED    = '#F87171';
+const NF_GREEN  = '#34D399';
+const NF_ORANGE = '#FB923C';
 const ADMIN_EMAIL = 'essentiallifekits@gmail.com';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Shared primitives ────────────────────────────────────────────────────────
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
@@ -61,29 +61,19 @@ function Card({ children, style }: { children: React.ReactNode; style?: any }) {
 function Btn({
   label, onPress, color = NF_BLUE, outline = false, small = false, disabled = false,
 }: {
-  label: string;
-  onPress: () => void;
-  color?: string;
-  outline?: boolean;
-  small?: boolean;
-  disabled?: boolean;
+  label: string; onPress: () => void; color?: string;
+  outline?: boolean; small?: boolean; disabled?: boolean;
 }) {
   return (
     <Pressable
-      onPress={onPress}
-      disabled={disabled}
+      onPress={onPress} disabled={disabled}
       style={[
-        s.btn,
-        small && s.btnSmall,
-        outline
-          ? { borderWidth: 1, borderColor: color, backgroundColor: 'transparent' }
-          : { backgroundColor: color },
+        s.btn, small && s.btnSmall,
+        outline ? { borderWidth: 1, borderColor: color, backgroundColor: 'transparent' } : { backgroundColor: color },
         disabled && { opacity: 0.4 },
       ]}
     >
-      <Text style={[s.btnText, small && s.btnTextSmall, outline && { color }]}>
-        {label}
-      </Text>
+      <Text style={[s.btnText, small && s.btnTextSmall, outline && { color }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -91,40 +81,47 @@ function Btn({
 function Field({
   label, value, onChangeText, placeholder, multiline = false,
 }: {
-  label: string;
-  value: string;
-  onChangeText: (t: string) => void;
-  placeholder?: string;
-  multiline?: boolean;
+  label: string; value: string; onChangeText: (t: string) => void;
+  placeholder?: string; multiline?: boolean;
 }) {
   return (
     <View style={s.fieldWrap}>
       <Text style={s.fieldLabel}>{label}</Text>
       <TextInput
         style={[s.input, multiline && s.inputMulti]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder ?? ''}
-        placeholderTextColor={colors.textTertiary}
-        multiline={multiline}
-        numberOfLines={multiline ? 3 : 1}
+        value={value} onChangeText={onChangeText}
+        placeholder={placeholder ?? ''} placeholderTextColor={colors.textTertiary}
+        multiline={multiline} numberOfLines={multiline ? 3 : 1}
       />
     </View>
   );
 }
 
-// ─── Email Config Section ────────────────────────────────────────────────────
+function ColorSwatch({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={{ alignItems: 'center', gap: 4 }}>
+      <View style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: color, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }} />
+      <Text style={{ fontSize: 9, color: colors.textTertiary }}>{label}</Text>
+    </View>
+  );
+}
 
-function EmailConfigSection({
+// ─── Email Template Editor ────────────────────────────────────────────────────
+
+function EmailTemplateSection({
   settings, onSave,
 }: {
   settings: Record<string, string>;
   onSave: (key: string, value: string) => Promise<void>;
 }) {
-  const [fromEmail, setFromEmail]       = useState(settings['from_email'] ?? '');
-  const [subjectTask, setSubjectTask]   = useState(settings['email_subject_task'] ?? '');
-  const [subjectRem, setSubjectRem]     = useState(settings['email_subject_reminder'] ?? '');
-  const [saving, setSaving]             = useState(false);
+  const [fromEmail,    setFromEmail]    = useState(settings['from_email'] ?? '');
+  const [subjectTask,  setSubjectTask]  = useState(settings['email_subject_task'] ?? '🎯 Now: {{title}}');
+  const [subjectRem,   setSubjectRem]   = useState(settings['email_subject_reminder'] ?? '⏰ Reminder: {{title}}');
+  const [headerColor,  setHeaderColor]  = useState(settings['email_header_color'] ?? '#4A90E2');
+  const [accentColor,  setAccentColor]  = useState(settings['email_accent_color'] ?? '#4A90E2');
+  const [footerText,   setFooterText]   = useState(settings['email_footer_text'] ?? 'Sent by NeuroFlow · ADHD Focus Planner · Built for your brain ✨');
+  const [previewOpen,  setPreviewOpen]  = useState(false);
+  const [saving, setSaving]            = useState(false);
 
   async function save() {
     setSaving(true);
@@ -133,8 +130,11 @@ function EmailConfigSection({
         onSave('from_email', fromEmail),
         onSave('email_subject_task', subjectTask),
         onSave('email_subject_reminder', subjectRem),
+        onSave('email_header_color', headerColor),
+        onSave('email_accent_color', accentColor),
+        onSave('email_footer_text', footerText),
       ]);
-      Alert.alert('Saved', 'Email config updated.');
+      Alert.alert('Saved', 'Email template config updated.');
     } finally {
       setSaving(false);
     }
@@ -142,16 +142,86 @@ function EmailConfigSection({
 
   return (
     <Card>
-      <SectionHeader title="✉️ Email Configuration" subtitle="Controls how reminder emails are sent via Resend" />
-      <Field label="From Email" value={fromEmail} onChangeText={setFromEmail} placeholder="NeuroFlow <reminders@keepzbrandai.com>" />
-      <Field label="At-Time Subject (use {{title}})" value={subjectTask} onChangeText={setSubjectTask} placeholder="🎯 Now: {{title}}" />
-      <Field label="Reminder Subject (use {{title}})" value={subjectRem} onChangeText={setSubjectRem} placeholder="⏰ Reminder: {{title}}" />
-      <Btn label={saving ? 'Saving…' : 'Save Email Config'} onPress={save} disabled={saving} />
+      <SectionHeader title="✉️ Email Template Editor" subtitle="Edit content, colors, and preview the live template" />
+
+      {/* Color swatches row */}
+      <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <ColorSwatch color={headerColor} label="Header" />
+        <ColorSwatch color={accentColor} label="Accent" />
+        <View style={{ flex: 1 }} />
+        <Btn label="👁 Preview Email" onPress={() => setPreviewOpen(true)} outline color={NF_BLUE} small />
+      </View>
+
+      <Field label="From Email Address" value={fromEmail} onChangeText={setFromEmail} placeholder="NeuroFlow <reminders@keepzbrandai.com>" />
+      <Field label="At-Time Subject  (use {{title}})" value={subjectTask} onChangeText={setSubjectTask} />
+      <Field label="Reminder Subject  (use {{title}})" value={subjectRem} onChangeText={setSubjectRem} />
+      <Field label="Header / Brand Color (hex)" value={headerColor} onChangeText={setHeaderColor} placeholder="#4A90E2" />
+      <Field label="Accent / Card Border Color (hex)" value={accentColor} onChangeText={setAccentColor} placeholder="#4A90E2" />
+      <Field label="Footer Text" value={footerText} onChangeText={setFooterText} multiline />
+
+      <Btn label={saving ? 'Saving…' : '💾 Save Email Config'} onPress={save} disabled={saving} />
+
+      {/* Live Preview Modal */}
+      <Modal visible={previewOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPreviewOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: '#0e0e1a' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary }}>📧 Email Preview</Text>
+            <Pressable onPress={() => setPreviewOpen(false)} style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: colors.bgCard, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+              <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13 }}>✕ Close</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+            <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 12, textAlign: 'center' }}>
+              Live preview — reflects your current color + content settings
+            </Text>
+            {/* Render the HTML preview as styled boxes since iframe isn't available natively */}
+            <View style={{ backgroundColor: '#15152a', borderRadius: 20, borderWidth: 1, borderColor: '#2a2a3e', overflow: 'hidden' }}>
+              {/* Header bar */}
+              <View style={{ backgroundColor: '#1a1a2e', padding: 20, borderBottomWidth: 1, borderBottomColor: '#2a2a3e', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: headerColor }}>NeuroFlow <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '400' }}>Focus Planner</Text></Text>
+                <View style={{ backgroundColor: accentColor + '22', borderWidth: 1, borderColor: accentColor + '55', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+                  <Text style={{ color: accentColor, fontSize: 10, fontWeight: '700' }}>✅ TASK</Text>
+                </View>
+              </View>
+              {/* Body */}
+              <View style={{ padding: 24 }}>
+                <Text style={{ fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Hi there 👋</Text>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f5', marginBottom: 4 }}>🎯 It's time: <Text style={{ fontWeight: '800' }}>Your Task Title</Text></Text>
+                <Text style={{ fontSize: 13, color: '#9ca3af', marginBottom: 20 }}>Your scheduled task is happening now.</Text>
+                {/* Card block */}
+                <View style={{ backgroundColor: '#1e1e35', borderWidth: 1, borderColor: accentColor + '44', borderLeftWidth: 4, borderLeftColor: accentColor, borderRadius: 10, padding: 16, marginBottom: 20 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f5', marginBottom: 10 }}>✅ Your Task Title</Text>
+                  <View style={{ flexDirection: 'row', gap: 24 }}>
+                    <View>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase' }}>DATE</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#e5e7eb', marginTop: 3 }}>📅 Saturday, April 5, 2026</Text>
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase' }}>TIME</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#e5e7eb', marginTop: 3 }}>🕐 9:00 AM</Text>
+                    </View>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 12, color: '#9ca3af', lineHeight: 20 }}>Open NeuroFlow and stay in your flow state. You've got this! 🌸</Text>
+              </View>
+              {/* Footer */}
+              <View style={{ backgroundColor: '#0e0e1a', padding: 16, borderTopWidth: 1, borderTopColor: '#2a2a3e' }}>
+                <Text style={{ fontSize: 10, color: '#4b5563', textAlign: 'center' }}>{footerText}</Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 16, textAlign: 'center', lineHeight: 18 }}>
+              Subject (at-time): {subjectTask.replace('{{title}}', 'Your Task Title')}{'\n'}
+              Subject (reminder): {subjectRem.replace('{{title}}', 'Your Task Title')}
+            </Text>
+          </ScrollView>
+        </View>
+      </Modal>
     </Card>
   );
 }
 
-// ─── App Settings Section ────────────────────────────────────────────────────
+// ─── App Settings ─────────────────────────────────────────────────────────────
 
 function AppSettingsSection({
   settings, onSave,
@@ -166,27 +236,48 @@ function AppSettingsSection({
   async function save() {
     setSaving(true);
     try {
-      await Promise.all([
-        onSave('blueprint_link', blueprint),
-        onSave('audio_link', audio),
-      ]);
+      await Promise.all([onSave('blueprint_link', blueprint), onSave('audio_link', audio)]);
       Alert.alert('Saved', 'App settings updated.');
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   return (
     <Card>
-      <SectionHeader title="⚙️ App Settings" subtitle="Links and content shown inside the app" />
+      <SectionHeader title="⚙️ App Settings" subtitle="Links displayed inside the app" />
       <Field label="Deep Work Blueprint Link" value={blueprint} onChangeText={setBlueprint} placeholder="https://…" />
       <Field label="Audio Player Link (Focus page)" value={audio} onChangeText={setAudio} placeholder="https://…" />
-      <Btn label={saving ? 'Saving…' : 'Save App Settings'} onPress={save} disabled={saving} />
+      <Btn label={saving ? 'Saving…' : '💾 Save Settings'} onPress={save} disabled={saving} />
     </Card>
   );
 }
 
-// ─── Resource Card Editor ────────────────────────────────────────────────────
+// ─── Resource Card Visual Preview ─────────────────────────────────────────────
+
+function ResourceCardPreview({ card }: { card: ResourceCard }) {
+  return (
+    <View style={{
+      backgroundColor: colors.bgCard, borderRadius: 14, padding: 16,
+      borderWidth: 1, borderColor: colors.border, gap: 10,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ width: 44, height: 44, borderRadius: 10, backgroundColor: card.icon_bg, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 22 }}>{card.icon}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.textPrimary }}>{card.title}</Text>
+          {!card.is_active && (
+            <View style={{ backgroundColor: NF_ORANGE + '22', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start', marginTop: 2 }}>
+              <Text style={{ fontSize: 9, fontWeight: '700', color: NF_ORANGE }}>HIDDEN</Text>
+            </View>
+          )}
+        </View>
+        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: card.accent_color }} />
+      </View>
+      <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 18 }}>{card.description}</Text>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: card.accent_color }}>{card.link_label}</Text>
+    </View>
+  );
+}
 
 type CardDraft = Omit<ResourceCard, 'id' | 'created_at' | 'updated_at'>;
 
@@ -196,6 +287,17 @@ const BLANK_CARD: CardDraft = {
   link: '#', link_label: 'Learn More →',
   sort_order: 0, is_active: true,
 };
+
+const ACCENT_PRESETS = [
+  { color: '#4A90E2', label: 'Blue' },
+  { color: '#34D399', label: 'Green' },
+  { color: '#FB923C', label: 'Orange' },
+  { color: '#F87171', label: 'Red' },
+  { color: '#60A5FA', label: 'Sky' },
+  { color: '#A78BFA', label: 'Purple' },
+  { color: '#FBBF24', label: 'Yellow' },
+  { color: '#EC4899', label: 'Pink' },
+];
 
 function ResourceCardEditor({
   initial, onSave, onCancel,
@@ -211,49 +313,80 @@ function ResourceCardEditor({
     setDraft(prev => ({ ...prev, [key]: value }));
   }
 
+  // Build live preview resource card from draft
+  const previewCard: ResourceCard = {
+    ...draft, id: 'preview', created_at: '', updated_at: '',
+  };
+
   async function handleSave() {
     if (!draft.title.trim()) { Alert.alert('Validation', 'Title is required.'); return; }
     setSaving(true);
-    try {
-      await onSave(draft);
-    } finally {
-      setSaving(false);
-    }
+    try { await onSave(draft); } finally { setSaving(false); }
   }
 
   return (
     <View style={s.editorWrap}>
-      <Field label="Title *"        value={draft.title}       onChangeText={v => set('title', v)}       placeholder="Deep Work Blueprint" />
-      <Field label="Description *"  value={draft.description} onChangeText={v => set('description', v)} placeholder="Short description…" multiline />
-      <Field label="Icon (emoji)"   value={draft.icon}        onChangeText={v => set('icon', v)}        placeholder="📘" />
-      <Field label="Icon Background" value={draft.icon_bg}   onChangeText={v => set('icon_bg', v)}     placeholder="rgba(74,144,226,0.12)" />
-      <Field label="Accent Color"   value={draft.accent_color} onChangeText={v => set('accent_color', v)} placeholder="#4A90E2" />
-      <Field label="Link URL"       value={draft.link}        onChangeText={v => set('link', v)}        placeholder="https://…" />
-      <Field label="Link Label"     value={draft.link_label}  onChangeText={v => set('link_label', v)}  placeholder="Learn More →" />
-      <Field label="Sort Order"     value={String(draft.sort_order)} onChangeText={v => set('sort_order', parseInt(v) || 0)} placeholder="0" />
-      <View style={s.toggleRow}>
-        <Text style={s.fieldLabel}>Active (visible to users)</Text>
-        <Switch
-          value={draft.is_active}
-          onValueChange={v => set('is_active', v)}
-          trackColor={{ false: colors.border, true: NF_BLUE }}
-          thumbColor="#fff"
+      {/* Live preview at top */}
+      <Text style={[s.fieldLabel, { marginBottom: 4 }]}>LIVE PREVIEW</Text>
+      <ResourceCardPreview card={previewCard} />
+
+      <View style={s.divider} />
+
+      <Field label="Title *" value={draft.title} onChangeText={v => set('title', v)} placeholder="Deep Work Blueprint" />
+      <Field label="Description *" value={draft.description} onChangeText={v => set('description', v)} placeholder="Short description…" multiline />
+      <Field label="Icon (emoji)" value={draft.icon} onChangeText={v => set('icon', v)} placeholder="📘" />
+      <Field label="Link URL" value={draft.link} onChangeText={v => set('link', v)} placeholder="https://… or #" />
+      <Field label="Link Label" value={draft.link_label} onChangeText={v => set('link_label', v)} placeholder="Learn More →" />
+      <Field label="Sort Order" value={String(draft.sort_order)} onChangeText={v => set('sort_order', parseInt(v) || 0)} placeholder="0" />
+
+      {/* Accent color presets */}
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>ACCENT COLOR</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+          {ACCENT_PRESETS.map(p => (
+            <Pressable key={p.color} onPress={() => { set('accent_color', p.color); set('icon_bg', p.color + '1E'); }}
+              style={{ alignItems: 'center', gap: 3 }}>
+              <View style={{
+                width: 32, height: 32, borderRadius: 8, backgroundColor: p.color,
+                borderWidth: draft.accent_color === p.color ? 2 : 1,
+                borderColor: draft.accent_color === p.color ? '#fff' : 'rgba(255,255,255,0.1)',
+              }} />
+              <Text style={{ fontSize: 9, color: colors.textTertiary }}>{p.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <TextInput
+          style={[s.input, { marginTop: 8 }]} value={draft.accent_color}
+          onChangeText={v => set('accent_color', v)}
+          placeholder="Custom hex e.g. #4A90E2" placeholderTextColor={colors.textTertiary}
         />
       </View>
+
+      {/* Icon background */}
+      <Field label="Icon Background (CSS color / rgba)" value={draft.icon_bg} onChangeText={v => set('icon_bg', v)} placeholder="rgba(74,144,226,0.12)" />
+
+      <View style={s.toggleRow}>
+        <Text style={s.fieldLabel}>VISIBLE TO USERS</Text>
+        <Switch
+          value={draft.is_active} onValueChange={v => set('is_active', v)}
+          trackColor={{ false: colors.border, true: NF_BLUE }} thumbColor="#fff"
+        />
+      </View>
+
       <View style={s.rowGap}>
-        <Btn label={saving ? 'Saving…' : 'Save Card'} onPress={handleSave} disabled={saving} />
+        <Btn label={saving ? 'Saving…' : '💾 Save Card'} onPress={handleSave} disabled={saving} />
         <Btn label="Cancel" onPress={onCancel} outline color={colors.textSecondary} />
       </View>
     </View>
   );
 }
 
-// ─── Resources Manager Section ───────────────────────────────────────────────
+// ─── Resources Manager Section ────────────────────────────────────────────────
 
 function ResourcesSection() {
-  const [cards, setCards]         = useState<ResourceCard[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [editing, setEditing]     = useState<ResourceCard | null | 'new'>(null);
+  const [cards, setCards]     = useState<ResourceCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<ResourceCard | null | 'new'>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -275,47 +408,34 @@ function ResourcesSection() {
     await updateResourceCard(id, draft);
     setEditing(null);
     await load();
-    Alert.alert('Updated', 'Resource card saved.');
+    Alert.alert('Updated', 'Card saved.');
   }
 
   async function handleDelete(card: ResourceCard) {
-    Alert.alert(
-      'Delete Card',
-      `Delete "${card.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive',
-          onPress: async () => {
-            await deleteResourceCard(card.id);
-            await load();
-          },
-        },
-      ],
-    );
+    Alert.alert('Delete Card', `Delete "${card.title}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteResourceCard(card.id); await load(); } },
+    ]);
   }
 
   return (
     <Card>
-      <SectionHeader title="🗂 Resources Manager" subtitle="Add, edit, or remove cards shown on the Resources page" />
+      <SectionHeader title="🗂 Resources Manager" subtitle="Visual editor — see and edit each card live" />
 
       {loading && <ActivityIndicator color={NF_BLUE} style={{ marginVertical: 12 }} />}
 
       {!loading && editing === null && (
         <>
           {cards.map(card => (
-            <View key={card.id} style={s.resourceRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.resourceTitle}>
-                  {card.icon} {card.title}
-                  {!card.is_active && <Text style={s.inactiveTag}> · hidden</Text>}
-                </Text>
-                <Text style={s.resourceDesc} numberOfLines={1}>{card.description}</Text>
+            <View key={card.id} style={{ gap: 8 }}>
+              {/* Visual preview */}
+              <ResourceCardPreview card={card} />
+              {/* Action row below preview */}
+              <View style={[s.rowGap, { marginBottom: 8 }]}>
+                <Btn label="✏️ Edit" onPress={() => setEditing(card)} small outline color={NF_BLUE} />
+                <Btn label="🗑 Delete" onPress={() => handleDelete(card)} small outline color={NF_RED} />
               </View>
-              <View style={s.resourceActions}>
-                <Btn label="Edit"   onPress={() => setEditing(card)} small outline color={NF_BLUE} />
-                <Btn label="Delete" onPress={() => handleDelete(card)} small outline color={NF_RED} />
-              </View>
+              <View style={s.divider} />
             </View>
           ))}
           <Btn label="+ Add New Card" onPress={() => setEditing('new')} color={NF_GREEN} />
@@ -347,7 +467,7 @@ function ResourcesSection() {
   );
 }
 
-// ─── User Monitor Section ────────────────────────────────────────────────────
+// ─── User Monitor ─────────────────────────────────────────────────────────────
 
 interface UserRow {
   id: string;
@@ -365,61 +485,96 @@ function UserMonitorSection() {
     (async () => {
       try {
         const { data, error } = await insforge.database
-          .from('users')
-          .select('*')
-          .order('created_at', { ascending: false });
+          .from('users').select('*').order('created_at', { ascending: false });
         if (error) throw new Error(error.message);
         setUsers((data ?? []) as UserRow[]);
       } catch (e: any) {
         Alert.alert('Error loading users', e.message);
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     })();
   }, []);
 
+  // A user is "active" if they have an email and are onboarded,
+  // OR if they are the admin (essentiallifekits@gmail.com)
+  function isActive(u: UserRow) {
+    if (u.email?.toLowerCase() === ADMIN_EMAIL) return true;
+    return u.onboarded === true;
+  }
+
   return (
-    <Card>
+    <Card style={{ paddingBottom: 0 }}>
       <SectionHeader
         title={`👥 User Monitor (${users.length})`}
-        subtitle="All registered NeuroFlow accounts"
+        subtitle="All registered NeuroFlow accounts · Green = active"
       />
       {loading && <ActivityIndicator color={NF_BLUE} style={{ marginVertical: 12 }} />}
       {!loading && users.length === 0 && (
         <Text style={s.emptyText}>No users found.</Text>
       )}
-      {!loading && users.map(u => (
-        <View key={u.id} style={s.userRow}>
-          <View style={s.userAvatar}>
-            <Text style={s.userAvatarText}>{(u.display_name ?? u.email)?.[0]?.toUpperCase() ?? '?'}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.userName}>{u.display_name ?? '—'}</Text>
-            <Text style={s.userEmail}>{u.email}</Text>
-          </View>
-          <View style={s.userMeta}>
-            <Text style={[s.userBadge, u.onboarded ? s.badgeGreen : s.badgeGray]}>
-              {u.onboarded ? 'Active' : 'Pending'}
-            </Text>
-            <Text style={s.userDate}>
-              {new Date(u.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' })}
-            </Text>
-          </View>
-        </View>
-      ))}
+      {/* Scrollable container — max height so it scrolls when many users */}
+      {!loading && users.length > 0 && (
+        <ScrollView
+          style={{ maxHeight: 420 }}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={true}
+        >
+          {users.map((u, idx) => {
+            const active = isActive(u);
+            const joinedDate = new Date(u.created_at).toLocaleDateString('en-US', {
+              month: 'short', day: 'numeric', year: 'numeric',
+            });
+            return (
+              <View key={u.id} style={[s.userRow, idx === users.length - 1 && { borderBottomWidth: 0 }]}>
+                {/* Avatar */}
+                <View style={s.userAvatar}>
+                  <Text style={s.userAvatarText}>
+                    {(u.display_name ?? u.email)?.[0]?.toUpperCase() ?? '?'}
+                  </Text>
+                </View>
+
+                {/* Info */}
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={s.userName}>{u.display_name ?? '—'}</Text>
+                  <Text style={s.userEmail}>{u.email}</Text>
+                  <Text style={s.userSince}>Joined {joinedDate}</Text>
+                </View>
+
+                {/* Status indicator */}
+                <View style={{ alignItems: 'center', gap: 4 }}>
+                  {active ? (
+                    <>
+                      {/* Glowing green dot */}
+                      <View style={s.activeDotWrap}>
+                        <View style={s.activeDotGlow} />
+                        <View style={s.activeDot} />
+                      </View>
+                      <Text style={s.activeLabel}>Active</Text>
+                    </>
+                  ) : (
+                    <>
+                      <View style={s.pendingDot} />
+                      <Text style={s.pendingLabel}>Pending</Text>
+                    </>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+      <View style={{ height: 8 }} />
     </Card>
   );
 }
 
-// ─── Admin Portal Screen ─────────────────────────────────────────────────────
+// ─── Admin Portal Screen ──────────────────────────────────────────────────────
 
 export default function AdminScreen() {
-  const { user } = useAuth();
-  const router   = useRouter();
-  const [settings, setSettings]   = useState<Record<string, string>>({});
+  const { user }  = useAuth();
+  const router    = useRouter();
+  const [settings, setSettings]           = useState<Record<string, string>>({});
   const [loadingSettings, setLoadingSettings] = useState(true);
 
-  // Gate: only admin email allowed
   const userEmail = (user as any)?.email ?? '';
   const isAdmin   = userEmail === ADMIN_EMAIL || userEmail === 'dev@neuroflow.app';
 
@@ -468,9 +623,9 @@ export default function AdminScreen() {
           <ActivityIndicator color={NF_BLUE} style={{ marginTop: 40 }} />
         ) : (
           <>
-            <EmailConfigSection settings={settings} onSave={handleSaveSetting} />
-            <AppSettingsSection settings={settings} onSave={handleSaveSetting} />
+            <EmailTemplateSection settings={settings} onSave={handleSaveSetting} />
             <ResourcesSection />
+            <AppSettingsSection settings={settings} onSave={handleSaveSetting} />
             <UserMonitorSection />
           </>
         )}
@@ -487,79 +642,61 @@ const s = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: colors.bgBase },
   scroll: { padding: spacing.lg, gap: spacing.lg },
 
-  // Header
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4,
-  },
-  backBtn: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(74,144,226,0.12)',
-    justifyContent: 'center', alignItems: 'center',
-  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
+  backBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(74,144,226,0.12)', justifyContent: 'center', alignItems: 'center' },
   backBtnText:  { fontSize: 22, color: NF_BLUE, lineHeight: 28, fontWeight: '600' },
   pageTitle:    { fontSize: 22, fontWeight: '800', color: NF_BLUE, letterSpacing: -0.5 },
   pageSub:      { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
   adminBadge:   { backgroundColor: 'rgba(74,144,226,0.12)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: radius.full, borderWidth: 1, borderColor: NF_BLUE + '44' },
   adminBadgeText: { fontSize: 12, fontWeight: '700', color: NF_BLUE },
 
-  // Card
-  card: {
-    backgroundColor: colors.bgCard,
-    borderRadius: radius.xl, padding: spacing.lg,
-    borderWidth: 1, borderColor: colors.border,
-    gap: spacing.md,
-  },
+  card: { backgroundColor: colors.bgCard, borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, gap: spacing.md },
 
-  // Section header
   sectionHeader: { marginBottom: 4 },
   sectionTitle:  { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
   sectionSub:    { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
 
-  // Field
-  fieldWrap:   { gap: 6 },
-  fieldLabel:  { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldWrap:  { gap: 6 },
+  fieldLabel: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   input: {
     backgroundColor: colors.bgBase, borderWidth: 1, borderColor: colors.border,
     borderRadius: radius.md, paddingHorizontal: 12, paddingVertical: 10,
     fontSize: 14, color: colors.textPrimary,
   },
-  inputMulti:  { minHeight: 72, textAlignVertical: 'top' },
+  inputMulti: { minHeight: 72, textAlignVertical: 'top' },
 
-  // Button
-  btn:         { borderRadius: radius.md, paddingHorizontal: 18, paddingVertical: 11, alignItems: 'center', justifyContent: 'center' },
-  btnSmall:    { paddingHorizontal: 10, paddingVertical: 6 },
-  btnText:     { fontSize: 14, fontWeight: '700', color: '#fff' },
+  btn:          { borderRadius: radius.md, paddingHorizontal: 18, paddingVertical: 11, alignItems: 'center', justifyContent: 'center' },
+  btnSmall:     { paddingHorizontal: 10, paddingVertical: 6 },
+  btnText:      { fontSize: 14, fontWeight: '700', color: '#fff' },
   btnTextSmall: { fontSize: 12 },
 
-  // Toggle row
-  toggleRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowGap:    { flexDirection: 'row', gap: 8 },
+  divider:   { height: 1, backgroundColor: colors.border, marginVertical: 4 },
 
-  // Row gap helper
-  rowGap: { flexDirection: 'row', gap: 8 },
-
-  // Resource rows
-  resourceRow:  { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
-  resourceTitle: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  resourceDesc:  { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  inactiveTag:   { color: NF_ORANGE, fontWeight: '600' },
-  resourceActions: { flexDirection: 'row', gap: 6 },
-  editorWrap:    { gap: spacing.md, paddingTop: 4 },
+  editorWrap: { gap: spacing.md, paddingTop: 4 },
 
   // User monitor
-  userRow:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
-  userAvatar:   { width: 36, height: 36, borderRadius: 18, backgroundColor: NF_BLUE + '22', justifyContent: 'center', alignItems: 'center' },
+  userRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  userAvatar:     { width: 38, height: 38, borderRadius: 19, backgroundColor: NF_BLUE + '22', justifyContent: 'center', alignItems: 'center' },
   userAvatarText: { fontSize: 15, fontWeight: '800', color: NF_BLUE },
-  userName:     { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  userEmail:    { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
-  userMeta:     { alignItems: 'flex-end', gap: 4 },
-  userBadge:    { fontSize: 10, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
-  badgeGreen:   { backgroundColor: NF_GREEN + '22', color: NF_GREEN },
-  badgeGray:    { backgroundColor: colors.border, color: colors.textTertiary },
-  userDate:     { fontSize: 10, color: colors.textTertiary },
+  userName:       { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
+  userEmail:      { fontSize: 11, color: colors.textSecondary },
+  userSince:      { fontSize: 10, color: colors.textTertiary },
+
+  // Active green glow indicator
+  activeDotWrap: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+  activeDotGlow: { position: 'absolute', width: 18, height: 18, borderRadius: 9, backgroundColor: NF_GREEN + '33' },
+  activeDot:     { width: 10, height: 10, borderRadius: 5, backgroundColor: NF_GREEN },
+  activeLabel:   { fontSize: 9, fontWeight: '700', color: NF_GREEN },
+  pendingDot:    { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.border },
+  pendingLabel:  { fontSize: 9, color: colors.textTertiary },
 
   emptyText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', paddingVertical: 8 },
 
-  // Access denied
   centerWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl, gap: 12 },
   lockIcon:   { fontSize: 48 },
   lockTitle:  { fontSize: 20, fontWeight: '800', color: colors.textPrimary, textAlign: 'center' },
