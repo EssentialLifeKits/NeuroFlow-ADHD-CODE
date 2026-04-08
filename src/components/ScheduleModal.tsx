@@ -302,8 +302,8 @@ export default function ScheduleModal({
     if (initialData?.id) { await editTask(initialData.id, taskInput); }
     else { await addTask(taskInput); }
 
-    // Schedule email reminder via Resend (skips InsForge entirely)
-    if (user?.email && reminderOffset !== 'none') {
+    // Schedule email reminder via Resend — always fires for every task with an email
+    if (user?.email) {
       try {
         await fetch('/api/schedule-reminder', {
           method: 'POST',
@@ -315,7 +315,7 @@ export default function ScheduleModal({
             category,
             userName: (user as any).displayName || user.email,
             email: user.email,
-            reminderOffset,
+            reminderOffset: reminderOffset === 'none' ? 'at_time' : reminderOffset,
           }),
         });
       } catch (e) {
