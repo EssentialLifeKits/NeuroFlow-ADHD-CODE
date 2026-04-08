@@ -57,7 +57,7 @@ const NF_BLUE = '#4A90E2';
 const NF_BLUE_GLOW = 'rgba(74, 144, 226, 0.28)';
 const DESKTOP_BREAKPOINT = 1024;
 const DESKTOP_SIDEBAR_W = 240; // matches Sidebar.tsx sidebarDesktop.width
-const CELL_H = 104;
+const CELL_H = 140;
 
 // ─── Calendar helpers ─────────────────────────────────────────────────────────
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -119,11 +119,18 @@ function DayCell({
   const onIn = () => Animated.spring(scale, { toValue: 0.93, friction: 8, tension: 100, useNativeDriver: true }).start();
   const onOut = () => Animated.spring(scale, { toValue: 1, friction: 8, tension: 100, useNativeDriver: true }).start();
 
-  const MAX = 2;
-  // One color bar per entry (max 5), each bar is that entry's category color
-  const bars: string[] = tasks.slice(0, 5).map((t) => getCategoryColor(t));
-  const visible = expanded ? tasks : tasks.slice(0, MAX);
-  const extra = tasks.length - MAX;
+  // One bar per UNIQUE post type — deduplicated, max 5 (one per category type).
+  // Multiple tasks of the same type show only one color indicator.
+  const bars: string[] = [];
+  const seenColors = new Set<string>();
+  for (const t of tasks) {
+    const color = getCategoryColor(t);
+    if (!seenColors.has(color)) {
+      seenColors.add(color);
+      bars.push(color);
+    }
+    if (bars.length === 5) break; // max 5 unique types
+  }
 
   return (
     <Animated.View style={[
@@ -133,11 +140,11 @@ function DayCell({
       isToday && cs.cellToday,
       { transform: [{ scale }] },
     ]}>
-      {/* Category color bars — flush to very top edge, full width, no padding */}
+      {/* Category color bars — one per unique post type, stacked horizontally */}
       {bars.length > 0 && (
         <View style={cs.barRow}>
           {bars.map((color, i) => (
-            <View key={i} style={[cs.bar, { backgroundColor: color }]} />
+            <View key={color + i} style={[cs.bar, { backgroundColor: color }]} />
           ))}
         </View>
       )}
@@ -146,8 +153,13 @@ function DayCell({
         <View style={isToday ? cs.badgeToday : cs.badge}>
           <Text style={[cs.dateNum, isToday && cs.dateNumToday]}>{day}</Text>
         </View>
-        <View style={cs.entries}>
-          {visible.map((t) => {
+        {/* All entries visible — ScrollView activates when more than 5 are present */}
+        <ScrollView
+          style={cs.entriesScroll}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator={tasks.length > 5}
+        >
+          {tasks.map((t) => {
             const conf = getCategoryConf(t);
             return (
               <Pressable key={t.id} onPress={(e) => { e.stopPropagation?.(); onTaskTap(t); }}>
@@ -159,12 +171,7 @@ function DayCell({
               </Pressable>
             );
           })}
-          {!expanded && extra > 0 && (
-            <Pressable onPress={() => onExpandMore(dateStr)}>
-              <Text style={cs.more}>+{extra} more</Text>
-            </Pressable>
-          )}
-        </View>
+        </ScrollView>
       </Pressable>
     </Animated.View>
   );
@@ -696,10 +703,11 @@ const cs = StyleSheet.create({
   dateNumToday: { color: '#fff', fontWeight: '700' },
   barRow: { flexDirection: 'row', height: 7, width: '100%' },
   bar: { flex: 1, height: 7 },
+  // Scroll container: shows 5 entries cleanly, scrolls beyond that
+  entriesScroll: { maxHeight: 90 },
   entries: { gap: 2 },
-  entry: { paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3, borderLeftWidth: 2 },
-  entryText: { fontSize: 8, fontWeight: '600' },
-  more: { fontSize: 8, color: colors.textTertiary, textAlign: 'center', marginTop: 2 },
+  entry: { paddingHorizontal: 3, paddingVertical: 2, borderRadius: 3, borderLeftWidth: 2, marginBottom: 2 },
+  entryText: { fontSize: 9, fontWeight: '600' },
 });
 
 // ─── Screen styles ────────────────────────────────────────────────────────────
