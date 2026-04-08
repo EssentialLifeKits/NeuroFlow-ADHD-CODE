@@ -686,7 +686,7 @@ export default function CalendarScreen() {
 // ─── Calendar cell styles ─────────────────────────────────────────────────────
 const cs = StyleSheet.create({
   // width is set inline via cellWidth prop — NOT baked in here
-  cell: { borderRightWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  cell: { borderRightWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, overflow: 'hidden' },
   cellInner: { flex: 1, padding: 5 },
   cellOther: { opacity: 0.3 },
   cellToday: { backgroundColor: NF_BLUE + '0F' },

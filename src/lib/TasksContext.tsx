@@ -53,8 +53,21 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         dbFetchTasks(profileId, 'monthly'),
       ]);
       const combined = [...d, ...w, ...m];
-      setTasks(combined);
-      saveToCache(combined);
+
+      if (combined.length > 0) {
+        // Server returned tasks — use authoritative DB data
+        setTasks(combined);
+        saveToCache(combined);
+      } else if (cachedTasks.length > 0) {
+        // Server returned nothing but cache has tasks — keep cache visible.
+        // This guards against a transient auth hiccup returning an empty result
+        // and silently wiping the user's task list. The cache stays intact and
+        // the next successful server fetch will overwrite it correctly.
+        setTasks(cachedTasks);
+      } else {
+        // Both server and cache are empty — genuinely no tasks
+        setTasks([]);
+      }
     } catch {
       // If server fails, keep showing cached tasks
     }

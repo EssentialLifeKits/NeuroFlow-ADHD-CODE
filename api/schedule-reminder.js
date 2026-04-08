@@ -96,24 +96,30 @@ module.exports = async function handler(req, res) {
 
   const results = [];
   for (const { sendAt, type } of scheduled) {
-    // Only schedule future emails
-    if (sendAt <= new Date()) continue;
+    const now = new Date();
+    // Tasks due in the past or within 60 seconds: send immediately (no scheduled_at).
+    // Resend requires scheduled_at to be at least ~60s in the future; past times are rejected.
+    const isPast = sendAt <= new Date(now.getTime() + 60_000);
+
+    const emailBody = {
+      from: FROM_EMAIL,
+      to: [email],
+      subject: type === 'at_time' ? `🎯 Now: ${title}` : `⏰ Reminder: ${title}`,
+      html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type }),
+    };
+    if (!isPast) {
+      emailBody.scheduled_at = sendAt.toISOString();
+    }
 
     const emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: FROM_EMAIL,
-        to: [email],
-        subject: type === 'at_time' ? `🎯 Now: ${title}` : `⏰ Reminder: ${title}`,
-        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type }),
-        scheduled_at: sendAt.toISOString(),
-      }),
+      body: JSON.stringify(emailBody),
     });
 
     if (emailRes.ok) {
       const data = await emailRes.json();
-      results.push({ type, scheduledAt: sendAt.toISOString(), id: data.id });
+      results.push({ type, scheduledAt: isPast ? 'immediate' : sendAt.toISOString(), id: data.id });
     } else {
       const err = await emailRes.text();
       console.error(`[schedule-reminder] Resend error: ${emailRes.status} ${err}`);
