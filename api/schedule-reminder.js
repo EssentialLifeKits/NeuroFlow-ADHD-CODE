@@ -1,14 +1,37 @@
 /**
- * NeuroFlow — Schedule a Resend email reminder for a task
+ * NeuroFlow — Schedule email reminder for a task
  * POST /api/schedule-reminder
  * Body: { title, dueDate, dueTime, category, userName, email, reminderOffset }
- *   reminderOffset: 'at_time' | '1h_before' | '1d_before' | 'none'
+ *
+ * Strategy:
+ *  - Immediate sends (due within 6 min / past due): Gmail SMTP → guaranteed inbox
+ *  - Future scheduled sends: Resend scheduled_at → exact time delivery
+ *  - Every task also gets an instant Gmail confirmation so inbox trust is established
  */
 
+const nodemailer   = require('nodemailer');
+const GMAIL_USER   = process.env.GMAIL_USER ?? '';
+const GMAIL_PASS   = process.env.GMAIL_APP_PASSWORD ?? '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
-const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <noreply@keepzbrandai.com>';
 const INSFORGE_URL   = process.env.INSFORGE_URL ?? process.env.EXPO_PUBLIC_INSFORGE_URL ?? '';
 const INSFORGE_KEY   = process.env.INSFORGE_API_KEY ?? '';
+
+function getGmailTransporter() {
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: GMAIL_USER, pass: GMAIL_PASS },
+  });
+}
+
+async function sendViaGmail({ to, subject, html }) {
+  const transporter = getGmailTransporter();
+  await transporter.sendMail({
+    from: `NeuroFlow Reminders <${GMAIL_USER}>`,
+    to,
+    subject,
+    html,
+  });
+}
 
 async function markTaskSent(taskId) {
   if (!taskId || !INSFORGE_URL || !INSFORGE_KEY) return;
@@ -72,7 +95,7 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
 </td></tr>
 <tr><td style="background:#0e0e1a;padding:20px 32px;border-top:1px solid #2a2a3e;">
 <p style="margin:0 0 6px;font-size:11px;color:#4b5563;text-align:center;">Sent by NeuroFlow · ADHD Focus Planner &nbsp;·&nbsp;<span style="color:#4A90E2;">Built for your brain ✨</span></p>
-<p style="margin:0;font-size:10px;color:#374151;text-align:center;">If this landed in spam, mark it <strong>Not Spam</strong> and add <span style="color:#4A90E2;">reminders@keepzbrandai.com</span> to your contacts so future reminders reach your inbox.</p>
+<p style="margin:0;font-size:10px;color:#374151;text-align:center;">Add <span style="color:#4A90E2;">neuroflow.reminders@gmail.com</span> to your contacts to ensure all alerts reach your inbox.</p>
 </td></tr>
 </table></td></tr></table></body></html>`;
 }
@@ -107,7 +130,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  if (!RESEND_API_KEY) return res.status(500).json({ error: 'Missing RESEND_API_KEY' });
+  if (!GMAIL_USER || !GMAIL_PASS) return res.status(500).json({ error: 'Missing GMAIL_USER or GMAIL_APP_PASSWORD' });
 
   const { title, dueDate, dueTime, category, userName, email, reminderOffset, timezone, taskId } = req.body ?? {};
   if (!title || !dueDate || !dueTime || !email) {
@@ -116,73 +139,110 @@ module.exports = async function handler(req, res) {
 
   console.log('[schedule-reminder] Request:', { title, dueDate, dueTime, email, reminderOffset, timezone, taskId });
 
-  // Calculate the scheduled send time based on reminderOffset
-  // The client sends times in the user's local timezone, so we need to convert to UTC
   const userTz = timezone || 'America/New_York';
   const naiveDt = new Date(`${dueDate}T${dueTime}:00`);
   const tzOffsetMs = getTimezoneOffsetMs(naiveDt, userTz);
   const eventDt = new Date(naiveDt.getTime() + tzOffsetMs);
   console.log('[schedule-reminder] Time conversion:', { naive: naiveDt.toISOString(), userTz, eventUTC: eventDt.toISOString() });
-  const scheduled = [];
 
-  if (!reminderOffset || reminderOffset === 'at_time' || reminderOffset === 'none') {
-    // No advance reminder — send at the exact due time only
-    scheduled.push({ sendAt: eventDt, type: 'at_time' });
-  } else {
-    // Parse new format "30min_before", "60min_before" etc. + legacy "1h_before" / "1d_before"
-    let offsetMs = 0;
-    const minMatch = reminderOffset.match(/^(\d+)min_before$/);
-    if (minMatch) offsetMs = parseInt(minMatch[1], 10) * 60 * 1000;
-    if (reminderOffset === '1h_before') offsetMs = 60 * 60 * 1000;
-    if (reminderOffset === '1d_before') offsetMs = 24 * 60 * 60 * 1000;
-
-    if (offsetMs > 0) {
-      scheduled.push({ sendAt: new Date(eventDt.getTime() - offsetMs), type: 'reminder' });
-    }
-    scheduled.push({ sendAt: eventDt, type: 'at_time' });
-  }
-
+  const now = new Date();
+  const SIX_MIN = 6 * 60 * 1000;
+  const isDueImmediately = eventDt <= new Date(now.getTime() + SIX_MIN);
   const results = [];
-  for (const { sendAt, type } of scheduled) {
-    const now = new Date();
-    // Resend requires scheduled_at to be at least 5 minutes in the future.
-    // Use a 6-minute buffer to be safe. Anything within 6 minutes sends immediately.
-    const isPast = sendAt <= new Date(now.getTime() + 6 * 60 * 1000);
 
-    const emailBody = {
-      from: FROM_EMAIL,
-      to: [email],
-      subject: type === 'at_time' ? `🎯 Now: ${title}` : `⏰ Reminder: ${title}`,
-      html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type }),
-    };
-    if (!isPast) {
-      emailBody.scheduled_at = sendAt.toISOString();
+  // ── Immediate send via Gmail (guaranteed inbox delivery) ──────────────────
+  // Tasks due within 6 minutes OR past due → send via Gmail right now
+  if (isDueImmediately) {
+    try {
+      await sendViaGmail({
+        to: email,
+        subject: `🎯 Now: ${title}`,
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'at_time' }),
+      });
+      results.push({ type: 'at_time', scheduledAt: 'immediate', via: 'gmail' });
+      if (taskId) await markTaskSent(taskId);
+    } catch (e) {
+      console.error('[schedule-reminder] Gmail send error:', e);
+      results.push({ type: 'at_time', error: String(e), via: 'gmail' });
+    }
+  }
+
+  // ── Future scheduled send via Resend (exact time delivery) ────────────────
+  // Tasks due more than 6 minutes away → schedule with Resend for exact time
+  if (!isDueImmediately && RESEND_API_KEY) {
+    // Parse reminder offset for advance email
+    let offsetMs = 0;
+    if (reminderOffset && reminderOffset !== 'at_time' && reminderOffset !== 'none') {
+      const minMatch = reminderOffset.match(/^(\d+)min_before$/);
+      if (minMatch) offsetMs = parseInt(minMatch[1], 10) * 60 * 1000;
+      if (reminderOffset === '1h_before') offsetMs = 60 * 60 * 1000;
+      if (reminderOffset === '1d_before') offsetMs = 24 * 60 * 60 * 1000;
     }
 
-    const emailRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(emailBody),
-    });
+    const toSchedule = [];
+    if (offsetMs > 0) toSchedule.push({ sendAt: new Date(eventDt.getTime() - offsetMs), type: 'reminder' });
+    toSchedule.push({ sendAt: eventDt, type: 'at_time' });
 
-    if (emailRes.ok) {
-      const data = await emailRes.json();
-      results.push({ type, scheduledAt: isPast ? 'immediate' : sendAt.toISOString(), id: data.id });
-      // After the at_time email is accepted by Resend, mark the task as sent in DB.
-      // Client will hide the task 5 minutes after its due time.
-      if (type === 'at_time' && taskId) {
-        await markTaskSent(taskId);
+    for (const { sendAt, type } of toSchedule) {
+      const emailRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: `NeuroFlow ADHD <reminders@keepzbrandai.com>`,
+          to: [email],
+          subject: type === 'at_time' ? `🎯 Now: ${title}` : `⏰ Reminder: ${title}`,
+          html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type }),
+          scheduled_at: sendAt.toISOString(),
+        }),
+      });
+      if (emailRes.ok) {
+        const data = await emailRes.json();
+        results.push({ type, scheduledAt: sendAt.toISOString(), id: data.id, via: 'resend' });
+        if (type === 'at_time' && taskId) await markTaskSent(taskId);
+      } else {
+        const err = await emailRes.text();
+        console.error(`[schedule-reminder] Resend error: ${emailRes.status} ${err}`);
+        results.push({ type, error: err, status: emailRes.status, via: 'resend' });
       }
-    } else {
-      const err = await emailRes.text();
-      console.error(`[schedule-reminder] Resend error: ${emailRes.status} ${err}`);
-      results.push({ type, error: err, status: emailRes.status });
+    }
+
+    // Also send an immediate Gmail confirmation so user sees it in inbox right away
+    try {
+      const [h, m] = dueTime.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      const formattedTime = `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+      const formattedDate = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+      await sendViaGmail({
+        to: email,
+        subject: `✅ Reminder Set: ${title} at ${formattedTime}`,
+        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0e0e1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0e0e1a;padding:40px 0;"><tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#15152a;border-radius:20px;border:1px solid #2a2a3e;max-width:560px;width:100%;">
+<tr><td style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:28px 32px;border-bottom:1px solid #2a2a3e;">
+<span style="font-size:22px;font-weight:800;color:#4A90E2;">NeuroFlow</span><span style="font-size:13px;color:#6b7280;margin-left:8px;">Focus Planner</span>
+</td></tr>
+<tr><td style="padding:32px;">
+<p style="margin:0 0 8px;font-size:14px;color:#9ca3af;">Hi ${userName || 'there'} 👋</p>
+<h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#f0f0f5;">✅ Your reminder is confirmed!</h1>
+<p style="margin:0 0 28px;font-size:14px;color:#9ca3af;">We'll send you an alert at the scheduled time.</p>
+<div style="background:#1e1e35;border:1px solid #4A90E244;border-left:4px solid #4A90E2;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+<p style="margin:0 0 12px;font-size:18px;font-weight:700;color:#f0f0f5;">📋 ${title}</p>
+<p style="margin:0;font-size:14px;color:#e5e7eb;">📅 ${formattedDate} &nbsp;·&nbsp; 🕐 ${formattedTime}</p>
+</div>
+<p style="margin:0;font-size:13px;color:#9ca3af;">Add <strong style="color:#4A90E2;">neuroflow.reminders@gmail.com</strong> to your contacts so all your alerts reach your inbox.</p>
+</td></tr>
+<tr><td style="background:#0e0e1a;padding:16px 32px;border-top:1px solid #2a2a3e;">
+<p style="margin:0;font-size:11px;color:#4b5563;text-align:center;">Sent by NeuroFlow · ADHD Focus Planner &nbsp;·&nbsp;<span style="color:#4A90E2;">Built for your brain ✨</span></p>
+</td></tr></table></td></tr></table></body></html>`,
+      });
+      results.push({ type: 'confirmation', scheduledAt: 'immediate', via: 'gmail' });
+    } catch (e) {
+      console.warn('[schedule-reminder] Gmail confirmation error:', e);
     }
   }
 
-  const hasError = results.every(r => r.error);
-  if (hasError) {
-    return res.status(502).json({ error: 'Resend rejected all emails', scheduled: results });
-  }
+  const allFailed = results.length > 0 && results.every(r => r.error);
+  if (allFailed) return res.status(502).json({ error: 'All email sends failed', scheduled: results });
   return res.status(200).json({ scheduled: results });
 };
