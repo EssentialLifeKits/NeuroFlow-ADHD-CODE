@@ -107,6 +107,15 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     }
   }, [profileId, loadFromServer]);
 
+  // Every 60 seconds, re-filter tasks so sent items disappear from the UI
+  // automatically once 5 minutes have passed since their due time.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTasks(prev => filterSentTasks(prev));
+    }, 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const refreshTasks = async () => {
     await loadFromServer();
   };
