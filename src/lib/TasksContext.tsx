@@ -7,10 +7,21 @@ interface TasksContextValue {
   tasks: Task[];
   loading: boolean;
   refreshTasks: () => Promise<void>;
-  addTask: (task: any) => Promise<void>;
+  addTask: (task: any) => Promise<string | null>;
   editTask: (taskId: string, taskInput: any) => Promise<void>;
   updateTaskState: (taskId: string, newStatus: any) => Promise<void>;
   removeTask: (taskId: string) => Promise<void>;
+}
+
+// Hide tasks that have been sent and are 5+ minutes past their due time
+function filterSentTasks(tasks: Task[]): Task[] {
+  const now = Date.now();
+  return tasks.filter((t) => {
+    if (t.recurrence_rule !== 'sent') return true;
+    if (!t.due_date || !t.due_time) return false;
+    const dueMs = new Date(`${t.due_date}T${t.due_time}:00`).getTime();
+    return now < dueMs + 5 * 60 * 1000;
+  });
 }
 
 const TasksContext = createContext<TasksContextValue | null>(null);
@@ -24,7 +35,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const loadFromCache = async () => {
     try {
       const cached = await AsyncStorage.getItem('@neuroflow_tasks');
-      if (cached) setTasks(JSON.parse(cached));
+      if (cached) setTasks(filterSentTasks(JSON.parse(cached)));
     } catch {}
   };
 
@@ -52,7 +63,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         dbFetchTasks(profileId, 'weekly'),
         dbFetchTasks(profileId, 'monthly'),
       ]);
-      const combined = [...d, ...w, ...m];
+      const combined = filterSentTasks([...d, ...w, ...m]);
 
       if (combined.length > 0) {
         // Server returned tasks — use authoritative DB data
@@ -100,7 +111,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     await loadFromServer();
   };
 
-  const addTask = async (taskInput: any) => {
+  const addTask = async (taskInput: any): Promise<string | null> => {
     // Optimistic cache update
     const tempId = `local-${Date.now()}`;
     const optimisticTask: Task = {
@@ -133,10 +144,12 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
           saveToCache(updated);
           return updated;
         });
+        return saved.id;
       } catch (e) {
         console.error('[NeuroFlow] DB save FAILED — entry NOT persisted:', e);
       }
     }
+    return tempId;
   };
 
   const editTask = async (taskId: string, taskInput: any) => {

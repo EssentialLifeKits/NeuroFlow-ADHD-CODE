@@ -7,6 +7,24 @@
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
 const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <noreply@keepzbrandai.com>';
+const INSFORGE_URL   = process.env.INSFORGE_URL ?? process.env.EXPO_PUBLIC_INSFORGE_URL ?? '';
+const INSFORGE_KEY   = process.env.INSFORGE_API_KEY ?? '';
+
+async function markTaskSent(taskId) {
+  if (!taskId || !INSFORGE_URL || !INSFORGE_KEY) return;
+  try {
+    const url = `${INSFORGE_URL}/api/database/records/tasks/${taskId}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${INSFORGE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'completed', recurrence_rule: 'sent' }),
+    });
+    if (!res.ok) console.error(`[schedule-reminder] markTaskSent failed ${res.status}: ${await res.text()}`);
+    else console.log(`[schedule-reminder] Task ${taskId} marked as sent`);
+  } catch (e) {
+    console.error(`[schedule-reminder] markTaskSent error:`, e);
+  }
+}
 
 const CATEGORY_META = {
   task:        { color: '#FEDA75', emoji: '✅', label: 'Task' },
@@ -90,12 +108,12 @@ module.exports = async function handler(req, res) {
 
   if (!RESEND_API_KEY) return res.status(500).json({ error: 'Missing RESEND_API_KEY' });
 
-  const { title, dueDate, dueTime, category, userName, email, reminderOffset, timezone } = req.body ?? {};
+  const { title, dueDate, dueTime, category, userName, email, reminderOffset, timezone, taskId } = req.body ?? {};
   if (!title || !dueDate || !dueTime || !email) {
     return res.status(400).json({ error: 'Missing required fields: title, dueDate, dueTime, email' });
   }
 
-  console.log('[schedule-reminder] Request:', { title, dueDate, dueTime, email, reminderOffset, timezone });
+  console.log('[schedule-reminder] Request:', { title, dueDate, dueTime, email, reminderOffset, timezone, taskId });
 
   // Calculate the scheduled send time based on reminderOffset
   // The client sends times in the user's local timezone, so we need to convert to UTC
@@ -126,9 +144,9 @@ module.exports = async function handler(req, res) {
   const results = [];
   for (const { sendAt, type } of scheduled) {
     const now = new Date();
-    // Tasks due in the past or within 60 seconds: send immediately (no scheduled_at).
-    // Resend requires scheduled_at to be at least ~60s in the future; past times are rejected.
-    const isPast = sendAt <= new Date(now.getTime() + 60_000);
+    // Resend requires scheduled_at to be at least 5 minutes in the future.
+    // Use a 6-minute buffer to be safe. Anything within 6 minutes sends immediately.
+    const isPast = sendAt <= new Date(now.getTime() + 6 * 60 * 1000);
 
     const emailBody = {
       from: FROM_EMAIL,
@@ -149,6 +167,11 @@ module.exports = async function handler(req, res) {
     if (emailRes.ok) {
       const data = await emailRes.json();
       results.push({ type, scheduledAt: isPast ? 'immediate' : sendAt.toISOString(), id: data.id });
+      // After the at_time email is accepted by Resend, mark the task as sent in DB.
+      // Client will hide the task 5 minutes after its due time.
+      if (type === 'at_time' && taskId) {
+        await markTaskSent(taskId);
+      }
     } else {
       const err = await emailRes.text();
       console.error(`[schedule-reminder] Resend error: ${emailRes.status} ${err}`);
@@ -156,5 +179,9 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  const hasError = results.every(r => r.error);
+  if (hasError) {
+    return res.status(502).json({ error: 'Resend rejected all emails', scheduled: results });
+  }
   return res.status(200).json({ scheduled: results });
 };

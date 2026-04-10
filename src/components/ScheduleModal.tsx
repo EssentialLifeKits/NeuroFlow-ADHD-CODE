@@ -299,8 +299,9 @@ export default function ScheduleModal({
       recurrence_rule: reminderOffset === 'none' ? 'none' : `${reminderOffset}min_before`, // minutes-based format
     };
 
+    let savedTaskId: string | null = null;
     if (initialData?.id) { await editTask(initialData.id, taskInput); }
-    else { await addTask(taskInput); }
+    else { savedTaskId = await addTask(taskInput); }
 
     // Schedule email reminder via Resend — always fires for every task with an email
     if (user?.email) {
@@ -309,7 +310,7 @@ export default function ScheduleModal({
       if (reminderOffset !== 'none' && reminderOffset !== '0') {
         apiOffset = `${reminderOffset}min_before`;
       }
-      console.log('[ScheduleModal] Scheduling email reminder:', { email: user.email, dueDate: dateStr, dueTime: timeStr, apiOffset });
+      console.log('[ScheduleModal] Scheduling email reminder:', { email: user.email, dueDate: dateStr, dueTime: timeStr, apiOffset, taskId: savedTaskId });
       try {
         const resp = await fetch('/api/schedule-reminder', {
           method: 'POST',
@@ -323,16 +324,20 @@ export default function ScheduleModal({
             email: user.email,
             reminderOffset: apiOffset,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            taskId: savedTaskId,
           }),
         });
         const result = await resp.json();
-        if (resp.ok) {
-          console.log('[ScheduleModal] Email scheduled successfully:', result);
-        } else {
+        if (!resp.ok || result.scheduled?.every((r: any) => r.error)) {
+          const detail = result.scheduled?.find((r: any) => r.error)?.error ?? result.error ?? 'Unknown error';
           console.error('[ScheduleModal] Email scheduling failed:', resp.status, result);
+          Alert.alert('⚠️ Email Reminder Failed', `Your entry was saved but the email reminder could not be scheduled.\n\n${detail}`);
+        } else {
+          console.log('[ScheduleModal] Email scheduled successfully:', result);
         }
       } catch (e) {
         console.warn('[ScheduleModal] schedule-reminder fetch failed:', e);
+        Alert.alert('⚠️ Email Reminder Failed', 'Your entry was saved but the email reminder could not be reached. Check your connection.');
       }
     } else {
       console.warn('[ScheduleModal] No user email found, skipping email reminder');
