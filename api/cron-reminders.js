@@ -83,7 +83,8 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
 <p style="margin:0 0 24px;font-size:13px;color:#9ca3af;line-height:1.6;">${isReminder ? 'Head to your NeuroFlow planner to review your task.' : "Open NeuroFlow and stay in your flow state. You've got this! 🌸"}</p>
 </td></tr>
 <tr><td style="background:#0e0e1a;padding:20px 32px;border-top:1px solid #2a2a3e;">
-<p style="margin:0;font-size:11px;color:#4b5563;text-align:center;">Sent by NeuroFlow · ADHD Focus Planner &nbsp;·&nbsp;<span style="color:#4A90E2;">Built for your brain ✨</span></p>
+<p style="margin:0 0 6px;font-size:11px;color:#4b5563;text-align:center;">Sent by NeuroFlow · ADHD Focus Planner &nbsp;·&nbsp;<span style="color:#4A90E2;">Built for your brain ✨</span></p>
+<p style="margin:0;font-size:10px;color:#374151;text-align:center;">If this landed in spam, mark it <strong>Not Spam</strong> and add <span style="color:#4A90E2;">reminders@keepzbrandai.com</span> to your contacts so future reminders reach your inbox.</p>
 </td></tr>
 </table></td></tr></table></body></html>`;
 }
