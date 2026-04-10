@@ -304,8 +304,14 @@ export default function ScheduleModal({
 
     // Schedule email reminder via Resend — always fires for every task with an email
     if (user?.email) {
+      // Convert minute-based offset to the format schedule-reminder.js expects
+      let apiOffset = 'at_time';
+      if (reminderOffset !== 'none' && reminderOffset !== '0') {
+        apiOffset = `${reminderOffset}min_before`;
+      }
+      console.log('[ScheduleModal] Scheduling email reminder:', { email: user.email, dueDate: dateStr, dueTime: timeStr, apiOffset });
       try {
-        await fetch('/api/schedule-reminder', {
+        const resp = await fetch('/api/schedule-reminder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -315,12 +321,21 @@ export default function ScheduleModal({
             category,
             userName: (user as any).displayName || user.email,
             email: user.email,
-            reminderOffset: reminderOffset === 'none' ? 'at_time' : reminderOffset,
+            reminderOffset: apiOffset,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         });
+        const result = await resp.json();
+        if (resp.ok) {
+          console.log('[ScheduleModal] Email scheduled successfully:', result);
+        } else {
+          console.error('[ScheduleModal] Email scheduling failed:', resp.status, result);
+        }
       } catch (e) {
-        console.warn('[ScheduleModal] schedule-reminder failed:', e);
+        console.warn('[ScheduleModal] schedule-reminder fetch failed:', e);
       }
+    } else {
+      console.warn('[ScheduleModal] No user email found, skipping email reminder');
     }
 
     handleClose();

@@ -12,7 +12,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY!;
-const FROM_EMAIL = process.env.FROM_EMAIL ?? 'NeuroFlow <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.FROM_EMAIL ?? 'NeuroFlow <noreply@keepzbrandai.com>';
 
 // Category colors matching the app theme
 const CATEGORY_COLORS: Record<string, { color: string; emoji: string; label: string }> = {

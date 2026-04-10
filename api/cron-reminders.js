@@ -6,7 +6,7 @@
 const INSFORGE_URL   = process.env.INSFORGE_URL ?? process.env.EXPO_PUBLIC_INSFORGE_URL ?? '';
 const INSFORGE_KEY   = process.env.INSFORGE_API_KEY ?? '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
-const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <onboarding@resend.dev>';
+const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <noreply@keepzbrandai.com>';
 
 async function dbSelect(table, select, eqFilters = {}) {
   const params = new URLSearchParams({ select });
@@ -88,6 +88,42 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
 </table></td></tr></table></body></html>`;
 }
 
+/**
+ * Compute the offset in ms to SUBTRACT from a "naive" UTC Date to get the
+ * correct UTC instant for a local time in the given IANA timezone.
+ * Example: 11:20 in America/New_York (EDT, UTC-4) → offset is +4h (14400000 ms)
+ * so eventDt = naiveUTC + 4h = 15:20 UTC, which is the correct UTC time.
+ *
+ * Uses Intl.DateTimeFormat (built-in to Node 18+) — no external libraries needed.
+ */
+function getTimezoneOffsetMs(naiveUtcDate, timezone) {
+  try {
+    // Format the UTC date in the target timezone to get the local components
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    });
+    const parts = {};
+    for (const p of fmt.formatToParts(naiveUtcDate)) {
+      parts[p.type] = p.value;
+    }
+    // Reconstruct what the UTC time would be if this local time were UTC
+    const localAsUtc = new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}Z`);
+    // The difference tells us the timezone offset
+    const offsetMs = naiveUtcDate.getTime() - localAsUtc.getTime();
+    // We need to ADD this offset to convert local→UTC
+    // If TZ is UTC-4: naiveUTC shows 11:20, localAsUtc shows 07:20 (because 11:20 UTC is 07:20 ET)
+    // offset = 11:20 - 07:20 = +4h. Adding +4h to naive 11:20 gives 15:20 UTC = correct!
+    return offsetMs;
+  } catch (e) {
+    console.warn(`[cron] Timezone conversion failed for ${timezone}:`, e);
+    // Default to America/New_York (UTC-4 EDT / UTC-5 EST) — best guess
+    return 4 * 60 * 60 * 1000;
+  }
+}
+
 module.exports = async function handler(req, res) {
   try { return await run(req, res); } catch(e) { console.error('[cron] FATAL:', e); return res.status(500).json({ error: String(e), cause: String(e?.cause ?? ''), url: INSFORGE_URL?.slice(0,30) }); }
 };
@@ -99,7 +135,7 @@ async function run(req, res) {
   }
 
   const now = new Date();
-  const windowStart = new Date(now.getTime() - 1 * 60 * 1000); // 1-minute window matches every-minute cron
+  const windowStart = new Date(now.getTime() - 2 * 60 * 1000); // 2-minute window for cron timing jitter
   console.log(`[cron] Running at ${now.toISOString()}`);
 
   const { data: allTasks, error } = await dbSelect('tasks', '*');
@@ -116,8 +152,6 @@ async function run(req, res) {
   const skipped = [];
 
   for (const task of tasks) {
-    const eventDt = new Date(`${task.due_date}T${task.due_time}:00`);
-
     // Find user email — try id first, then auth_user_id
     let userRow;
     const { data: byId } = await dbSelect('users', '*', { id: task.user_id });
@@ -132,6 +166,17 @@ async function run(req, res) {
       console.warn(`[cron] No email for user ${task.user_id} (task ${task.id})`);
       continue;
     }
+
+    // Convert stored local time → UTC using the user's timezone.
+    // Tasks store due_time in the user's local TZ (e.g. "11:20" means 11:20 AM ET).
+    // On Vercel (UTC), new Date("2026-04-10T11:20:00") would be 11:20 UTC, not ET.
+    // We use Intl to compute the correct UTC offset and adjust.
+    const userTz = userRow.timezone || 'America/New_York'; // default to ET
+    const naiveDt = new Date(`${task.due_date}T${task.due_time}:00`);
+    // Get the offset at that datetime for the user's timezone
+    const tzOffsetMs = getTimezoneOffsetMs(naiveDt, userTz);
+    const eventDt = new Date(naiveDt.getTime() + tzOffsetMs);
+    console.log(`[cron] Task ${task.id}: stored=${task.due_date}T${task.due_time}, tz=${userTz}, eventUTC=${eventDt.toISOString()}, now=${now.toISOString()}`);
 
     // Send at-time email if task is due within the window
     if (eventDt >= windowStart && eventDt <= now) {

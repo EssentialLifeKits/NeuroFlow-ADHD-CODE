@@ -6,7 +6,7 @@
  */
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
-const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <onboarding@resend.dev>';
+const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <noreply@keepzbrandai.com>';
 
 const CATEGORY_META = {
   task:        { color: '#FEDA75', emoji: '✅', label: 'Task' },
@@ -58,6 +58,28 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
 </table></td></tr></table></body></html>`;
 }
 
+/**
+ * Compute the offset in ms to convert a "naive" local time to UTC.
+ * Uses Intl.DateTimeFormat — built-in to Node 18+.
+ */
+function getTimezoneOffsetMs(naiveUtcDate, timezone) {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    });
+    const parts = {};
+    for (const p of fmt.formatToParts(naiveUtcDate)) parts[p.type] = p.value;
+    const localAsUtc = new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}Z`);
+    return naiveUtcDate.getTime() - localAsUtc.getTime();
+  } catch (e) {
+    console.warn(`[schedule-reminder] TZ conversion failed for ${timezone}:`, e);
+    return 4 * 60 * 60 * 1000; // default EST/EDT offset
+  }
+}
+
 module.exports = async function handler(req, res) {
   // Allow CORS from the app
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -68,13 +90,20 @@ module.exports = async function handler(req, res) {
 
   if (!RESEND_API_KEY) return res.status(500).json({ error: 'Missing RESEND_API_KEY' });
 
-  const { title, dueDate, dueTime, category, userName, email, reminderOffset } = req.body ?? {};
+  const { title, dueDate, dueTime, category, userName, email, reminderOffset, timezone } = req.body ?? {};
   if (!title || !dueDate || !dueTime || !email) {
     return res.status(400).json({ error: 'Missing required fields: title, dueDate, dueTime, email' });
   }
 
+  console.log('[schedule-reminder] Request:', { title, dueDate, dueTime, email, reminderOffset, timezone });
+
   // Calculate the scheduled send time based on reminderOffset
-  const eventDt = new Date(`${dueDate}T${dueTime}:00`);
+  // The client sends times in the user's local timezone, so we need to convert to UTC
+  const userTz = timezone || 'America/New_York';
+  const naiveDt = new Date(`${dueDate}T${dueTime}:00`);
+  const tzOffsetMs = getTimezoneOffsetMs(naiveDt, userTz);
+  const eventDt = new Date(naiveDt.getTime() + tzOffsetMs);
+  console.log('[schedule-reminder] Time conversion:', { naive: naiveDt.toISOString(), userTz, eventUTC: eventDt.toISOString() });
   const scheduled = [];
 
   if (!reminderOffset || reminderOffset === 'at_time' || reminderOffset === 'none') {
@@ -123,6 +152,7 @@ module.exports = async function handler(req, res) {
     } else {
       const err = await emailRes.text();
       console.error(`[schedule-reminder] Resend error: ${emailRes.status} ${err}`);
+      results.push({ type, error: err, status: emailRes.status });
     }
   }
 
