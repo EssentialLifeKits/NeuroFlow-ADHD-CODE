@@ -146,13 +146,15 @@ module.exports = async function handler(req, res) {
   console.log('[schedule-reminder] Time conversion:', { naive: naiveDt.toISOString(), userTz, eventUTC: eventDt.toISOString() });
 
   const now = new Date();
-  const SIX_MIN = 6 * 60 * 1000;
-  const isDueImmediately = eventDt <= new Date(now.getTime() + SIX_MIN);
+  const FIVE_MIN_MS = 5 * 60 * 1000;
+  // Tasks past their due time or within 1 minute: send immediately via Gmail
+  const isPastDue = eventDt <= new Date(now.getTime() + 60_000);
+  // Tasks 1–5 minutes away: too soon for Resend's minimum, send via Gmail immediately
+  const isTooSoonForResend = !isPastDue && eventDt <= new Date(now.getTime() + FIVE_MIN_MS);
   const results = [];
 
-  // ── Immediate send via Gmail (guaranteed inbox delivery) ──────────────────
-  // Tasks due within 6 minutes OR past due → send via Gmail right now
-  if (isDueImmediately) {
+  // ── Past due or within 1 minute → Gmail "It's time" ──────────────────────
+  if (isPastDue) {
     try {
       await sendViaGmail({
         to: email,
@@ -167,10 +169,25 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // ── Future scheduled send via Resend (exact time delivery) ────────────────
-  // Tasks due more than 6 minutes away → schedule with Resend for exact time
-  if (!isDueImmediately && RESEND_API_KEY) {
-    // Parse reminder offset for advance email
+  // ── 1–5 minutes away → Gmail "Starting soon" (Resend minimum not met) ─────
+  if (isTooSoonForResend) {
+    const minsAway = Math.ceil((eventDt.getTime() - now.getTime()) / 60_000);
+    try {
+      await sendViaGmail({
+        to: email,
+        subject: `⏰ Starting in ${minsAway} min: ${title}`,
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'reminder' }),
+      });
+      results.push({ type: 'reminder', scheduledAt: 'immediate', via: 'gmail' });
+      if (taskId) await markTaskSent(taskId);
+    } catch (e) {
+      console.error('[schedule-reminder] Gmail soon-send error:', e);
+      results.push({ type: 'reminder', error: String(e), via: 'gmail' });
+    }
+  }
+
+  // ── 5+ minutes away → Resend at exact scheduled time ─────────────────────
+  if (!isPastDue && !isTooSoonForResend && RESEND_API_KEY) {
     let offsetMs = 0;
     if (reminderOffset && reminderOffset !== 'at_time' && reminderOffset !== 'none') {
       const minMatch = reminderOffset.match(/^(\d+)min_before$/);
@@ -204,41 +221,6 @@ module.exports = async function handler(req, res) {
         console.error(`[schedule-reminder] Resend error: ${emailRes.status} ${err}`);
         results.push({ type, error: err, status: emailRes.status, via: 'resend' });
       }
-    }
-
-    // Also send an immediate Gmail confirmation so user sees it in inbox right away
-    try {
-      const [h, m] = dueTime.split(':').map(Number);
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const h12 = h % 12 || 12;
-      const formattedTime = `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-      const formattedDate = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-      await sendViaGmail({
-        to: email,
-        subject: `✅ Reminder Set: ${title} at ${formattedTime}`,
-        html: `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0e0e1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0e0e1a;padding:40px 0;"><tr><td align="center">
-<table width="560" cellpadding="0" cellspacing="0" style="background:#15152a;border-radius:20px;border:1px solid #2a2a3e;max-width:560px;width:100%;">
-<tr><td style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:28px 32px;border-bottom:1px solid #2a2a3e;">
-<span style="font-size:22px;font-weight:800;color:#4A90E2;">NeuroFlow</span><span style="font-size:13px;color:#6b7280;margin-left:8px;">Focus Planner</span>
-</td></tr>
-<tr><td style="padding:32px;">
-<p style="margin:0 0 8px;font-size:14px;color:#9ca3af;">Hi ${userName || 'there'} 👋</p>
-<h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#f0f0f5;">✅ Your reminder is confirmed!</h1>
-<p style="margin:0 0 28px;font-size:14px;color:#9ca3af;">We'll send you an alert at the scheduled time.</p>
-<div style="background:#1e1e35;border:1px solid #4A90E244;border-left:4px solid #4A90E2;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
-<p style="margin:0 0 12px;font-size:18px;font-weight:700;color:#f0f0f5;">📋 ${title}</p>
-<p style="margin:0;font-size:14px;color:#e5e7eb;">📅 ${formattedDate} &nbsp;·&nbsp; 🕐 ${formattedTime}</p>
-</div>
-<p style="margin:0;font-size:13px;color:#9ca3af;">Add <strong style="color:#4A90E2;">neuroflow.reminders@gmail.com</strong> to your contacts so all your alerts reach your inbox.</p>
-</td></tr>
-<tr><td style="background:#0e0e1a;padding:16px 32px;border-top:1px solid #2a2a3e;">
-<p style="margin:0;font-size:11px;color:#4b5563;text-align:center;">Sent by NeuroFlow · ADHD Focus Planner &nbsp;·&nbsp;<span style="color:#4A90E2;">Built for your brain ✨</span></p>
-</td></tr></table></td></tr></table></body></html>`,
-      });
-      results.push({ type: 'confirmation', scheduledAt: 'immediate', via: 'gmail' });
-    } catch (e) {
-      console.warn('[schedule-reminder] Gmail confirmation error:', e);
     }
   }
 

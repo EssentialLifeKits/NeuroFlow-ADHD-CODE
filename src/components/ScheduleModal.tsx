@@ -155,7 +155,7 @@ export default function ScheduleModal({
   const { width } = useWindowDimensions();
   const isDesktop = width > DESKTOP_BREAKPOINT;
 
-  const { addTask, editTask } = useTasks();
+  const { addTask, editTask, refreshTasks } = useTasks();
   const { user } = useAuth();
 
   const [taskDetails, setTaskDetails] = useState('');
@@ -334,6 +334,9 @@ export default function ScheduleModal({
           Alert.alert('⚠️ Email Reminder Failed', `Your entry was saved but the email reminder could not be scheduled.\n\n${detail}`);
         } else {
           console.log('[ScheduleModal] Email scheduled successfully:', result);
+          // Refresh tasks so the server-side recurrence_rule:'sent' update
+          // is picked up by the local state — enables auto-delete timer to work
+          refreshTasks();
         }
       } catch (e) {
         console.warn('[ScheduleModal] schedule-reminder fetch failed:', e);

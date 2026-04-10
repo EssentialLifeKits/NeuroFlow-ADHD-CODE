@@ -11,12 +11,15 @@ Vercel Hobby plan: cron must be AT MOST once per day (`"0 0 * * *"`). More frequ
 ## CRITICAL FIXES — NEVER BREAK THESE
 
 ### 1. Email Delivery (src/components/ScheduleModal.tsx + api/schedule-reminder.js)
-- Emails send via **Gmail SMTP** (nodemailer) for immediate sends — guaranteed inbox delivery
+- Three-tier delivery based on how far away the due time is:
+  - Past due / within 1 min → **Gmail SMTP** immediately: "It's time"
+  - 1–5 min away → **Gmail SMTP** immediately: "Starting in X min" (Resend minimum not met)
+  - 5+ min away → **Resend scheduled_at** at exact time (domain keepzbrandai.com verified)
 - Gmail env vars: `GMAIL_USER` + `GMAIL_APP_PASSWORD` (set in Vercel)
-- Future scheduled emails use Resend `scheduled_at` (domain keepzbrandai.com verified in Resend)
 - Resend env var: `RESEND_API_KEY` (set in Vercel)
 - `ScheduleModal` passes `taskId` to `/api/schedule-reminder` so task is marked sent after email
-- **Do NOT remove nodemailer, switch back to Resend-only, or remove the Gmail transporter**
+- After successful email, `ScheduleModal` calls `refreshTasks()` to sync `recurrence_rule:sent` to local state
+- **Do NOT remove nodemailer, collapse the three tiers, or remove refreshTasks() call**
 
 ### 2. Task Persistence on Logout (src/lib/TasksContext.tsx)
 - `loadFromServer` must NEVER overwrite the cache when the server returns empty
