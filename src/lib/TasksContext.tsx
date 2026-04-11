@@ -94,7 +94,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     }
     // Show cached tasks immediately while server fetch runs
     loadFromCache();
-    getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
+    getOrCreateProfile(user.id, user.user_metadata?.full_name ?? user.user_metadata?.name ?? null, user.email)
       .then((p) => {
         setProfileId(p.id);
       })

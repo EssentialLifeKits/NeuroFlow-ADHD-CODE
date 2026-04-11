@@ -334,7 +334,7 @@ export default function ScheduleModal({
             dueDate: dateStr,
             dueTime: timeStr,
             category,
-            userName: (user as any).displayName || user.email,
+            userName: user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email,
             email: user.email,
             reminderOffset: apiOffset,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,

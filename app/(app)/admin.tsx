@@ -744,7 +744,7 @@ export default function AdminScreen() {
   const [settings, setSettings]           = useState<Record<string, string>>({});
   const [loadingSettings, setLoadingSettings] = useState(true);
 
-  const userEmail = (user as any)?.email ?? '';
+  const userEmail = user?.email ?? '';
   const isAdmin   = userEmail === ADMIN_EMAIL || userEmail === 'dev@neuroflow.app';
 
   useEffect(() => {

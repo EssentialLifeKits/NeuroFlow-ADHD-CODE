@@ -67,8 +67,11 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
     const pathname = usePathname();
     const { user, signOut } = useAuth();
 
-    const userEmail = (user as any)?.email as string | undefined;
-    const rawDisplayName = (user as any)?.displayName as string | undefined;
+    const userEmail = user?.email as string | undefined;
+    // Supabase stores name in user_metadata.full_name (Google) or user_metadata.name
+    const rawDisplayName = user?.user_metadata?.full_name
+      ?? user?.user_metadata?.name
+      ?? undefined;
     const displayName = resolveUserName(userEmail, rawDisplayName);
     const initials = resolveInitials(displayName);
 
