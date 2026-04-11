@@ -9,10 +9,12 @@
  *   4. User Monitor           — scrollable list, green glow for active users
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +23,7 @@ import {
   View,
   Switch,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -251,6 +254,102 @@ function AppSettingsSection({
   );
 }
 
+// ─── Full user-facing resource card (exact match to resources.tsx) ────────────
+
+function LiveResourceCard({ card, cardWidth }: { card: ResourceCard; cardWidth: any }) {
+  const opacity    = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(12)).current;
+  const hoverAnim  = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity,    { toValue: 1, duration: 350, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 350, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const borderColor  = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [colors.border, NF_BLUE] });
+  const shadowOpacity = hoverAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.4] });
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }], width: cardWidth }}>
+      <Pressable
+        onHoverIn={() => Animated.timing(hoverAnim, { toValue: 1, duration: 250, useNativeDriver: false }).start()}
+        onHoverOut={() => Animated.timing(hoverAnim, { toValue: 0, duration: 250, useNativeDriver: false }).start()}
+        onPress={() => { if (card.link !== '#') Linking.openURL(card.link); }}
+        style={{ flex: 1, width: '100%' }}
+      >
+        <Animated.View style={[
+          liveCardStyles.card,
+          { borderColor, shadowColor: NF_BLUE, shadowOffset: { width: 0, height: 0 }, shadowOpacity, shadowRadius: 14, elevation: 8 },
+        ]}>
+          <View style={[liveCardStyles.iconBox, { backgroundColor: card.icon_bg }]}>
+            <Text style={liveCardStyles.icon}>{card.icon}</Text>
+          </View>
+          <View style={liveCardStyles.cardContent}>
+            <Text style={liveCardStyles.cardTitle}>{card.title}</Text>
+            <Text style={liveCardStyles.cardDesc}>{card.description}</Text>
+            <Text style={[liveCardStyles.cardLink, { color: card.accent_color }]}>{card.link_label}</Text>
+          </View>
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function LiveResourceGrid({ cards }: { cards: ResourceCard[] }) {
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 1024;
+  const isTablet  = width > 768 && width <= 1024;
+
+  let columns = 1;
+  if (isDesktop) columns = 3;
+  else if (isTablet) columns = 2;
+
+  const gap           = 12;
+  const totalGapWidth = gap * (columns - 1);
+  const sidePadding   = 32; // matches admin scroll padding * 2
+  const cardWidth = columns === 1
+    ? ('100%' as any)
+    : (width - sidePadding - totalGapWidth) / columns;
+
+  const active = cards.filter(c => c.is_active);
+
+  return (
+    <View>
+      <Text style={liveCardStyles.previewLabel}>LIVE PREVIEW — AS USERS SEE IT</Text>
+      <View style={liveCardStyles.grid}>
+        {active.map(card => (
+          <LiveResourceCard key={card.id} card={card} cardWidth={cardWidth} />
+        ))}
+        {active.length === 0 && (
+          <Text style={{ color: colors.textTertiary, fontSize: 13, paddingVertical: 8 }}>
+            No active cards to preview.
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const liveCardStyles = StyleSheet.create({
+  previewLabel: {
+    fontSize: 11, fontWeight: '700', color: NF_BLUE, textTransform: 'uppercase',
+    letterSpacing: 0.8, marginBottom: 12,
+  },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  card: {
+    backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border,
+    borderRadius: 16, padding: 20, flexDirection: 'column', gap: 12, alignItems: 'flex-start',
+  },
+  iconBox:     { width: 52, height: 52, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  icon:        { fontSize: 28 },
+  cardContent: { flex: 1, gap: 8, marginTop: 4, width: '100%' },
+  cardTitle:   { fontSize: 17, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.3 },
+  cardDesc:    { fontSize: 14, color: colors.textSecondary, lineHeight: 22 },
+  cardLink:    { fontSize: 14, fontWeight: '700', marginTop: 6 },
+});
+
 // ─── Resource Card Visual Preview ─────────────────────────────────────────────
 
 function ResourceCardPreview({ card }: { card: ResourceCard }) {
@@ -384,9 +483,10 @@ function ResourceCardEditor({
 // ─── Resources Manager Section ────────────────────────────────────────────────
 
 function ResourcesSection() {
-  const [cards, setCards]     = useState<ResourceCard[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<ResourceCard | null | 'new'>(null);
+  const [cards, setCards]           = useState<ResourceCard[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [editing, setEditing]       = useState<ResourceCard | null | 'new'>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -420,7 +520,30 @@ function ResourcesSection() {
 
   return (
     <Card>
-      <SectionHeader title="🗂 Resources Manager" subtitle="Visual editor — see and edit each card live" />
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <SectionHeader title="🗂 Resources Manager" subtitle="Visual editor — see and edit each card live" />
+        <Pressable
+          onPress={() => setShowPreview(p => !p)}
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: 6,
+            backgroundColor: showPreview ? NF_BLUE + '22' : colors.bgBase,
+            borderWidth: 1, borderColor: showPreview ? NF_BLUE : colors.border,
+            borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2,
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: '700', color: showPreview ? NF_BLUE : colors.textSecondary }}>
+            {showPreview ? '✕ Close Preview' : '👁 User View'}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Full user-facing card grid — hidden until toggled */}
+      {showPreview && !loading && (
+        <>
+          <LiveResourceGrid cards={cards} />
+          <View style={s.divider} />
+        </>
+      )}
 
       {loading && <ActivityIndicator color={NF_BLUE} style={{ marginVertical: 12 }} />}
 
