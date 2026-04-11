@@ -215,6 +215,9 @@ module.exports = async function handler(req, res) {
       if (emailRes.ok) {
         const data = await emailRes.json();
         results.push({ type, scheduledAt: sendAt.toISOString(), id: data.id, via: 'resend' });
+        // Mark the at_time email task as sent now so the auto-delete timer has the right state.
+        // filterSentTasks keeps tasks visible until 5 min AFTER due time, so marking early
+        // does NOT hide the task prematurely — it only affects cleanup after the due time passes.
         if (type === 'at_time' && taskId) await markTaskSent(taskId);
       } else {
         const err = await emailRes.text();

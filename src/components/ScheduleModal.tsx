@@ -194,8 +194,22 @@ export default function ScheduleModal({
   const [lightbox, setLightbox] = useState<LightboxState>({ visible: false, file: null });
 
   const initDate = () => selectedDate ? new Date(selectedDate + 'T00:00:00') : new Date();
+
+  // Default time = 1 hour from now, rounded up to the next 15-minute mark.
+  // This ensures new tasks are always in the future so the email is scheduled,
+  // not fired immediately (which happens when the due time is within 5 min of save time).
+  const initTime = () => {
+    const d = new Date();
+    d.setHours(d.getHours() + 1, 0, 0, 0); // +1 hour, reset minutes/seconds
+    const mins = d.getMinutes(); // always 0 after setHours above, but kept for clarity
+    const rounded = Math.ceil(mins / 15) * 15;
+    if (rounded >= 60) { d.setHours(d.getHours() + 1, 0, 0, 0); }
+    else { d.setMinutes(rounded, 0, 0); }
+    return d;
+  };
+
   const [pickedDate, setPickedDate] = useState<Date>(initDate);
-  const [pickedTime, setPickedTime] = useState<Date>(new Date());
+  const [pickedTime, setPickedTime] = useState<Date>(initTime);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
@@ -222,7 +236,7 @@ export default function ScheduleModal({
           const [h, m] = initialData.due_time.split(':').map(Number);
           d.setHours(h, m, 0, 0);
           setPickedTime(d);
-        } else setPickedTime(new Date());
+        } else setPickedTime(initTime());
 
         if (initialData.sticker_id && initialData.sticker_id.startsWith('{')) {
           try {
@@ -236,7 +250,7 @@ export default function ScheduleModal({
         setTaskDetails(''); setTags(''); setCategory('task'); setReminderOffset('none'); setCustomMinutes(''); setShowCustomInput(false);
         setDetailsFocused(false); setSelectedChipTime(null); setAttachedFile(null); setUploadSuccess(false);
         setThumbnailTime(null); setCapturedThumbnail(null);
-        setPickedDate(initDate()); setPickedTime(new Date());
+        setPickedDate(initDate()); setPickedTime(initTime());
       }
     }
   }, [visible, selectedDate, initialData]);
@@ -334,9 +348,12 @@ export default function ScheduleModal({
           Alert.alert('⚠️ Email Reminder Failed', `Your entry was saved but the email reminder could not be scheduled.\n\n${detail}`);
         } else {
           console.log('[ScheduleModal] Email scheduled successfully:', result);
-          // Refresh tasks so the server-side recurrence_rule:'sent' update
-          // is picked up by the local state — enables auto-delete timer to work
-          refreshTasks();
+          // For Gmail immediate sends (past due / within 5 min), the server marks
+          // the task as 'sent' right away — refresh to sync that status.
+          // For Resend future-scheduled sends, nothing changes in the DB at this
+          // point (markTaskSent fires only after delivery), so this is a no-op.
+          const hasImmediateSend = result.scheduled?.some((r: any) => !r.error && r.scheduledAt === 'immediate');
+          if (hasImmediateSend) refreshTasks();
         }
       } catch (e) {
         console.warn('[ScheduleModal] schedule-reminder fetch failed:', e);
