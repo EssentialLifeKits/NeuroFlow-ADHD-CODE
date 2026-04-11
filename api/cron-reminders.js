@@ -3,34 +3,40 @@
  * GET /api/cron-reminders
  */
 
-const INSFORGE_URL   = process.env.INSFORGE_URL ?? process.env.EXPO_PUBLIC_INSFORGE_URL ?? '';
-const INSFORGE_KEY   = process.env.INSFORGE_API_KEY ?? '';
+const SUPABASE_URL         = process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
 const FROM_EMAIL     = process.env.FROM_EMAIL ?? 'NeuroFlow <noreply@keepzbrandai.com>';
 
+// Supabase REST helpers — uses service role key to bypass RLS in cron context
+function sbHeaders() {
+  return {
+    'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+    'apikey': SUPABASE_SERVICE_KEY,
+    'Content-Type': 'application/json',
+  };
+}
+
 async function dbSelect(table, select, eqFilters = {}) {
   const params = new URLSearchParams({ select });
-  for (const [k, v] of Object.entries(eqFilters)) params.append(k, v);
-  const url = `${INSFORGE_URL}/api/database/records/${table}?${params}`;
+  for (const [k, v] of Object.entries(eqFilters)) params.append(`${k}`, `eq.${v}`);
+  const url = `${SUPABASE_URL}/rest/v1/${table}?${params}`;
   console.log(`[cron] dbSelect ${table}: ${url}`);
-  const res = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${INSFORGE_KEY}`, 'Content-Type': 'application/json' },
-  });
+  const res = await fetch(url, { headers: sbHeaders() });
   if (!res.ok) {
     const body = await res.text();
     console.error(`[cron] dbSelect ${table} failed ${res.status}: ${body}`);
     return { data: null, error: { message: body } };
   }
-  const json = await res.json();
-  const data = Array.isArray(json) ? json : (json.data ?? []);
-  return { data, error: null };
+  const data = await res.json();
+  return { data: Array.isArray(data) ? data : [], error: null };
 }
 
 async function dbUpdate(table, id, body) {
-  const url = `${INSFORGE_URL}/api/database/records/${table}/${id}`;
+  const url = `${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`;
   const res = await fetch(url, {
     method: 'PATCH',
-    headers: { 'Authorization': `Bearer ${INSFORGE_KEY}`, 'Content-Type': 'application/json' },
+    headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
     body: JSON.stringify(body),
   });
   if (!res.ok) console.error(`[cron] dbUpdate ${table}/${id} failed ${res.status}: ${await res.text()}`);
@@ -126,12 +132,12 @@ function getTimezoneOffsetMs(naiveUtcDate, timezone) {
 }
 
 module.exports = async function handler(req, res) {
-  try { return await run(req, res); } catch(e) { console.error('[cron] FATAL:', e); return res.status(500).json({ error: String(e), cause: String(e?.cause ?? ''), url: INSFORGE_URL?.slice(0,30) }); }
+  try { return await run(req, res); } catch(e) { console.error('[cron] FATAL:', e); return res.status(500).json({ error: String(e), cause: String(e?.cause ?? ''), url: SUPABASE_URL?.slice(0,30) }); }
 };
 
 async function run(req, res) {
-  if (!INSFORGE_URL || !INSFORGE_KEY || !RESEND_API_KEY) {
-    console.error('[cron] Missing env vars:', { INSFORGE_URL: !!INSFORGE_URL, INSFORGE_KEY: !!INSFORGE_KEY, RESEND_API_KEY: !!RESEND_API_KEY });
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !RESEND_API_KEY) {
+    console.error('[cron] Missing env vars:', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_SERVICE_KEY: !!SUPABASE_SERVICE_KEY, RESEND_API_KEY: !!RESEND_API_KEY });
     return res.status(500).json({ error: 'Missing required environment variables' });
   }
 

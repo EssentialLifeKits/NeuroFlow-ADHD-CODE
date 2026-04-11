@@ -37,7 +37,7 @@ import {
   setSetting,
   type ResourceCard,
 } from '../../src/lib/adminDb';
-import { insforge } from '../../src/lib/insforge';
+import { supabase } from '../../src/lib/supabase';
 import { colors, radius, spacing } from '../../src/constants/theme';
 
 const NF_BLUE   = '#4A90E2';
@@ -653,7 +653,7 @@ function UserMonitorSection() {
   useEffect(() => {
     (async () => {
       try {
-        const { data, error } = await insforge.database
+        const { data, error } = await supabase
           .from('users').select('*').order('created_at', { ascending: false });
         if (error) throw new Error(error.message);
         setUsers((data ?? []) as UserRow[]);

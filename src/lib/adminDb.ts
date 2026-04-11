@@ -1,10 +1,10 @@
 /**
  * NeuroFlow — Admin Database Layer
  * Handles resources, email config, and app settings
- * stored in InsForge database tables.
+ * stored in Supabase database tables.
  */
 
-import { insforge } from './insforge';
+import { supabase } from './supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ export interface AppSetting {
 // ─── Resource Cards ───────────────────────────────────────────────────────────
 
 export async function fetchResourceCards(): Promise<ResourceCard[]> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('resource_cards')
     .select('*')
     .eq('is_active', true)
@@ -44,7 +44,7 @@ export async function fetchResourceCards(): Promise<ResourceCard[]> {
 }
 
 export async function fetchAllResourceCards(): Promise<ResourceCard[]> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('resource_cards')
     .select('*')
     .order('sort_order', { ascending: true });
@@ -54,7 +54,7 @@ export async function fetchAllResourceCards(): Promise<ResourceCard[]> {
 }
 
 export async function createResourceCard(card: Omit<ResourceCard, 'id' | 'created_at' | 'updated_at'>): Promise<ResourceCard> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('resource_cards')
     .insert(card)
     .select()
@@ -65,7 +65,7 @@ export async function createResourceCard(card: Omit<ResourceCard, 'id' | 'create
 }
 
 export async function updateResourceCard(id: string, card: Partial<Omit<ResourceCard, 'id' | 'created_at'>>): Promise<void> {
-  const { error } = await insforge.database
+  const { error } = await supabase
     .from('resource_cards')
     .update({ ...card, updated_at: new Date().toISOString() })
     .eq('id', id);
@@ -74,7 +74,7 @@ export async function updateResourceCard(id: string, card: Partial<Omit<Resource
 }
 
 export async function deleteResourceCard(id: string): Promise<void> {
-  const { error } = await insforge.database
+  const { error } = await supabase
     .from('resource_cards')
     .delete()
     .eq('id', id);
@@ -82,10 +82,10 @@ export async function deleteResourceCard(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-// ─── App Settings (email config, blueprint link, audio link, etc.) ────────────
+// ─── App Settings ─────────────────────────────────────────────────────────────
 
 export async function getSetting(key: string): Promise<string | null> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('app_settings')
     .select('value')
     .eq('key', key)
@@ -96,24 +96,15 @@ export async function getSetting(key: string): Promise<string | null> {
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
-  // Upsert — insert or update
-  const existing = await getSetting(key);
-  if (existing !== null) {
-    const { error } = await insforge.database
-      .from('app_settings')
-      .update({ value, updated_at: new Date().toISOString() })
-      .eq('key', key);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await insforge.database
-      .from('app_settings')
-      .insert({ key, value });
-    if (error) throw new Error(error.message);
-  }
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+
+  if (error) throw new Error(error.message);
 }
 
 export async function getAllSettings(): Promise<Record<string, string>> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('app_settings')
     .select('*');
 

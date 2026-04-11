@@ -13,8 +13,8 @@ const nodemailer   = require('nodemailer');
 const GMAIL_USER   = process.env.GMAIL_USER ?? '';
 const GMAIL_PASS   = process.env.GMAIL_APP_PASSWORD ?? '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
-const INSFORGE_URL   = process.env.INSFORGE_URL ?? process.env.EXPO_PUBLIC_INSFORGE_URL ?? '';
-const INSFORGE_KEY   = process.env.INSFORGE_API_KEY ?? '';
+const SUPABASE_URL    = process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 function getGmailTransporter() {
   return nodemailer.createTransport({
@@ -34,12 +34,17 @@ async function sendViaGmail({ to, subject, html }) {
 }
 
 async function markTaskSent(taskId) {
-  if (!taskId || !INSFORGE_URL || !INSFORGE_KEY) return;
+  if (!taskId || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
   try {
-    const url = `${INSFORGE_URL}/api/database/records/tasks/${taskId}`;
+    const url = `${SUPABASE_URL}/rest/v1/tasks?id=eq.${taskId}`;
     const res = await fetch(url, {
       method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${INSFORGE_KEY}`, 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
       body: JSON.stringify({ status: 'completed', recurrence_rule: 'sent' }),
     });
     if (!res.ok) console.error(`[schedule-reminder] markTaskSent failed ${res.status}: ${await res.text()}`);

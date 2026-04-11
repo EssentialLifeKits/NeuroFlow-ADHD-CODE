@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { insforge } from '../../src/lib/insforge';
+import { supabase } from '../../src/lib/supabase';
 import { useAuth } from '../../src/lib/auth';
 import { colors, spacing, typography } from '../../src/constants/theme';
 
@@ -14,7 +14,10 @@ export default function AuthCallbackScreen() {
       // Small delay ensures Root Layout has mounted before navigation
       await new Promise(resolve => setTimeout(resolve, 100));
       try {
-        const session = (insforge.auth as any).tokenManager?.getSession?.();
+        // On web, Supabase detects the code/token in the URL automatically.
+        // On native, the code was already exchanged in auth.tsx signInWithGoogle.
+        // Either way, just check if there's a valid session.
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           await refreshUser();
           router.replace('/(app)');

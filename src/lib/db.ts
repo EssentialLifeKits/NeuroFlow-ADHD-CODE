@@ -1,15 +1,14 @@
 /**
- * NeuroFlow — InsForge Data Access Layer
- * ---------------------------------------
- * Typed wrappers around insforge.database for:
- *   - User profiles (users table — links auth user → app user)
+ * NeuroFlow — Supabase Data Access Layer
+ * Typed wrappers around supabase for:
+ *   - User profiles (users table)
  *   - Tasks (daily / weekly / monthly calendar entries)
  *   - Focus sessions (Hyperfocus Lotus)
  */
 
-import { insforge } from './insforge';
+import { supabase } from './supabase';
 
-// ─── Shared types ────────────────────────────────────────────────────────────
+// ─── Shared types ─────────────────────────────────────────────────────────────
 
 export type ViewType   = 'daily' | 'weekly' | 'monthly';
 export type TaskStatus = 'pending' | 'completed' | 'draft';
@@ -65,17 +64,12 @@ export interface FocusSession {
 
 // ─── User Profiles ────────────────────────────────────────────────────────────
 
-/**
- * Returns the app-level user profile for the given InsForge auth user ID.
- * Creates one on the first login so the FK references in tasks/sessions work.
- */
 export async function getOrCreateProfile(
   authUserId: string,
   displayName?: string | null,
   email?: string | null,
 ): Promise<UserProfile> {
-  // Try to fetch existing profile
-  const { data: existing, error: fetchErr } = await insforge.database
+  const { data: existing, error: fetchErr } = await supabase
     .from('users')
     .select('*')
     .eq('auth_user_id', authUserId)
@@ -84,8 +78,7 @@ export async function getOrCreateProfile(
   if (fetchErr) throw new Error(fetchErr.message);
   if (existing) return existing as UserProfile;
 
-  // Create profile on first login — id MUST equal authUserId so tasks RLS (auth.uid() = user_id) works
-  const { data: created, error: insertErr } = await insforge.database
+  const { data: created, error: insertErr } = await supabase
     .from('users')
     .insert({
       id: authUserId,
@@ -100,10 +93,10 @@ export async function getOrCreateProfile(
   return created as UserProfile;
 }
 
-// ─── Tasks ───────────────────────────────────────────────────────────────────
+// ─── Tasks ────────────────────────────────────────────────────────────────────
 
 export async function fetchTasks(profileId: string, viewType: ViewType): Promise<Task[]> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('tasks')
     .select('*')
     .eq('user_id', profileId)
@@ -118,7 +111,7 @@ export async function createTask(
   task: Omit<Task, 'id' | 'created_at' | 'updated_at' | 'description' | 'due_date' | 'due_time' | 'recurrence_rule' | 'chore_category' | 'sticker_id' | 'completed_at'> &
     Partial<Pick<Task, 'description' | 'due_date' | 'due_time' | 'recurrence_rule' | 'chore_category' | 'sticker_id'>>,
 ): Promise<Task> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('tasks')
     .insert(task)
     .select()
@@ -130,7 +123,7 @@ export async function createTask(
 
 export async function toggleTask(taskId: string, currentStatus: TaskStatus): Promise<void> {
   const newStatus: TaskStatus = currentStatus === 'completed' ? 'pending' : 'completed';
-  const { error } = await insforge.database
+  const { error } = await supabase
     .from('tasks')
     .update({
       status: newStatus,
@@ -142,7 +135,7 @@ export async function toggleTask(taskId: string, currentStatus: TaskStatus): Pro
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
-  const { error } = await insforge.database
+  const { error } = await supabase
     .from('tasks')
     .delete()
     .eq('id', taskId);
@@ -156,7 +149,7 @@ export async function createFocusSession(
   session: Omit<FocusSession, 'id' | 'created_at' | 'task_id' | 'label' | 'actual_duration_min' | 'mood_before' | 'mood_after' | 'notes' | 'ended_at'> &
     Partial<Pick<FocusSession, 'task_id' | 'label' | 'mood_before'>>,
 ): Promise<FocusSession> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('focus_sessions')
     .insert(session)
     .select()
@@ -172,7 +165,7 @@ export async function completeFocusSession(
   moodAfter?: number,
   notes?: string | null,
 ): Promise<void> {
-  const { error } = await insforge.database
+  const { error } = await supabase
     .from('focus_sessions')
     .update({
       status: 'completed',
@@ -192,7 +185,7 @@ export async function abandonFocusSession(
   moodAfter?: number,
   notes?: string | null,
 ): Promise<void> {
-  const { error } = await insforge.database
+  const { error } = await supabase
     .from('focus_sessions')
     .update({
       status: 'abandoned',
@@ -207,7 +200,7 @@ export async function abandonFocusSession(
 }
 
 export async function fetchAllSessions(profileId: string): Promise<FocusSession[]> {
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('focus_sessions')
     .select('*')
     .eq('user_id', profileId)
@@ -218,7 +211,7 @@ export async function fetchAllSessions(profileId: string): Promise<FocusSession[
 }
 
 export async function updateSessionNote(sessionId: string, notes: string | null): Promise<void> {
-  const { error } = await insforge.database
+  const { error } = await supabase
     .from('focus_sessions')
     .update({ notes: notes ?? null })
     .eq('id', sessionId);
@@ -227,7 +220,7 @@ export async function updateSessionNote(sessionId: string, notes: string | null)
 }
 
 export async function deleteFocusSession(sessionId: string): Promise<void> {
-  const { error } = await insforge.database
+  const { error } = await supabase
     .from('focus_sessions')
     .delete()
     .eq('id', sessionId);
@@ -241,40 +234,35 @@ function localDateString(d: Date): string {
 }
 
 export async function fetchTodaysSessions(profileId: string): Promise<FocusSession[]> {
-  // Filter by local date string so timezone-stored ISO dates are compared correctly
   const todayStr = localDateString(new Date());
-
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('focus_sessions')
     .select('*')
     .eq('user_id', profileId)
     .order('started_at', { ascending: false });
 
   if (error) throw new Error(error.message);
-  // Filter client-side by local date to avoid UTC midnight timezone mismatch
   return ((data ?? []) as FocusSession[]).filter(
     (s) => localDateString(new Date(s.started_at)) === todayStr,
   );
 }
 
 export async function fetchWeekSessions(profileId: string): Promise<FocusSession[]> {
-  // Start of current week (Monday 00:00:00 local time)
   const now = new Date();
-  const day = now.getDay(); // 0=Sun, 1=Mon...
+  const day = now.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
   const monday = new Date(now);
   monday.setDate(now.getDate() + diffToMonday);
   monday.setHours(0, 0, 0, 0);
   const mondayStr = localDateString(monday);
 
-  const { data, error } = await insforge.database
+  const { data, error } = await supabase
     .from('focus_sessions')
     .select('*')
     .eq('user_id', profileId)
     .order('started_at', { ascending: false });
 
   if (error) throw new Error(error.message);
-  // Filter client-side by local date to avoid UTC midnight timezone mismatch
   return ((data ?? []) as FocusSession[]).filter(
     (s) => localDateString(new Date(s.started_at)) >= mondayStr,
   );
