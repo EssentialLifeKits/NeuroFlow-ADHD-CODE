@@ -254,6 +254,55 @@ function AppSettingsSection({
   );
 }
 
+// ─── Default cards — mirror of resources.tsx DEFAULT_RESOURCES ───────────────
+// Used as fallback when DB resource_cards table is empty, so the preview always
+// shows the 6 real cards exactly as users see them.
+
+const DEFAULT_RESOURCE_CARDS: ResourceCard[] = [
+  {
+    id: 'default-1', sort_order: 0, is_active: true, created_at: '', updated_at: '',
+    title: 'Deep Work Blueprint',
+    description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
+    icon: '📘', icon_bg: NF_BLUE + '18', accent_color: NF_BLUE,
+    link: 'https://neuroflow.app/deep-work-blueprint', link_label: 'Download Free →',
+  },
+  {
+    id: 'default-2', sort_order: 1, is_active: true, created_at: '', updated_at: '',
+    title: 'Focus Timer Templates',
+    description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
+    icon: '⏱', icon_bg: 'rgba(52,211,153,0.12)', accent_color: '#34D399',
+    link: '#', link_label: 'Explore Templates →',
+  },
+  {
+    id: 'default-3', sort_order: 2, is_active: true, created_at: '', updated_at: '',
+    title: 'Task Batching System',
+    description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
+    icon: '📋', icon_bg: 'rgba(251,146,60,0.12)', accent_color: '#FB923C',
+    link: '#', link_label: 'Get the System →',
+  },
+  {
+    id: 'default-4', sort_order: 3, is_active: true, created_at: '', updated_at: '',
+    title: 'ADHD Habit Stacker',
+    description: 'Anchor new routines to existing ones — build habits without constant reminders.',
+    icon: '🔗', icon_bg: 'rgba(248,113,113,0.12)', accent_color: '#F87171',
+    link: '#', link_label: 'Learn More →',
+  },
+  {
+    id: 'default-5', sort_order: 4, is_active: true, created_at: '', updated_at: '',
+    title: 'Brain Dump Toolkit',
+    description: 'Capture every thought, idea, and obligation into a trusted external system.',
+    icon: '🧠', icon_bg: NF_BLUE + '14', accent_color: NF_BLUE,
+    link: '#', link_label: 'Get Toolkit →',
+  },
+  {
+    id: 'default-6', sort_order: 5, is_active: true, created_at: '', updated_at: '',
+    title: 'Productivity Analytics',
+    description: 'Track focus streaks, energy patterns, and see your real daily output.',
+    icon: '📊', icon_bg: 'rgba(96,165,250,0.12)', accent_color: '#60A5FA',
+    link: '#', link_label: 'Track Progress →',
+  },
+];
+
 // ─── Full user-facing resource card (exact match to resources.tsx) ────────────
 
 function LiveResourceCard({ card, cardWidth }: { card: ResourceCard; cardWidth: any }) {
@@ -308,12 +357,14 @@ function LiveResourceGrid({ cards }: { cards: ResourceCard[] }) {
 
   const gap           = 12;
   const totalGapWidth = gap * (columns - 1);
-  const sidePadding   = 32; // matches admin scroll padding * 2
+  const sidePadding   = 32;
   const cardWidth = columns === 1
     ? ('100%' as any)
     : (width - sidePadding - totalGapWidth) / columns;
 
-  const active = cards.filter(c => c.is_active);
+  // If DB has no records yet, fall back to the exact same defaults the user page shows
+  const source = cards.length > 0 ? cards : DEFAULT_RESOURCE_CARDS;
+  const active = source.filter(c => c.is_active);
 
   return (
     <View>
@@ -322,11 +373,6 @@ function LiveResourceGrid({ cards }: { cards: ResourceCard[] }) {
         {active.map(card => (
           <LiveResourceCard key={card.id} card={card} cardWidth={cardWidth} />
         ))}
-        {active.length === 0 && (
-          <Text style={{ color: colors.textTertiary, fontSize: 13, paddingVertical: 8 }}>
-            No active cards to preview.
-          </Text>
-        )}
       </View>
     </View>
   );
