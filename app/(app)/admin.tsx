@@ -862,6 +862,7 @@ function ResourcesSection() {
   const [addingNew, setAddingNew]     = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
+  // Full load with spinner — only on first mount
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -869,7 +870,6 @@ function ResourcesSection() {
       if (fetched.length > 0) {
         setCards(fetched);
       } else {
-        // DB empty — seed defaults then reload so admin always sees all 6 cards
         for (const c of DEFAULT_RESOURCE_CARDS) {
           try {
             await createResourceCard({
@@ -885,10 +885,17 @@ function ResourcesSection() {
         const seeded = await fetchAllResourceCards();
         setCards(seeded.length > 0 ? seeded : DEFAULT_RESOURCE_CARDS);
       }
-    } catch (e: any) {
-      // DB unreachable — show defaults so admin isn't stuck on blank screen
+    } catch {
       setCards(DEFAULT_RESOURCE_CARDS);
     } finally { setLoading(false); }
+  }, []);
+
+  // Silent refresh — no spinner, updates cards in place so User View stays visible
+  const silentRefresh = useCallback(async () => {
+    try {
+      const fetched = await fetchAllResourceCards();
+      if (fetched.length > 0) setCards(fetched);
+    } catch {}
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -896,14 +903,14 @@ function ResourcesSection() {
   async function handleCreate(draft: CardDraft) {
     await createResourceCard(draft);
     setAddingNew(false);
-    await load();
+    await silentRefresh();
     Alert.alert('Created', 'Resource card added.');
   }
 
   async function handleDelete(card: ResourceCard) {
     Alert.alert('Delete Card', `Delete "${card.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteResourceCard(card.id); await load(); } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteResourceCard(card.id); await silentRefresh(); } },
     ]);
   }
 
@@ -926,7 +933,7 @@ function ResourcesSection() {
         </Pressable>
       </View>
 
-      {showPreview && !loading && (
+      {showPreview && cards.length > 0 && (
         <>
           <LiveResourceGrid cards={cards} />
           <View style={s.divider} />
@@ -942,7 +949,7 @@ function ResourcesSection() {
               key={card.id}
               card={card}
               onDelete={handleDelete}
-              onSaved={load}
+              onSaved={silentRefresh}
             />
           ))}
           <Btn label="+ Add New Card" onPress={() => setAddingNew(true)} color={NF_GREEN} />

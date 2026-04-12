@@ -6,7 +6,7 @@
  * Resources updated to ADHD-relevant tools instead of Instagram content.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { fetchResourceCards } from '../../src/lib/adminDb';
 
@@ -172,26 +173,32 @@ export default function ResourcesScreen() {
   // Start with hardcoded defaults — always visible instantly
   const [resources, setResources] = useState<Resource[]>(DEFAULT_RESOURCES);
 
+  // Animate header once on mount
   useEffect(() => {
     Animated.timing(headerOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start();
-    // Overlay DB data when it arrives — falls back to defaults silently on error
-    fetchResourceCards()
-      .then(cards => {
-        if (cards.length > 0) {
-          setResources(cards.map(c => ({
-            id: c.id,
-            title: c.title,
-            description: c.description,
-            icon: c.icon,
-            iconBg: c.icon_bg,
-            link: c.link,
-            linkLabel: c.link_label,
-            accent: c.accent_color,
-          })));
-        }
-      })
-      .catch(() => {/* keep defaults */});
   }, []);
+
+  // Re-fetch from DB every time this screen comes into focus — picks up admin edits immediately
+  useFocusEffect(
+    useCallback(() => {
+      fetchResourceCards()
+        .then(cards => {
+          if (cards.length > 0) {
+            setResources(cards.map(c => ({
+              id: c.id,
+              title: c.title,
+              description: c.description,
+              icon: c.icon,
+              iconBg: c.icon_bg,
+              link: c.link,
+              linkLabel: c.link_label,
+              accent: c.accent_color,
+            })));
+          }
+        })
+        .catch(() => {/* keep defaults */});
+    }, [])
+  );
 
   const isDesktop = width > 1024;
   const isTablet = width > 768 && width <= 1024;
