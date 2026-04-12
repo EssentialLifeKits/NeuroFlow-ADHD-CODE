@@ -110,21 +110,31 @@ function CardTab({
 }
 
 // ─── Inline PDF slide viewer (web only) ──────────────────────────────────────
-// Renders the PDF in an iframe. Click anywhere on the viewer area to advance
-// to the next page using PDF viewer's built-in fragment navigation.
+// Uses Google Drive /preview embed for true page-by-page navigation.
+// Toolbar buttons (print, download, open) are native to the Drive viewer.
+// Fullscreen opens a modal overlay. One Download Free PDF button at bottom.
 function SlideViewer({ url, accentColor }: { url: string; accentColor: string }) {
-  const [page, setPage] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
   const { width } = useWindowDimensions();
   const viewerH = Math.min(width * 0.65, 520);
 
-  // Build the URL with #page=N so the browser PDF viewer jumps to the right page
-  const pageUrl = `${url}#page=${page}`;
+  // Convert any Supabase storage URL or direct PDF URL into a Google Drive
+  // viewer embed. If it's already a /preview URL leave it alone.
+  // For non-Google URLs we use the Google Docs viewer which handles PDFs
+  // with full toolbar (print, download, page nav) built in.
+  function getEmbedUrl(rawUrl: string): string {
+    if (rawUrl.includes('drive.google.com') && rawUrl.includes('/preview')) return rawUrl;
+    if (rawUrl.includes('drive.google.com/file/d/')) {
+      const match = rawUrl.match(/\/file\/d\/([^/]+)/);
+      if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+    }
+    // For Supabase/other URLs — use Google Docs viewer (renders PDF with toolbar)
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
+  }
 
-  function nextPage() { setPage(p => p + 1); }
-  function prevPage() { setPage(p => Math.max(1, p - 1)); }
+  const embedUrl = getEmbedUrl(url);
 
   if (Platform.OS !== 'web') {
-    // Native: no iframe — show download button only
     return (
       <Pressable onPress={() => Linking.openURL(url)}
         style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
@@ -139,45 +149,74 @@ function SlideViewer({ url, accentColor }: { url: string; accentColor: string })
 
   return (
     <View style={styles.slideViewerWrap}>
-      {/* iframe rendered via dangerouslySetInnerHTML approach on web */}
+
+      {/* ── Toolbar row: fullscreen button ── */}
+      <View style={styles.slideToolbar}>
+        <Text style={styles.slideToolbarLabel}>Use ‹ › inside the viewer to navigate slides</Text>
+        <Pressable onPress={() => setFullscreen(true)} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
+          <Text style={[styles.slideToolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
+        </Pressable>
+      </View>
+
+      {/* ── Embedded viewer ── */}
       <View style={[styles.iframeContainer, { height: viewerH }]}>
-        {/* @ts-ignore — iframe is valid on web */}
+        {/* @ts-ignore */}
         <iframe
-          src={pageUrl}
+          src={embedUrl}
           style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 }}
           title="Slide Deck"
-        />
-        {/* Invisible click overlay — advances slide on tap */}
-        <Pressable
-          onPress={nextPage}
-          style={styles.slideClickOverlay}
-          accessibilityLabel="Tap to advance slide"
+          allow="autoplay"
         />
       </View>
 
-      {/* Slide nav controls */}
-      <View style={styles.slideNav}>
-        <Pressable
-          onPress={prevPage}
-          disabled={page === 1}
-          style={[styles.slideNavBtn, { borderColor: accentColor, opacity: page === 1 ? 0.3 : 1 }]}
-        >
-          <Text style={[styles.slideNavText, { color: accentColor }]}>‹ Prev</Text>
-        </Pressable>
-        <Text style={styles.slidePageNum}>Slide {page}</Text>
-        <Pressable
-          onPress={nextPage}
-          style={[styles.slideNavBtn, { borderColor: accentColor }]}
-        >
-          <Text style={[styles.slideNavText, { color: accentColor }]}>Next ›</Text>
-        </Pressable>
-      </View>
-
-      {/* Download button — separate from viewer */}
-      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnSmall, { borderColor: accentColor }]}>
-        <Text style={{ fontSize: 14 }}>📥</Text>
-        <Text style={[styles.downloadBtnSmallText, { color: accentColor }]}>Download PDF</Text>
+      {/* ── Single Download Free PDF button ── */}
+      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
+        <Text style={{ fontSize: 16 }}>📥</Text>
+        <Text style={styles.downloadBtnFullText}>Download Free PDF</Text>
       </Pressable>
+
+      {/* ── Fullscreen modal overlay ── */}
+      {fullscreen && Platform.OS === 'web' && React.createElement('div', {
+        style: {
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 99999,
+          backgroundColor: 'rgba(0,0,0,0.95)',
+          display: 'flex', flexDirection: 'column',
+        },
+      }, [
+        // Header bar
+        React.createElement('div', {
+          key: 'fsbar',
+          style: {
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 20px',
+            borderBottom: '1px solid rgba(74,144,226,0.2)',
+            backgroundColor: '#0b1426',
+          },
+        }, [
+          React.createElement('span', { key: 'title', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, 'Slide Deck — Full Screen'),
+          React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 10 } }, [
+            React.createElement('button', {
+              key: 'dl',
+              onClick: () => Linking.openURL(url),
+              style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700 },
+            }, '📥 Download PDF'),
+            React.createElement('button', {
+              key: 'close',
+              onClick: () => setFullscreen(false),
+              style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 },
+            }, '✕ Close'),
+          ]),
+        ]),
+        // Full-height iframe
+        React.createElement('iframe', {
+          key: 'fs-iframe',
+          src: embedUrl,
+          style: { flex: 1, width: '100%', border: 'none', backgroundColor: '#000' },
+          title: 'Slide Deck Fullscreen',
+          allow: 'autoplay',
+        }),
+      ])}
     </View>
   );
 }
@@ -402,13 +441,23 @@ const styles = StyleSheet.create({
     width: '100%', borderRadius: 12, overflow: 'hidden',
     backgroundColor: '#1a1a2e', position: 'relative',
   },
-  slideClickOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-  },
-  slideNav: {
+  slideToolbar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
+  slideToolbarLabel: { fontSize: 11, color: colors.textTertiary, flex: 1 },
+  slideToolbarBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: radius.full, borderWidth: 1.5,
+  },
+  slideToolbarBtnText: { fontSize: 12, fontWeight: '700' },
+  downloadBtnFull: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 14, borderRadius: radius.lg, marginTop: 2,
+  },
+  downloadBtnFullText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  // keep these for native fallback
   slideNavBtn: {
     paddingHorizontal: 16, paddingVertical: 8,
     borderRadius: radius.full, borderWidth: 1.5,

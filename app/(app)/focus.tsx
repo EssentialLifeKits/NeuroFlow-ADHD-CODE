@@ -1138,13 +1138,30 @@ export default function FocusScreen() {
             React.createElement('button', { key: 'close', onClick: (e: any) => { e.stopPropagation(); setAudioOpen(false); setAudioPos(null); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '✕'),
           ]),
         ]),
-        React.createElement('iframe', {
-          key: 'audio-iframe',
-          src: 'https://drive.google.com/file/d/1yEcTiYAp-rPW61fwIJL8JfVH5QMhzby7/preview',
-          style: { width: '100%', height: 80, border: 'none', borderRadius: '0 0 16px 16px', backgroundColor: colors.bgCard },
-          allow: 'autoplay',
-          title: 'Deep Work Audio Blueprint',
-        }),
+        // Wrapper to mask the native Google Drive "open in new tab" arrow
+        React.createElement('div', {
+          key: 'audio-iframe-wrap',
+          style: { position: 'relative', width: '100%', height: 80 },
+        }, [
+          React.createElement('iframe', {
+            key: 'audio-iframe',
+            src: 'https://drive.google.com/file/d/1yEcTiYAp-rPW61fwIJL8JfVH5QMhzby7/preview',
+            style: { width: '100%', height: 80, border: 'none', borderRadius: '0 0 16px 16px', backgroundColor: colors.bgCard },
+            allow: 'autoplay',
+            title: 'Deep Work Audio Blueprint',
+          }),
+          // Transparent mask over bottom-right 44×44px where Google's external link arrow appears
+          React.createElement('div', {
+            key: 'audio-mask',
+            style: {
+              position: 'absolute', bottom: 0, right: 0,
+              width: 44, height: 44,
+              backgroundColor: colors.bgCard,
+              borderRadius: '0 0 16px 0',
+              pointerEvents: 'none',
+            },
+          }),
+        ]),
       ])}
 
       {/* ── Audio Fullscreen Overlay ── */}
