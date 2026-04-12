@@ -16,7 +16,6 @@ import {
   Animated,
   Image,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -264,48 +263,24 @@ function AppSettingsSection({
 // shows the 6 real cards exactly as users see them.
 
 const DEFAULT_RESOURCE_CARDS: ResourceCard[] = [
-  {
-    id: 'default-1', sort_order: 0, is_active: true, created_at: '', updated_at: '',
-    title: 'Deep Work Blueprint',
-    description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
-    icon: '📘', icon_bg: NF_BLUE + '18', accent_color: NF_BLUE,
-    link: 'https://neuroflow.app/deep-work-blueprint', link_label: 'Download Free →',
-  },
-  {
-    id: 'default-2', sort_order: 1, is_active: true, created_at: '', updated_at: '',
-    title: 'Focus Timer Templates',
-    description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
-    icon: '⏱', icon_bg: 'rgba(52,211,153,0.12)', accent_color: '#34D399',
-    link: '#', link_label: 'Explore Templates →',
-  },
-  {
-    id: 'default-3', sort_order: 2, is_active: true, created_at: '', updated_at: '',
-    title: 'Task Batching System',
-    description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
-    icon: '📋', icon_bg: 'rgba(251,146,60,0.12)', accent_color: '#FB923C',
-    link: '#', link_label: 'Get the System →',
-  },
-  {
-    id: 'default-4', sort_order: 3, is_active: true, created_at: '', updated_at: '',
-    title: 'ADHD Habit Stacker',
-    description: 'Anchor new routines to existing ones — build habits without constant reminders.',
-    icon: '🔗', icon_bg: 'rgba(248,113,113,0.12)', accent_color: '#F87171',
-    link: '#', link_label: 'Learn More →',
-  },
-  {
-    id: 'default-5', sort_order: 4, is_active: true, created_at: '', updated_at: '',
-    title: 'Brain Dump Toolkit',
-    description: 'Capture every thought, idea, and obligation into a trusted external system.',
-    icon: '🧠', icon_bg: NF_BLUE + '14', accent_color: NF_BLUE,
-    link: '#', link_label: 'Get Toolkit →',
-  },
-  {
-    id: 'default-6', sort_order: 5, is_active: true, created_at: '', updated_at: '',
-    title: 'Productivity Analytics',
-    description: 'Track focus streaks, energy patterns, and see your real daily output.',
-    icon: '📊', icon_bg: 'rgba(96,165,250,0.12)', accent_color: '#60A5FA',
-    link: '#', link_label: 'Track Progress →',
-  },
+  { id: 'default-1', sort_order: 0, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
+    title: 'Deep Work Blueprint', description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
+    icon: '📘', icon_bg: NF_BLUE + '18', accent_color: NF_BLUE, link: '#', link_label: 'Open Resource →' },
+  { id: 'default-2', sort_order: 1, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
+    title: 'Focus Timer Templates', description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
+    icon: '⏱', icon_bg: 'rgba(52,211,153,0.12)', accent_color: '#34D399', link: '#', link_label: 'Open Resource →' },
+  { id: 'default-3', sort_order: 2, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
+    title: 'Task Batching System', description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
+    icon: '📋', icon_bg: 'rgba(251,146,60,0.12)', accent_color: '#FB923C', link: '#', link_label: 'Open Resource →' },
+  { id: 'default-4', sort_order: 3, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
+    title: 'ADHD Habit Stacker', description: 'Anchor new routines to existing ones — build habits without constant reminders.',
+    icon: '🔗', icon_bg: 'rgba(248,113,113,0.12)', accent_color: '#F87171', link: '#', link_label: 'Open Resource →' },
+  { id: 'default-5', sort_order: 4, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
+    title: 'Brain Dump Toolkit', description: 'Capture every thought, idea, and obligation into a trusted external system.',
+    icon: '🧠', icon_bg: NF_BLUE + '14', accent_color: NF_BLUE, link: '#', link_label: 'Open Resource →' },
+  { id: 'default-6', sort_order: 5, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
+    title: 'Productivity Analytics', description: 'Track focus streaks, energy patterns, and see your real daily output.',
+    icon: '📊', icon_bg: 'rgba(96,165,250,0.12)', accent_color: '#60A5FA', link: '#', link_label: 'Open Resource →' },
 ];
 
 // ─── Full user-facing resource card (exact match to resources.tsx) ────────────
@@ -456,10 +431,14 @@ function InlineCardRow({
   card,
   onDelete,
   onSaved,
+  onDraftChange,
+  onEditorClose,
 }: {
   card: ResourceCard;
   onDelete: (card: ResourceCard) => void;
   onSaved: () => void;
+  onDraftChange: (cardId: string, draft: CardDraft | null) => void;
+  onEditorClose: (cardId: string) => void;
 }) {
   const [open, setOpen]     = useState(false);
   const [draft, setDraft]   = useState<CardDraft>({
@@ -476,14 +455,19 @@ function InlineCardRow({
   const [uploadingIcon, setUploadingIcon] = useState(false);
 
   function set(key: keyof CardDraft, value: any) {
-    setDraft(prev => ({ ...prev, [key]: value }));
+    setDraft(prev => {
+      const updated = { ...prev, [key]: value };
+      // Bubble updated draft to parent so User View reflects it in real time
+      onDraftChange(card.id, updated);
+      return updated;
+    });
   }
 
   async function pickIconImage() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo library access to upload an icon image.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
     if (result.canceled || !result.assets?.[0]) return;
@@ -527,10 +511,28 @@ function InlineCardRow({
     try {
       await updateResourceCard(card.id, draft);
       setOpen(false);
+      onDraftChange(card.id, null); // clear live draft — card is now saved
       onSaved();
     } catch (e: any) {
       Alert.alert('Error', e.message);
     } finally { setSaving(false); }
+  }
+
+  function handleCancel() {
+    setOpen(false);
+    onDraftChange(card.id, null); // discard live draft on cancel
+    onEditorClose(card.id);
+  }
+
+  function handleToggleOpen() {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      // Notify parent of current draft when opening
+      onDraftChange(card.id, draft);
+    } else {
+      onDraftChange(card.id, null);
+    }
   }
 
   const previewCard: ResourceCard = { ...draft, id: card.id, created_at: '', updated_at: '' };
@@ -565,7 +567,7 @@ function InlineCardRow({
         {/* Action buttons */}
         <View style={{ flexDirection: 'row', gap: 6 }}>
           <Pressable
-            onPress={() => setOpen(o => !o)}
+            onPress={handleToggleOpen}
             style={[inlineStyles.iconBtn, open && { backgroundColor: NF_BLUE + '22', borderColor: NF_BLUE }]}
           >
             <Text style={{ fontSize: 14 }}>{open ? '✕' : '✏️'}</Text>
@@ -690,7 +692,7 @@ function InlineCardRow({
 
           <View style={s.rowGap}>
             <Btn label={saving ? 'Saving…' : '💾 Save Card'} onPress={handleSave} disabled={saving} />
-            <Btn label="Cancel" onPress={() => setOpen(false)} outline color={colors.textSecondary} />
+            <Btn label="Cancel" onPress={handleCancel} outline color={colors.textSecondary} />
           </View>
         </View>
       )}
@@ -724,7 +726,7 @@ function NewCardForm({
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo library access to upload an icon image.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
     if (result.canceled || !result.assets?.[0]) return;
@@ -861,6 +863,23 @@ function ResourcesSection() {
   const [loading, setLoading]         = useState(true);
   const [addingNew, setAddingNew]     = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  // Live drafts: cardId → in-progress draft (null = editor closed / saved)
+  const [liveDrafts, setLiveDrafts]   = useState<Record<string, CardDraft | null>>({});
+
+  // Merge saved cards with any open live drafts for real-time User View preview
+  const previewCards: ResourceCard[] = cards.map(c => {
+    const d = liveDrafts[c.id];
+    if (!d) return c;
+    return { ...c, ...d };
+  });
+
+  function handleDraftChange(cardId: string, draft: CardDraft | null) {
+    setLiveDrafts(prev => ({ ...prev, [cardId]: draft }));
+  }
+
+  function handleEditorClose(cardId: string) {
+    setLiveDrafts(prev => ({ ...prev, [cardId]: null }));
+  }
 
   // Full load with spinner — only on first mount
   const load = useCallback(async () => {
@@ -933,9 +952,9 @@ function ResourcesSection() {
         </Pressable>
       </View>
 
-      {showPreview && cards.length > 0 && (
+      {showPreview && previewCards.length > 0 && (
         <>
-          <LiveResourceGrid cards={cards} />
+          <LiveResourceGrid cards={previewCards} />
           <View style={s.divider} />
         </>
       )}
@@ -950,6 +969,8 @@ function ResourcesSection() {
               card={card}
               onDelete={handleDelete}
               onSaved={silentRefresh}
+              onDraftChange={handleDraftChange}
+              onEditorClose={handleEditorClose}
             />
           ))}
           <Btn label="+ Add New Card" onPress={() => setAddingNew(true)} color={NF_GREEN} />
