@@ -9,7 +9,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -59,6 +58,7 @@ function PulsingDot() {
 
 // ─── Resource type ────────────────────────────────────────────────────────────
 interface Resource {
+  id: string;
   title: string;
   description: string;
   icon: string;
@@ -71,63 +71,45 @@ interface Resource {
 // Default cards — always shown immediately; DB data overlays on top when it loads
 const DEFAULT_RESOURCES: Resource[] = [
   {
+    id: 'default-1',
     title: 'Deep Work Blueprint',
     description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
-    icon: '📘',
-    iconBg: NF_BLUE + '18',
-    link: 'https://neuroflow.app/deep-work-blueprint',
-    linkLabel: 'Download Free →',
-    accent: NF_BLUE,
+    icon: '📘', iconBg: NF_BLUE + '18', link: '#', linkLabel: 'Open Resource →', accent: NF_BLUE,
   },
   {
+    id: 'default-2',
     title: 'Focus Timer Templates',
     description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
-    icon: '⏱',
-    iconBg: 'rgba(52, 211, 153, 0.12)',
-    link: '#',
-    linkLabel: 'Explore Templates →',
-    accent: '#34D399',
+    icon: '⏱', iconBg: 'rgba(52, 211, 153, 0.12)', link: '#', linkLabel: 'Open Resource →', accent: '#34D399',
   },
   {
+    id: 'default-3',
     title: 'Task Batching System',
     description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
-    icon: '📋',
-    iconBg: 'rgba(251, 146, 60, 0.12)',
-    link: '#',
-    linkLabel: 'Get the System →',
-    accent: '#FB923C',
+    icon: '📋', iconBg: 'rgba(251, 146, 60, 0.12)', link: '#', linkLabel: 'Open Resource →', accent: '#FB923C',
   },
   {
+    id: 'default-4',
     title: 'ADHD Habit Stacker',
     description: 'Anchor new routines to existing ones — build habits without constant reminders.',
-    icon: '🔗',
-    iconBg: 'rgba(248, 113, 113, 0.12)',
-    link: '#',
-    linkLabel: 'Learn More →',
-    accent: '#F87171',
+    icon: '🔗', iconBg: 'rgba(248, 113, 113, 0.12)', link: '#', linkLabel: 'Open Resource →', accent: '#F87171',
   },
   {
+    id: 'default-5',
     title: 'Brain Dump Toolkit',
     description: 'Capture every thought, idea, and obligation into a trusted external system.',
-    icon: '🧠',
-    iconBg: NF_BLUE + '14',
-    link: '#',
-    linkLabel: 'Get Toolkit →',
-    accent: NF_BLUE,
+    icon: '🧠', iconBg: NF_BLUE + '14', link: '#', linkLabel: 'Open Resource →', accent: NF_BLUE,
   },
   {
+    id: 'default-6',
     title: 'Productivity Analytics',
     description: 'Track focus streaks, energy patterns, and see your real daily output.',
-    icon: '📊',
-    iconBg: 'rgba(96, 165, 250, 0.12)',
-    link: '#',
-    linkLabel: 'Track Progress →',
-    accent: '#60A5FA',
+    icon: '📊', iconBg: 'rgba(96, 165, 250, 0.12)', link: '#', linkLabel: 'Open Resource →', accent: '#60A5FA',
   },
 ];
 
 // ─── Resource Card ────────────────────────────────────────────────────────────
-function ResourceCard({ resource, delay, cardWidth }: { resource: Resource; delay: number; cardWidth: any }) {
+function ResourceCard({ resource, delay, cardWidth, onPress }: { resource: Resource; delay: number; cardWidth: any; onPress: () => void }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(12)).current;
   const hoverAnim = useRef(new Animated.Value(0)).current;
@@ -154,7 +136,7 @@ function ResourceCard({ resource, delay, cardWidth }: { resource: Resource; dela
       <Pressable
         onHoverIn={() => Animated.timing(hoverAnim, { toValue: 1, duration: 250, useNativeDriver: false }).start()}
         onHoverOut={() => Animated.timing(hoverAnim, { toValue: 0, duration: 250, useNativeDriver: false }).start()}
-        onPress={() => { if (resource.link !== '#') Linking.openURL(resource.link); }}
+        onPress={onPress}
         style={{ flex: 1, width: '100%' }}
       >
         <Animated.View style={[
@@ -197,6 +179,7 @@ export default function ResourcesScreen() {
       .then(cards => {
         if (cards.length > 0) {
           setResources(cards.map(c => ({
+            id: c.id,
             title: c.title,
             description: c.description,
             icon: c.icon,
@@ -250,7 +233,13 @@ export default function ResourcesScreen() {
         {/* Resource Cards Grid — defaults show immediately, DB data overlays when loaded */}
         <View style={styles.gridContainer}>
           {resources.map((resource, i) => (
-            <ResourceCard key={resource.title} resource={resource} delay={i * 80} cardWidth={cardWidth} />
+            <ResourceCard
+              key={resource.id}
+              resource={resource}
+              delay={i * 80}
+              cardWidth={cardWidth}
+              onPress={() => router.push({ pathname: '/(app)/resource-viewer', params: { cardId: resource.id } } as any)}
+            />
           ))}
         </View>
 

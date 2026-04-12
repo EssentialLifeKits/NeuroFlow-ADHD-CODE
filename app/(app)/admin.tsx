@@ -14,7 +14,9 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Image,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,12 +29,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../../src/lib/auth';
 import {
   fetchAllResourceCards,
   createResourceCard,
   updateResourceCard,
   deleteResourceCard,
+  uploadResourceFile,
   getAllSettings,
   setSetting,
   type ResourceCard,
@@ -431,6 +436,7 @@ const BLANK_CARD: CardDraft = {
   icon_bg: 'rgba(74,144,226,0.12)', accent_color: '#4A90E2',
   link: '#', link_label: 'Learn More →',
   sort_order: 0, is_active: true,
+  slide_deck_url: null, icon_image_url: null,
 };
 
 const ACCENT_PRESETS = [
@@ -444,82 +450,404 @@ const ACCENT_PRESETS = [
   { color: '#EC4899', label: 'Pink' },
 ];
 
-function ResourceCardEditor({
-  initial, onSave, onCancel,
+// ─── Inline Card Row (pencil icon opens editor inline) ────────────────────────
+
+function InlineCardRow({
+  card,
+  onDelete,
+  onSaved,
 }: {
-  initial: CardDraft;
-  onSave: (draft: CardDraft) => Promise<void>;
-  onCancel: () => void;
+  card: ResourceCard;
+  onDelete: (card: ResourceCard) => void;
+  onSaved: () => void;
 }) {
-  const [draft, setDraft] = useState<CardDraft>({ ...initial });
-  const [saving, setSaving] = useState(false);
+  const [open, setOpen]     = useState(false);
+  const [draft, setDraft]   = useState<CardDraft>({
+    title: card.title, description: card.description,
+    icon: card.icon, icon_bg: card.icon_bg,
+    accent_color: card.accent_color, link: card.link,
+    link_label: card.link_label, sort_order: card.sort_order,
+    is_active: card.is_active,
+    slide_deck_url: card.slide_deck_url ?? null,
+    icon_image_url: card.icon_image_url ?? null,
+  });
+  const [saving, setSaving]           = useState(false);
+  const [uploadingDeck, setUploadingDeck] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   function set(key: keyof CardDraft, value: any) {
     setDraft(prev => ({ ...prev, [key]: value }));
   }
 
-  // Build live preview resource card from draft
-  const previewCard: ResourceCard = {
-    ...draft, id: 'preview', created_at: '', updated_at: '',
-  };
+  async function pickIconImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo library access to upload an icon image.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, aspect: [1, 1], quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const name  = asset.uri.split('/').pop() ?? 'icon.jpg';
+    setUploadingIcon(true);
+    try {
+      const url = await uploadResourceFile(
+        { uri: asset.uri, name, type: asset.mimeType ?? 'image/jpeg' },
+        'icons',
+      );
+      set('icon_image_url', url);
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message);
+    } finally { setUploadingIcon(false); }
+  }
+
+  async function pickSlideDeck() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/vnd.ms-powerpoint',
+               'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setUploadingDeck(true);
+      const url = await uploadResourceFile(
+        { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'application/pdf' },
+        'slide-decks',
+      );
+      set('slide_deck_url', url);
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message);
+    } finally { setUploadingDeck(false); }
+  }
 
   async function handleSave() {
     if (!draft.title.trim()) { Alert.alert('Validation', 'Title is required.'); return; }
     setSaving(true);
-    try { await onSave(draft); } finally { setSaving(false); }
+    try {
+      await updateResourceCard(card.id, draft);
+      setOpen(false);
+      onSaved();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    } finally { setSaving(false); }
   }
+
+  const previewCard: ResourceCard = { ...draft, id: card.id, created_at: '', updated_at: '' };
+
+  return (
+    <View style={{ gap: 0 }}>
+      {/* Card row header — always visible */}
+      <View style={inlineStyles.rowHeader}>
+        {/* Icon thumbnail */}
+        <View style={[inlineStyles.rowIconBox, { backgroundColor: card.icon_bg }]}>
+          {card.icon_image_url
+            ? <Image source={{ uri: card.icon_image_url }} style={{ width: 28, height: 28, borderRadius: 6 }} />
+            : <Text style={{ fontSize: 20 }}>{card.icon}</Text>
+          }
+        </View>
+        {/* Title + status */}
+        <View style={{ flex: 1 }}>
+          <Text style={inlineStyles.rowTitle} numberOfLines={1}>{card.title}</Text>
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+            {!card.is_active && (
+              <View style={inlineStyles.hiddenBadge}>
+                <Text style={inlineStyles.hiddenBadgeText}>HIDDEN</Text>
+              </View>
+            )}
+            {card.slide_deck_url && (
+              <View style={inlineStyles.deckBadge}>
+                <Text style={inlineStyles.deckBadgeText}>📎 Deck</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        {/* Action buttons */}
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Pressable
+            onPress={() => setOpen(o => !o)}
+            style={[inlineStyles.iconBtn, open && { backgroundColor: NF_BLUE + '22', borderColor: NF_BLUE }]}
+          >
+            <Text style={{ fontSize: 14 }}>{open ? '✕' : '✏️'}</Text>
+          </Pressable>
+          <Pressable onPress={() => onDelete(card)} style={inlineStyles.iconBtnRed}>
+            <Text style={{ fontSize: 14 }}>🗑</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Inline editor — slides open when pencil tapped */}
+      {open && (
+        <View style={inlineStyles.editorBody}>
+          {/* Live preview */}
+          <Text style={[s.fieldLabel, { marginBottom: 6 }]}>LIVE PREVIEW</Text>
+          <ResourceCardPreview card={previewCard} />
+          <View style={s.divider} />
+
+          {/* Icon picker — emoji OR image */}
+          <View style={s.fieldWrap}>
+            <Text style={s.fieldLabel}>ICON — EMOJI OR IMAGE</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 6, alignItems: 'center' }}>
+              {/* Current icon preview */}
+              <View style={[inlineStyles.iconPreview, { backgroundColor: draft.icon_bg }]}>
+                {draft.icon_image_url
+                  ? <Image source={{ uri: draft.icon_image_url }} style={{ width: 36, height: 36, borderRadius: 8 }} />
+                  : <Text style={{ fontSize: 24 }}>{draft.icon}</Text>
+                }
+              </View>
+              {/* Emoji input */}
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                value={draft.icon_image_url ? '' : draft.icon}
+                onChangeText={v => { set('icon', v); set('icon_image_url', null); }}
+                placeholder="Emoji e.g. 📘"
+                placeholderTextColor={colors.textTertiary}
+              />
+              {/* Upload image button */}
+              <Pressable onPress={pickIconImage} disabled={uploadingIcon} style={inlineStyles.uploadBtn}>
+                {uploadingIcon
+                  ? <ActivityIndicator size="small" color={NF_BLUE} />
+                  : <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE }}>📷 Image</Text>
+                }
+              </Pressable>
+            </View>
+            {draft.icon_image_url && (
+              <Pressable onPress={() => set('icon_image_url', null)} style={{ marginTop: 4 }}>
+                <Text style={{ fontSize: 11, color: NF_RED }}>✕ Remove image — use emoji instead</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <Field label="Title *" value={draft.title} onChangeText={v => set('title', v)} placeholder="Deep Work Blueprint" />
+          <Field label="Description *" value={draft.description} onChangeText={v => set('description', v)} placeholder="Short description…" multiline />
+          <Field label="Link Label" value={draft.link_label} onChangeText={v => set('link_label', v)} placeholder="Learn More →" />
+          <Field label="Sort Order" value={String(draft.sort_order)} onChangeText={v => set('sort_order', parseInt(v) || 0)} placeholder="0" />
+
+          {/* Accent color presets */}
+          <View style={s.fieldWrap}>
+            <Text style={s.fieldLabel}>ACCENT COLOR</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+              {ACCENT_PRESETS.map(p => (
+                <Pressable key={p.color} onPress={() => { set('accent_color', p.color); set('icon_bg', p.color + '1E'); }}
+                  style={{ alignItems: 'center', gap: 3 }}>
+                  <View style={{
+                    width: 32, height: 32, borderRadius: 8, backgroundColor: p.color,
+                    borderWidth: draft.accent_color === p.color ? 2.5 : 1,
+                    borderColor: draft.accent_color === p.color ? '#fff' : 'rgba(255,255,255,0.1)',
+                  }} />
+                  <Text style={{ fontSize: 9, color: colors.textTertiary }}>{p.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              style={[s.input, { marginTop: 8 }]} value={draft.accent_color}
+              onChangeText={v => set('accent_color', v)}
+              placeholder="Custom hex e.g. #4A90E2" placeholderTextColor={colors.textTertiary}
+            />
+          </View>
+
+          {/* Slide deck upload */}
+          <View style={s.fieldWrap}>
+            <Text style={s.fieldLabel}>SLIDE DECK (PDF / PPTX)</Text>
+            <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 6 }}>
+              Upload your NotebookLM slide deck — users can download it from the Resource Viewer page.
+            </Text>
+            {draft.slide_deck_url ? (
+              <View style={inlineStyles.deckRow}>
+                <Text style={{ fontSize: 12, color: NF_GREEN, flex: 1 }} numberOfLines={1}>
+                  ✅ Deck uploaded
+                </Text>
+                <Pressable onPress={() => Linking.openURL(draft.slide_deck_url!)} style={inlineStyles.deckViewBtn}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE }}>View</Text>
+                </Pressable>
+                <Pressable onPress={pickSlideDeck} disabled={uploadingDeck} style={inlineStyles.deckViewBtn}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_ORANGE }}>Replace</Text>
+                </Pressable>
+                <Pressable onPress={() => set('slide_deck_url', null)} style={inlineStyles.deckViewBtn}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable onPress={pickSlideDeck} disabled={uploadingDeck} style={inlineStyles.deckUploadBtn}>
+                {uploadingDeck
+                  ? <ActivityIndicator size="small" color={NF_BLUE} />
+                  : <>
+                      <Text style={{ fontSize: 18 }}>📎</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload Slide Deck</Text>
+                    </>
+                }
+              </Pressable>
+            )}
+          </View>
+
+          <View style={s.toggleRow}>
+            <Text style={s.fieldLabel}>VISIBLE TO USERS</Text>
+            <Switch
+              value={draft.is_active} onValueChange={v => set('is_active', v)}
+              trackColor={{ false: colors.border, true: NF_BLUE }} thumbColor="#fff"
+            />
+          </View>
+
+          <View style={s.rowGap}>
+            <Btn label={saving ? 'Saving…' : '💾 Save Card'} onPress={handleSave} disabled={saving} />
+            <Btn label="Cancel" onPress={() => setOpen(false)} outline color={colors.textSecondary} />
+          </View>
+        </View>
+      )}
+
+      <View style={s.divider} />
+    </View>
+  );
+}
+
+// ─── New card creation form ───────────────────────────────────────────────────
+
+function NewCardForm({
+  sortOrder,
+  onSave,
+  onCancel,
+}: {
+  sortOrder: number;
+  onSave: (draft: CardDraft) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft]             = useState<CardDraft>({ ...BLANK_CARD, sort_order: sortOrder });
+  const [saving, setSaving]           = useState(false);
+  const [uploadingDeck, setUploadingDeck] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+
+  function set(key: keyof CardDraft, value: any) {
+    setDraft(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function pickIconImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo library access to upload an icon image.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true, aspect: [1, 1], quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const name  = asset.uri.split('/').pop() ?? 'icon.jpg';
+    setUploadingIcon(true);
+    try {
+      const url = await uploadResourceFile({ uri: asset.uri, name, type: asset.mimeType ?? 'image/jpeg' }, 'icons');
+      set('icon_image_url', url);
+    } catch (e: any) { Alert.alert('Upload failed', e.message); }
+    finally { setUploadingIcon(false); }
+  }
+
+  async function pickSlideDeck() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/vnd.ms-powerpoint',
+               'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setUploadingDeck(true);
+      const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'application/pdf' }, 'slide-decks');
+      set('slide_deck_url', url);
+    } catch (e: any) { Alert.alert('Upload failed', e.message); }
+    finally { setUploadingDeck(false); }
+  }
+
+  async function handleSave() {
+    if (!draft.title.trim()) { Alert.alert('Validation', 'Title is required.'); return; }
+    setSaving(true);
+    try { await onSave(draft); } catch (e: any) { Alert.alert('Error', e.message); }
+    finally { setSaving(false); }
+  }
+
+  const previewCard: ResourceCard = { ...draft, id: 'new', created_at: '', updated_at: '' };
 
   return (
     <View style={s.editorWrap}>
-      {/* Live preview at top */}
-      <Text style={[s.fieldLabel, { marginBottom: 4 }]}>LIVE PREVIEW</Text>
+      <Text style={[s.fieldLabel, { marginBottom: 6 }]}>LIVE PREVIEW</Text>
       <ResourceCardPreview card={previewCard} />
-
       <View style={s.divider} />
+
+      {/* Icon picker */}
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>ICON — EMOJI OR IMAGE</Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 6, alignItems: 'center' }}>
+          <View style={[inlineStyles.iconPreview, { backgroundColor: draft.icon_bg }]}>
+            {draft.icon_image_url
+              ? <Image source={{ uri: draft.icon_image_url }} style={{ width: 36, height: 36, borderRadius: 8 }} />
+              : <Text style={{ fontSize: 24 }}>{draft.icon}</Text>
+            }
+          </View>
+          <TextInput
+            style={[s.input, { flex: 1 }]}
+            value={draft.icon_image_url ? '' : draft.icon}
+            onChangeText={v => { set('icon', v); set('icon_image_url', null); }}
+            placeholder="Emoji e.g. 📘"
+            placeholderTextColor={colors.textTertiary}
+          />
+          <Pressable onPress={pickIconImage} disabled={uploadingIcon} style={inlineStyles.uploadBtn}>
+            {uploadingIcon
+              ? <ActivityIndicator size="small" color={NF_BLUE} />
+              : <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE }}>📷 Image</Text>
+            }
+          </Pressable>
+        </View>
+      </View>
 
       <Field label="Title *" value={draft.title} onChangeText={v => set('title', v)} placeholder="Deep Work Blueprint" />
       <Field label="Description *" value={draft.description} onChangeText={v => set('description', v)} placeholder="Short description…" multiline />
-      <Field label="Icon (emoji)" value={draft.icon} onChangeText={v => set('icon', v)} placeholder="📘" />
-      <Field label="Link URL" value={draft.link} onChangeText={v => set('link', v)} placeholder="https://… or #" />
       <Field label="Link Label" value={draft.link_label} onChangeText={v => set('link_label', v)} placeholder="Learn More →" />
       <Field label="Sort Order" value={String(draft.sort_order)} onChangeText={v => set('sort_order', parseInt(v) || 0)} placeholder="0" />
 
-      {/* Accent color presets */}
       <View style={s.fieldWrap}>
         <Text style={s.fieldLabel}>ACCENT COLOR</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
           {ACCENT_PRESETS.map(p => (
             <Pressable key={p.color} onPress={() => { set('accent_color', p.color); set('icon_bg', p.color + '1E'); }}
               style={{ alignItems: 'center', gap: 3 }}>
               <View style={{
                 width: 32, height: 32, borderRadius: 8, backgroundColor: p.color,
-                borderWidth: draft.accent_color === p.color ? 2 : 1,
+                borderWidth: draft.accent_color === p.color ? 2.5 : 1,
                 borderColor: draft.accent_color === p.color ? '#fff' : 'rgba(255,255,255,0.1)',
               }} />
               <Text style={{ fontSize: 9, color: colors.textTertiary }}>{p.label}</Text>
             </Pressable>
           ))}
         </View>
-        <TextInput
-          style={[s.input, { marginTop: 8 }]} value={draft.accent_color}
-          onChangeText={v => set('accent_color', v)}
-          placeholder="Custom hex e.g. #4A90E2" placeholderTextColor={colors.textTertiary}
-        />
       </View>
 
-      {/* Icon background */}
-      <Field label="Icon Background (CSS color / rgba)" value={draft.icon_bg} onChangeText={v => set('icon_bg', v)} placeholder="rgba(74,144,226,0.12)" />
+      {/* Slide deck */}
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>SLIDE DECK (PDF / PPTX)</Text>
+        {draft.slide_deck_url ? (
+          <View style={inlineStyles.deckRow}>
+            <Text style={{ fontSize: 12, color: NF_GREEN, flex: 1 }}>✅ Deck uploaded</Text>
+            <Pressable onPress={() => set('slide_deck_url', null)} style={inlineStyles.deckViewBtn}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={pickSlideDeck} disabled={uploadingDeck} style={inlineStyles.deckUploadBtn}>
+            {uploadingDeck
+              ? <ActivityIndicator size="small" color={NF_BLUE} />
+              : <>
+                  <Text style={{ fontSize: 18 }}>📎</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload Slide Deck</Text>
+                </>
+            }
+          </Pressable>
+        )}
+      </View>
 
       <View style={s.toggleRow}>
         <Text style={s.fieldLabel}>VISIBLE TO USERS</Text>
-        <Switch
-          value={draft.is_active} onValueChange={v => set('is_active', v)}
-          trackColor={{ false: colors.border, true: NF_BLUE }} thumbColor="#fff"
-        />
+        <Switch value={draft.is_active} onValueChange={v => set('is_active', v)}
+          trackColor={{ false: colors.border, true: NF_BLUE }} thumbColor="#fff" />
       </View>
 
       <View style={s.rowGap}>
-        <Btn label={saving ? 'Saving…' : '💾 Save Card'} onPress={handleSave} disabled={saving} />
+        <Btn label={saving ? 'Saving…' : '💾 Create Card'} onPress={handleSave} disabled={saving} />
         <Btn label="Cancel" onPress={onCancel} outline color={colors.textSecondary} />
       </View>
     </View>
@@ -529,9 +857,9 @@ function ResourceCardEditor({
 // ─── Resources Manager Section ────────────────────────────────────────────────
 
 function ResourcesSection() {
-  const [cards, setCards]           = useState<ResourceCard[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [editing, setEditing]       = useState<ResourceCard | null | 'new'>(null);
+  const [cards, setCards]             = useState<ResourceCard[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [addingNew, setAddingNew]     = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
   const load = useCallback(async () => {
@@ -545,16 +873,9 @@ function ResourcesSection() {
 
   async function handleCreate(draft: CardDraft) {
     await createResourceCard(draft);
-    setEditing(null);
+    setAddingNew(false);
     await load();
     Alert.alert('Created', 'Resource card added.');
-  }
-
-  async function handleUpdate(id: string, draft: CardDraft) {
-    await updateResourceCard(id, draft);
-    setEditing(null);
-    await load();
-    Alert.alert('Updated', 'Card saved.');
   }
 
   async function handleDelete(card: ResourceCard) {
@@ -567,7 +888,7 @@ function ResourcesSection() {
   return (
     <Card>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <SectionHeader title="🗂 Resources Manager" subtitle="Visual editor — see and edit each card live" />
+        <SectionHeader title="🗂 Resources Manager" subtitle="Tap ✏️ on any card to edit inline" />
         <Pressable
           onPress={() => setShowPreview(p => !p)}
           style={{
@@ -583,7 +904,6 @@ function ResourcesSection() {
         </Pressable>
       </View>
 
-      {/* Full user-facing card grid — hidden until toggled */}
       {showPreview && !loading && (
         <>
           <LiveResourceGrid cards={cards} />
@@ -593,48 +913,93 @@ function ResourcesSection() {
 
       {loading && <ActivityIndicator color={NF_BLUE} style={{ marginVertical: 12 }} />}
 
-      {!loading && editing === null && (
+      {!loading && !addingNew && (
         <>
           {cards.map(card => (
-            <View key={card.id} style={{ gap: 8 }}>
-              {/* Visual preview */}
-              <ResourceCardPreview card={card} />
-              {/* Action row below preview */}
-              <View style={[s.rowGap, { marginBottom: 8 }]}>
-                <Btn label="✏️ Edit" onPress={() => setEditing(card)} small outline color={NF_BLUE} />
-                <Btn label="🗑 Delete" onPress={() => handleDelete(card)} small outline color={NF_RED} />
-              </View>
-              <View style={s.divider} />
-            </View>
+            <InlineCardRow
+              key={card.id}
+              card={card}
+              onDelete={handleDelete}
+              onSaved={load}
+            />
           ))}
-          <Btn label="+ Add New Card" onPress={() => setEditing('new')} color={NF_GREEN} />
+          <Btn label="+ Add New Card" onPress={() => setAddingNew(true)} color={NF_GREEN} />
         </>
       )}
 
-      {!loading && editing === 'new' && (
-        <ResourceCardEditor
-          initial={{ ...BLANK_CARD, sort_order: cards.length }}
+      {!loading && addingNew && (
+        <NewCardForm
+          sortOrder={cards.length}
           onSave={handleCreate}
-          onCancel={() => setEditing(null)}
-        />
-      )}
-
-      {!loading && editing !== null && editing !== 'new' && (
-        <ResourceCardEditor
-          initial={{
-            title: editing.title, description: editing.description,
-            icon: editing.icon, icon_bg: editing.icon_bg,
-            accent_color: editing.accent_color, link: editing.link,
-            link_label: editing.link_label, sort_order: editing.sort_order,
-            is_active: editing.is_active,
-          }}
-          onSave={(draft) => handleUpdate((editing as ResourceCard).id, draft)}
-          onCancel={() => setEditing(null)}
+          onCancel={() => setAddingNew(false)}
         />
       )}
     </Card>
   );
 }
+
+// ─── Inline card styles ───────────────────────────────────────────────────────
+const inlineStyles = StyleSheet.create({
+  rowHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12,
+  },
+  rowIconBox: {
+    width: 44, height: 44, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rowTitle: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+  hiddenBadge: {
+    backgroundColor: NF_ORANGE + '22', paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 4,
+  },
+  hiddenBadgeText: { fontSize: 9, fontWeight: '700', color: NF_ORANGE },
+  deckBadge: {
+    backgroundColor: NF_GREEN + '22', paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 4,
+  },
+  deckBadgeText: { fontSize: 9, fontWeight: '700', color: NF_GREEN },
+  iconBtn: {
+    width: 34, height: 34, borderRadius: 8, borderWidth: 1,
+    borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
+  },
+  iconBtnRed: {
+    width: 34, height: 34, borderRadius: 8, borderWidth: 1,
+    borderColor: NF_RED + '44', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: NF_RED + '0A',
+  },
+  editorBody: {
+    backgroundColor: colors.bgBase, borderRadius: 12,
+    borderWidth: 1, borderColor: NF_BLUE + '33',
+    padding: 16, gap: 14, marginBottom: 4,
+  },
+  iconPreview: {
+    width: 52, height: 52, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  uploadBtn: {
+    paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: NF_BLUE + '14', borderRadius: 8,
+    borderWidth: 1, borderColor: NF_BLUE + '33',
+    alignItems: 'center', justifyContent: 'center', minWidth: 72,
+  },
+  deckUploadBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, borderRadius: 10,
+    backgroundColor: NF_BLUE + '0F', borderWidth: 1.5,
+    borderColor: NF_BLUE + '33', borderStyle: 'dashed',
+  },
+  deckRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: NF_GREEN + '0F', borderRadius: 8,
+    padding: 10, borderWidth: 1, borderColor: NF_GREEN + '33',
+  },
+  deckViewBtn: {
+    paddingHorizontal: 10, paddingVertical: 6,
+    backgroundColor: colors.bgCard, borderRadius: 6,
+    borderWidth: 1, borderColor: colors.border,
+  },
+});
 
 // ─── User Monitor ─────────────────────────────────────────────────────────────
 

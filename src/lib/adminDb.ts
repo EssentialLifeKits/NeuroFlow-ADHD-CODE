@@ -19,6 +19,8 @@ export interface ResourceCard {
   link_label: string;
   sort_order: number;
   is_active: boolean;
+  slide_deck_url: string | null;
+  icon_image_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +53,21 @@ export async function fetchAllResourceCards(): Promise<ResourceCard[]> {
 
   if (error) throw new Error(error.message);
   return (data ?? []) as ResourceCard[];
+}
+
+export async function uploadResourceFile(
+  file: { uri: string; name: string; type: string },
+  folder: 'slide-decks' | 'icons',
+): Promise<string> {
+  const response = await fetch(file.uri);
+  const blob = await response.blob();
+  const path = `${folder}/${Date.now()}-${file.name}`;
+  const { error } = await supabase.storage
+    .from('resource-assets')
+    .upload(path, blob, { contentType: file.type, upsert: true });
+  if (error) throw new Error(error.message);
+  const { data } = supabase.storage.from('resource-assets').getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export async function createResourceCard(card: Omit<ResourceCard, 'id' | 'created_at' | 'updated_at'>): Promise<ResourceCard> {
