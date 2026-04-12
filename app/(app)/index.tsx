@@ -10,7 +10,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
+  Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,6 +39,7 @@ import {
 } from '../../src/lib/tasksUtils';
 import ScheduleModal from '../../src/components/ScheduleModal';
 import { TaskThumbnail } from '../../src/components/TaskThumbnail';
+import { getSetting } from '../../src/lib/adminDb';
 
 const NF_BLUE = '#4A90E2';
 const DESKTOP_BREAKPOINT = 1024;
@@ -242,6 +245,18 @@ export default function DashboardScreen() {
   const sectionTranslateY = useRef(new Animated.Value(12)).current;
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const ctaTranslateY = useRef(new Animated.Value(12)).current;
+
+  // How To video
+  const [howToVisible, setHowToVisible] = useState(false);
+  const [howToUrl, setHowToUrl] = useState('');
+  const [howToTitle, setHowToTitle] = useState('How To Use NeuroFlow');
+  const [howToDesc, setHowToDesc] = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
+
+  useEffect(() => {
+    getSetting('howto_video_url').then(v => { if (v) setHowToUrl(v); }).catch(() => {});
+    getSetting('howto_video_title').then(v => { if (v) setHowToTitle(v); }).catch(() => {});
+    getSetting('howto_video_desc').then(v => { if (v) setHowToDesc(v); }).catch(() => {});
+  }, []);
 
   // Edit Task State
   const [modalVisible, setModalVisible] = useState(false);
@@ -453,6 +468,9 @@ export default function DashboardScreen() {
               <PulsingDot />
               <Text style={styles.todayBadgeText}>Today • {DAY_NAMES[new Date().getDay()]}</Text>
             </View>
+            <Pressable onPress={() => setHowToVisible(true)} style={styles.howToBtn}>
+              <Text style={styles.howToBtnText}>▶ How To</Text>
+            </Pressable>
             <Pressable style={styles.avatar}>
               <Text style={styles.avatarText}>{avatarLetter}</Text>
             </Pressable>
@@ -527,6 +545,42 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── How To Video Modal ── */}
+      <Modal visible={howToVisible} transparent animationType="fade" onRequestClose={() => setHowToVisible(false)}>
+        <Pressable style={styles.howToOverlay} onPress={() => setHowToVisible(false)}>
+          <Pressable style={styles.howToSheet} onPress={e => e.stopPropagation()}>
+            <View style={styles.howToHeader}>
+              <Text style={styles.howToTitle}>{howToTitle}</Text>
+              <Pressable onPress={() => setHowToVisible(false)} style={styles.howToClose}>
+                <Text style={styles.howToCloseText}>✕</Text>
+              </Pressable>
+            </View>
+            {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
+            {howToUrl ? (
+              Platform.OS === 'web' ? (
+                <View style={styles.howToVideoWrap}>
+                  {/* @ts-ignore */}
+                  <iframe
+                    src={howToUrl}
+                    style={{ width: '100%', height: '100%', border: 'none', borderRadius: 10 }}
+                    title="How To Video"
+                    allow="autoplay; fullscreen"
+                  />
+                </View>
+              ) : (
+                <Pressable onPress={() => Linking.openURL(howToUrl)} style={[styles.howToOpenBtn, { backgroundColor: NF_BLUE }]}>
+                  <Text style={styles.howToOpenBtnText}>▶ Watch Video</Text>
+                </Pressable>
+              )
+            ) : (
+              <View style={styles.howToEmpty}>
+                <Text style={styles.howToEmptyText}>🎬 Video coming soon</Text>
+              </View>
+            )}
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -669,6 +723,34 @@ const styles = StyleSheet.create({
   },
   ctaButtonText: { color: colors.white, fontWeight: '700', fontSize: typography.fontSizeSm, textAlign: 'center' },
   ctaSub: { fontSize: 10, color: colors.textTertiary, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
+
+  // How To button
+  howToBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: NF_BLUE + '18',
+    borderWidth: 1, borderColor: NF_BLUE + '55',
+  },
+  howToBtnText: { fontSize: 12, fontWeight: '700', color: NF_BLUE },
+
+  // How To modal
+  howToOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  howToSheet: {
+    backgroundColor: colors.bgCard, borderRadius: radius.xl,
+    padding: spacing.lg, width: '100%', maxWidth: 560,
+    borderWidth: 1, borderColor: NF_BLUE + '44', gap: spacing.md,
+  },
+  howToHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  howToTitle: { fontSize: 18, fontWeight: '800', color: NF_BLUE, flex: 1 },
+  howToClose: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center' },
+  howToCloseText: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
+  howToDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
+  howToVideoWrap: { width: '100%', height: 280, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' },
+  howToOpenBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: radius.lg },
+  howToOpenBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  howToEmpty: { paddingVertical: 24, alignItems: 'center', backgroundColor: colors.bgBase, borderRadius: radius.lg },
+  howToEmptyText: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
 
   toastContainer: {
     position: 'absolute', bottom: 32, alignSelf: 'center',

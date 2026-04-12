@@ -258,6 +258,85 @@ function AppSettingsSection({
   );
 }
 
+// ─── How To Video Editor ──────────────────────────────────────────────────────
+
+function HowToVideoSection({
+  settings, onSave,
+}: {
+  settings: Record<string, string>;
+  onSave: (key: string, value: string) => Promise<void>;
+}) {
+  const [videoUrl,  setVideoUrl]  = useState(settings['howto_video_url']   ?? '');
+  const [title,     setTitle]     = useState(settings['howto_video_title']  ?? 'How To Use NeuroFlow');
+  const [desc,      setDesc]      = useState(settings['howto_video_desc']   ?? 'Watch this short explainer to get the most out of your ADHD toolkit.');
+  const [saving,    setSaving]    = useState(false);
+  const [preview,   setPreview]   = useState(false);
+  const { width }   = useWindowDimensions();
+
+  async function save() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        onSave('howto_video_url',   videoUrl),
+        onSave('howto_video_title', title),
+        onSave('howto_video_desc',  desc),
+      ]);
+      Alert.alert('Saved', 'How To video card updated.');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Card>
+      <SectionHeader
+        title="🎬 How To Video Card"
+        subtitle="Shown on Dashboard behind the 'How To' button — not downloadable by users"
+      />
+      <Field label="Video Title" value={title} onChangeText={setTitle} placeholder="How To Use NeuroFlow" />
+      <Field label="Short Description" value={desc} onChangeText={setDesc} multiline placeholder="Describe what the video covers…" />
+      <Field
+        label="Video Embed URL"
+        value={videoUrl}
+        onChangeText={setVideoUrl}
+        placeholder="https://www.youtube.com/embed/…  or  NotebookLM share link"
+      />
+      <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: -8 }}>
+        Tip: use a YouTube /embed/ URL for best in-app playback. Paste any shareable link for native.
+      </Text>
+
+      <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+        <Btn label="👁 Preview Card" onPress={() => setPreview(true)} outline color={NF_BLUE} small />
+        <Btn label={saving ? 'Saving…' : '💾 Save Video Card'} onPress={save} disabled={saving} />
+      </View>
+
+      {/* Preview Modal */}
+      <Modal visible={preview} transparent animationType="fade" onRequestClose={() => setPreview(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', alignItems: 'center', justifyContent: 'center', padding: 24 }} onPress={() => setPreview(false)}>
+          <Pressable style={{ backgroundColor: colors.bgCard, borderRadius: 20, padding: 20, width: '100%', maxWidth: 540, gap: 14, borderWidth: 1, borderColor: NF_BLUE + '44' }} onPress={e => e.stopPropagation()}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: NF_BLUE, flex: 1 }}>{title || 'Untitled'}</Text>
+              <Pressable onPress={() => setPreview(false)} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 13, color: colors.textSecondary, fontWeight: '700' }}>✕</Text>
+              </Pressable>
+            </View>
+            {desc ? <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{desc}</Text> : null}
+            {videoUrl ? (
+              <View style={{ width: '100%', height: Math.min(width * 0.5, 260), borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' }}>
+                {/* @ts-ignore */}
+                <iframe src={videoUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="Video Preview" allow="autoplay; fullscreen" />
+              </View>
+            ) : (
+              <View style={{ paddingVertical: 24, alignItems: 'center', backgroundColor: colors.bgBase, borderRadius: 12 }}>
+                <Text style={{ fontSize: 14, color: colors.textSecondary }}>🎬 No URL set yet</Text>
+              </View>
+            )}
+            <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>This is exactly how it looks on the Dashboard</Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </Card>
+  );
+}
+
 // ─── Default cards — mirror of resources.tsx DEFAULT_RESOURCES ───────────────
 // Used as fallback when DB resource_cards table is empty, so the preview always
 // shows the 6 real cards exactly as users see them.
@@ -1238,6 +1317,7 @@ export default function AdminScreen() {
           <>
             <EmailTemplateSection settings={settings} onSave={handleSaveSetting} />
             <ResourcesSection />
+            <HowToVideoSection settings={settings} onSave={handleSaveSetting} />
             <AppSettingsSection settings={settings} onSave={handleSaveSetting} />
             <UserMonitorSection />
           </>

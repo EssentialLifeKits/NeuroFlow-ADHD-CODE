@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { colors, radius, spacing, typography } from '../../src/constants/theme';
+import { colors, radius, spacing } from '../../src/constants/theme';
 import { fetchResourceCards, type ResourceCard } from '../../src/lib/adminDb';
 
 const NF_BLUE = '#4A90E2';
@@ -109,6 +109,79 @@ function CardTab({
   );
 }
 
+// ─── Inline PDF slide viewer (web only) ──────────────────────────────────────
+// Renders the PDF in an iframe. Click anywhere on the viewer area to advance
+// to the next page using PDF viewer's built-in fragment navigation.
+function SlideViewer({ url, accentColor }: { url: string; accentColor: string }) {
+  const [page, setPage] = useState(1);
+  const { width } = useWindowDimensions();
+  const viewerH = Math.min(width * 0.65, 520);
+
+  // Build the URL with #page=N so the browser PDF viewer jumps to the right page
+  const pageUrl = `${url}#page=${page}`;
+
+  function nextPage() { setPage(p => p + 1); }
+  function prevPage() { setPage(p => Math.max(1, p - 1)); }
+
+  if (Platform.OS !== 'web') {
+    // Native: no iframe — show download button only
+    return (
+      <Pressable onPress={() => Linking.openURL(url)}
+        style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
+        <Text style={styles.downloadIcon}>📥</Text>
+        <View>
+          <Text style={styles.downloadLabel}>Open Slide Deck</Text>
+          <Text style={styles.downloadSub}>Opens in your device viewer</Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.slideViewerWrap}>
+      {/* iframe rendered via dangerouslySetInnerHTML approach on web */}
+      <View style={[styles.iframeContainer, { height: viewerH }]}>
+        {/* @ts-ignore — iframe is valid on web */}
+        <iframe
+          src={pageUrl}
+          style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 }}
+          title="Slide Deck"
+        />
+        {/* Invisible click overlay — advances slide on tap */}
+        <Pressable
+          onPress={nextPage}
+          style={styles.slideClickOverlay}
+          accessibilityLabel="Tap to advance slide"
+        />
+      </View>
+
+      {/* Slide nav controls */}
+      <View style={styles.slideNav}>
+        <Pressable
+          onPress={prevPage}
+          disabled={page === 1}
+          style={[styles.slideNavBtn, { borderColor: accentColor, opacity: page === 1 ? 0.3 : 1 }]}
+        >
+          <Text style={[styles.slideNavText, { color: accentColor }]}>‹ Prev</Text>
+        </Pressable>
+        <Text style={styles.slidePageNum}>Slide {page}</Text>
+        <Pressable
+          onPress={nextPage}
+          style={[styles.slideNavBtn, { borderColor: accentColor }]}
+        >
+          <Text style={[styles.slideNavText, { color: accentColor }]}>Next ›</Text>
+        </Pressable>
+      </View>
+
+      {/* Download button — separate from viewer */}
+      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnSmall, { borderColor: accentColor }]}>
+        <Text style={{ fontSize: 14 }}>📥</Text>
+        <Text style={[styles.downloadBtnSmallText, { color: accentColor }]}>Download PDF</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 // ─── Main card detail panel ───────────────────────────────────────────────────
 function CardDetail({ card }: { card: ResourceCard }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -123,52 +196,39 @@ function CardDetail({ card }: { card: ResourceCard }) {
     ]).start();
   }, [card.id]);
 
-  async function handleDownload() {
-    if (!card.slide_deck_url) return;
-    try {
-      await Linking.openURL(card.slide_deck_url);
-    } catch {}
-  }
-
   async function handleLink() {
     if (!card.link || card.link === '#') return;
     try { await Linking.openURL(card.link); } catch {}
   }
 
   return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      {/* Hero icon */}
-      <View style={[styles.heroIconWrap, { backgroundColor: card.icon_bg }]}>
-        {card.icon_image_url
-          ? <Image source={{ uri: card.icon_image_url }} style={{ width: 64, height: 64, borderRadius: 16 }} />
-          : <Text style={styles.heroIcon}>{card.icon}</Text>
-        }
+    <Animated.View style={[{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }, { gap: 14 }]}>
+      {/* Hero icon + title row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        <View style={[styles.heroIconWrap, { backgroundColor: card.icon_bg }]}>
+          {card.icon_image_url
+            ? <Image source={{ uri: card.icon_image_url }} style={{ width: 48, height: 48, borderRadius: 12 }} />
+            : <Text style={styles.heroIcon}>{card.icon}</Text>
+          }
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={[styles.accentBar, { backgroundColor: card.accent_color, alignSelf: 'flex-start', marginBottom: 4 }]} />
+          <Text style={styles.cardTitle}>{card.title}</Text>
+          <Text style={styles.cardDesc}>{card.description}</Text>
+        </View>
       </View>
 
-      {/* Accent bar */}
-      <View style={[styles.accentBar, { backgroundColor: card.accent_color }]} />
-
-      {/* Title + description */}
-      <Text style={styles.cardTitle}>{card.title}</Text>
-      <Text style={styles.cardDesc}>{card.description}</Text>
-
-      {/* Slide deck download — primary CTA */}
+      {/* Inline slide viewer OR coming-soon placeholder */}
       {card.slide_deck_url ? (
-        <Pressable onPress={handleDownload} style={[styles.downloadBtn, { backgroundColor: card.accent_color }]}>
-          <Text style={styles.downloadIcon}>📥</Text>
-          <View>
-            <Text style={styles.downloadLabel}>Download Slide Deck</Text>
-            <Text style={styles.downloadSub}>Tap to open or save PDF</Text>
-          </View>
-        </Pressable>
+        <SlideViewer url={card.slide_deck_url} accentColor={card.accent_color} />
       ) : (
         <View style={styles.noDeckyBox}>
           <Text style={styles.noDeckText}>📭 Slide deck coming soon</Text>
-          <Text style={styles.noDeckSub}>Check back — the admin will upload resources here.</Text>
+          <Text style={styles.noDeckSub}>Check back — content will appear here.</Text>
         </View>
       )}
 
-      {/* Secondary link (if set) */}
+      {/* Secondary link */}
       {card.link && card.link !== '#' && (
         <Pressable onPress={handleLink} style={[styles.linkBtn, { borderColor: card.accent_color }]}>
           <Text style={[styles.linkBtnText, { color: card.accent_color }]}>{card.link_label}</Text>
@@ -213,7 +273,7 @@ export default function ResourceViewerScreen() {
 
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Pressable onPress={() => router.replace('/(app)/resources')} style={styles.backBtn}>
             <Text style={styles.backBtnText}>‹</Text>
           </Pressable>
           <View style={{ flex: 1 }}>
@@ -335,4 +395,29 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, marginTop: 4,
   },
   linkBtnText: { fontSize: 14, fontWeight: '700' },
+
+  // Slide viewer
+  slideViewerWrap: { gap: 10, marginTop: 4 },
+  iframeContainer: {
+    width: '100%', borderRadius: 12, overflow: 'hidden',
+    backgroundColor: '#1a1a2e', position: 'relative',
+  },
+  slideClickOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+  },
+  slideNav: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  slideNavBtn: {
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: radius.full, borderWidth: 1.5,
+  },
+  slideNavText: { fontSize: 14, fontWeight: '700' },
+  slidePageNum: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  downloadBtnSmall: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 10, borderRadius: radius.lg, borderWidth: 1.5,
+  },
+  downloadBtnSmallText: { fontSize: 13, fontWeight: '700' },
 });
