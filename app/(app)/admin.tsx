@@ -873,8 +873,37 @@ function ResourcesSection() {
     return { ...c, ...d };
   });
 
+  // Broadcast channel — sends live draft to any open Resources page in real time
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  useEffect(() => {
+    channelRef.current = supabase.channel('resource-cards-live');
+    channelRef.current.subscribe();
+    return () => { channelRef.current?.unsubscribe(); };
+  }, []);
+
   function handleDraftChange(cardId: string, draft: CardDraft | null) {
     setLiveDrafts(prev => ({ ...prev, [cardId]: draft }));
+    // Broadcast the updated card to all listeners (Resources page)
+    if (draft) {
+      const mergedCard = cards.find(c => c.id === cardId);
+      if (mergedCard) {
+        channelRef.current?.send({
+          type: 'broadcast',
+          event: 'card-draft',
+          payload: { ...mergedCard, ...draft },
+        });
+      }
+    } else {
+      // Draft cleared (saved or cancelled) — broadcast saved state
+      const savedCard = cards.find(c => c.id === cardId);
+      if (savedCard) {
+        channelRef.current?.send({
+          type: 'broadcast',
+          event: 'card-draft',
+          payload: savedCard,
+        });
+      }
+    }
   }
 
   function handleEditorClose(cardId: string) {

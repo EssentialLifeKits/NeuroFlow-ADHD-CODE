@@ -21,6 +21,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { fetchResourceCards } from '../../src/lib/adminDb';
+import { supabase } from '../../src/lib/supabase';
 
 const NF_BLUE = '#4A90E2';
 
@@ -178,6 +179,14 @@ export default function ResourcesScreen() {
     Animated.timing(headerOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start();
   }, []);
 
+  const applyCard = useCallback((c: any) => {
+    setResources(prev => prev.map(r =>
+      r.id === c.id
+        ? { id: c.id, title: c.title, description: c.description, icon: c.icon, iconBg: c.icon_bg, link: c.link, linkLabel: c.link_label, accent: c.accent_color }
+        : r
+    ));
+  }, []);
+
   const syncCards = useCallback(() => {
     fetchResourceCards()
       .then(cards => {
@@ -197,8 +206,7 @@ export default function ResourcesScreen() {
       .catch(() => {/* keep defaults */});
   }, []);
 
-  // Fetch on focus AND poll every 8 seconds while page is visible
-  // so admin edits appear on the user page within seconds — no navigation needed
+  // Fetch on focus + poll every 8s for saved changes
   useFocusEffect(
     useCallback(() => {
       syncCards();
@@ -206,6 +214,17 @@ export default function ResourcesScreen() {
       return () => clearInterval(interval);
     }, [syncCards])
   );
+
+  // Realtime broadcast — receive live admin drafts instantly (before save)
+  useEffect(() => {
+    const channel = supabase
+      .channel('resource-cards-live')
+      .on('broadcast', { event: 'card-draft' }, ({ payload }) => {
+        if (payload) applyCard(payload);
+      })
+      .subscribe();
+    return () => { channel.unsubscribe(); };
+  }, [applyCard]);
 
   const isDesktop = width > 1024;
   const isTablet = width > 768 && width <= 1024;
