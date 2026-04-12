@@ -864,9 +864,31 @@ function ResourcesSection() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setCards(await fetchAllResourceCards()); }
-    catch (e: any) { Alert.alert('Error', e.message); }
-    finally { setLoading(false); }
+    try {
+      const fetched = await fetchAllResourceCards();
+      if (fetched.length > 0) {
+        setCards(fetched);
+      } else {
+        // DB empty — seed defaults then reload so admin always sees all 6 cards
+        for (const c of DEFAULT_RESOURCE_CARDS) {
+          try {
+            await createResourceCard({
+              title: c.title, description: c.description,
+              icon: c.icon, icon_bg: c.icon_bg,
+              accent_color: c.accent_color, link: c.link,
+              link_label: c.link_label, sort_order: c.sort_order,
+              is_active: c.is_active,
+              slide_deck_url: null, icon_image_url: null,
+            });
+          } catch {}
+        }
+        const seeded = await fetchAllResourceCards();
+        setCards(seeded.length > 0 ? seeded : DEFAULT_RESOURCE_CARDS);
+      }
+    } catch (e: any) {
+      // DB unreachable — show defaults so admin isn't stuck on blank screen
+      setCards(DEFAULT_RESOURCE_CARDS);
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
