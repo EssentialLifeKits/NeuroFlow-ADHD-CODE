@@ -178,26 +178,33 @@ export default function ResourcesScreen() {
     Animated.timing(headerOpacity, { toValue: 1, duration: 450, useNativeDriver: true }).start();
   }, []);
 
-  // Re-fetch from DB every time this screen comes into focus — picks up admin edits immediately
+  const syncCards = useCallback(() => {
+    fetchResourceCards()
+      .then(cards => {
+        if (cards.length > 0) {
+          setResources(cards.map(c => ({
+            id: c.id,
+            title: c.title,
+            description: c.description,
+            icon: c.icon,
+            iconBg: c.icon_bg,
+            link: c.link,
+            linkLabel: c.link_label,
+            accent: c.accent_color,
+          })));
+        }
+      })
+      .catch(() => {/* keep defaults */});
+  }, []);
+
+  // Fetch on focus AND poll every 8 seconds while page is visible
+  // so admin edits appear on the user page within seconds — no navigation needed
   useFocusEffect(
     useCallback(() => {
-      fetchResourceCards()
-        .then(cards => {
-          if (cards.length > 0) {
-            setResources(cards.map(c => ({
-              id: c.id,
-              title: c.title,
-              description: c.description,
-              icon: c.icon,
-              iconBg: c.icon_bg,
-              link: c.link,
-              linkLabel: c.link_label,
-              accent: c.accent_color,
-            })));
-          }
-        })
-        .catch(() => {/* keep defaults */});
-    }, [])
+      syncCards();
+      const interval = setInterval(syncCards, 8000);
+      return () => clearInterval(interval);
+    }, [syncCards])
   );
 
   const isDesktop = width > 1024;
