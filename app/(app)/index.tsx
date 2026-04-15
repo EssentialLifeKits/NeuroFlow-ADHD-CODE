@@ -322,10 +322,11 @@ export default function DashboardScreen() {
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const ctaTranslateY = useRef(new Animated.Value(12)).current;
 
-  // How To video — loaded from settings, shown as inline card on dashboard
-  const [howToUrl, setHowToUrl] = useState('');
-  const [howToTitle, setHowToTitle] = useState('How To Use NeuroFlow');
-  const [howToDesc, setHowToDesc] = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
+  // How To video — inline card + button opens modal
+  const [howToUrl,     setHowToUrl]     = useState('');
+  const [howToTitle,   setHowToTitle]   = useState('How To Use NeuroFlow');
+  const [howToDesc,    setHowToDesc]    = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
+  const [howToVisible, setHowToVisible] = useState(false);
 
   useEffect(() => {
     getSetting('howto_video_url').then(v => { if (v) setHowToUrl(v); }).catch(() => {});
@@ -543,9 +544,9 @@ export default function DashboardScreen() {
               <PulsingDot />
               <Text style={styles.todayBadgeText}>Today • {DAY_NAMES[new Date().getDay()]}</Text>
             </View>
-            <View style={styles.howToBtn}>
-              <Text style={styles.howToBtnText}>🎬 How To</Text>
-            </View>
+            <Pressable onPress={() => setHowToVisible(true)} style={styles.howToBtn}>
+              <Text style={styles.howToBtnText}>▶ How To</Text>
+            </Pressable>
             <Pressable style={styles.avatar}>
               <Text style={styles.avatarText}>{avatarLetter}</Text>
             </Pressable>
@@ -623,6 +624,48 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── How To Video Modal — no download button ── */}
+      <Modal visible={howToVisible} transparent animationType="fade" onRequestClose={() => setHowToVisible(false)}>
+        <Pressable style={styles.howToOverlay} onPress={() => setHowToVisible(false)}>
+          <Pressable style={styles.howToSheet} onPress={e => e.stopPropagation()}>
+            <View style={styles.howToHeader}>
+              <Text style={styles.howToTitle}>{howToTitle}</Text>
+              <Pressable onPress={() => setHowToVisible(false)} style={styles.howToClose}>
+                <Text style={styles.howToCloseText}>✕</Text>
+              </Pressable>
+            </View>
+            {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
+            {howToUrl ? (
+              Platform.OS === 'web' ? (
+                <View style={styles.howToVideoWrap}>
+                  {/\.(mp4|mov|webm)(\?|$)/i.test(howToUrl)
+                    ? React.createElement('video', {
+                        src: howToUrl, controls: true, autoPlay: false,
+                        controlsList: 'nofullscreen nodownload',
+                        disablePictureInPicture: true,
+                        style: { width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#000', outline: 'none' },
+                      })
+                    : React.createElement('iframe', {
+                        src: howToUrl,
+                        style: { width: '100%', height: '100%', border: 'none', borderRadius: 10 },
+                        title: 'How To Video', allow: 'autoplay; fullscreen',
+                      })
+                  }
+                </View>
+              ) : (
+                <Pressable onPress={() => Linking.openURL(howToUrl)} style={[styles.howToOpenBtn, { backgroundColor: NF_BLUE }]}>
+                  <Text style={styles.howToOpenBtnText}>▶ Watch Video</Text>
+                </Pressable>
+              )
+            ) : (
+              <View style={styles.howToEmpty}>
+                <Text style={styles.howToEmptyText}>🎬 Video coming soon</Text>
+              </View>
+            )}
+          </Pressable>
         </Pressable>
       </Modal>
 
