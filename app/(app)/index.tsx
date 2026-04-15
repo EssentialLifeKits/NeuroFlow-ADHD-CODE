@@ -561,15 +561,28 @@ export default function DashboardScreen() {
             {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
             {howToUrl ? (
               Platform.OS === 'web' ? (
-                <View style={styles.howToVideoWrap}>
-                  {/* @ts-ignore */}
-                  <iframe
-                    src={howToUrl}
-                    style={{ width: '100%', height: '100%', border: 'none', borderRadius: 10 }}
-                    title="How To Video"
-                    allow="autoplay; fullscreen"
-                  />
-                </View>
+                (() => {
+                  const lower = howToUrl.toLowerCase().split('?')[0];
+                  const isDirectVideo = lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov');
+                  return (
+                    <View style={styles.howToVideoWrap}>
+                      {isDirectVideo
+                        ? React.createElement('video', {
+                            src: howToUrl,
+                            controls: true,
+                            autoPlay: false,
+                            style: { width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#000', outline: 'none' },
+                          })
+                        : React.createElement('iframe', {
+                            src: howToUrl,
+                            style: { width: '100%', height: '100%', border: 'none', borderRadius: 10 },
+                            title: 'How To Video',
+                            allow: 'autoplay; fullscreen',
+                          })
+                      }
+                    </View>
+                  );
+                })()
               ) : (
                 <Pressable onPress={() => Linking.openURL(howToUrl)} style={[styles.howToOpenBtn, { backgroundColor: NF_BLUE }]}>
                   <Text style={styles.howToOpenBtnText}>▶ Watch Video</Text>
@@ -735,18 +748,18 @@ const styles = StyleSheet.create({
   howToBtnText: { fontSize: 12, fontWeight: '700', color: NF_BLUE },
 
   // How To modal
-  howToOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  howToOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   howToSheet: {
     backgroundColor: colors.bgCard, borderRadius: radius.xl,
-    padding: spacing.lg, width: '100%', maxWidth: 560,
+    padding: spacing.lg, width: '100%', maxWidth: 720,
     borderWidth: 1, borderColor: NF_BLUE + '44', gap: spacing.md,
   },
   howToHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   howToTitle: { fontSize: 18, fontWeight: '800', color: NF_BLUE, flex: 1 },
-  howToClose: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center' },
+  howToClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center' },
   howToCloseText: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
   howToDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
-  howToVideoWrap: { width: '100%', height: 280, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' },
+  howToVideoWrap: { width: '100%', aspectRatio: 16 / 9, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' },
   howToOpenBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: radius.lg },
   howToOpenBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   howToEmpty: { paddingVertical: 24, alignItems: 'center', backgroundColor: colors.bgBase, borderRadius: radius.lg },
