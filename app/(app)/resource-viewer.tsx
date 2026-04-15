@@ -225,6 +225,17 @@ function PDFSlideViewer({ url, accentColor }: { url: string; accentColor: string
         <View style={[styles.iframeContainer, { height: viewerH }]}>
           {/* @ts-ignore */}
           <iframe src={embedUrl} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 }} title="Document" allow="autoplay" />
+          {/* Block Google's native "open in new tab" button (bottom-right corner) */}
+          {React.createElement('div', {
+            style: {
+              position: 'absolute', bottom: 0, right: 0,
+              width: 56, height: 56,
+              backgroundColor: '#0b1426',
+              borderBottomRightRadius: 12,
+              pointerEvents: 'auto',
+              cursor: 'default',
+            },
+          })}
         </View>
         <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
           <Text style={{ fontSize: 16 }}>📥</Text>
@@ -486,10 +497,12 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
         </Pressable>
       </View>
 
-      {/* Native HTML5 video */}
+      {/* Native HTML5 video — controlsList removes browser's own fullscreen/download buttons */}
       <View style={[styles.iframeContainer, { height: 320 }]}>
         {React.createElement('video', {
           src: url, controls: true,
+          controlsList: 'nofullscreen nodownload',
+          disablePictureInPicture: true,
           style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
           preload: 'metadata',
         })}
@@ -513,7 +526,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
           ]),
         ]),
         React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
-          React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
+          React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nofullscreen nodownload', disablePictureInPicture: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
         ),
       ])}
     </View>

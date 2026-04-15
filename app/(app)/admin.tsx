@@ -296,7 +296,7 @@ function HowToVideoSection({
       const asset = result.assets[0];
       setUploadingVideo(true);
       const url = await uploadResourceFile(
-        { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'video/mp4' },
+        { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'video/mp4', file: (asset as any).file },
         'videos',
       );
       setVideoUrl(url);
@@ -655,7 +655,7 @@ function InlineCardRow({
       const mime = asset.mimeType ?? 'application/octet-stream';
       const folder = mime.startsWith('video/') ? 'videos' : 'slide-decks';
       const url = await uploadResourceFile(
-        { uri: asset.uri, name: asset.name, type: mime },
+        { uri: asset.uri, name: asset.name, type: mime, file: (asset as any).file },
         folder,
       );
       set('slide_deck_url', url);
@@ -930,7 +930,7 @@ function NewCardForm({
       setUploadingDeck(true);
       const mime = asset.mimeType ?? 'application/octet-stream';
       const folder = mime.startsWith('video/') ? 'videos' : 'slide-decks';
-      const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: mime }, folder);
+      const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: mime, file: (asset as any).file }, folder);
       set('slide_deck_url', url);
     } catch (e: any) { Alert.alert('Upload failed', e.message); }
     finally { setUploadingDeck(false); }

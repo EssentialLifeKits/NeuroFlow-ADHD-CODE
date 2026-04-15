@@ -56,11 +56,12 @@ export async function fetchAllResourceCards(): Promise<ResourceCard[]> {
 }
 
 export async function uploadResourceFile(
-  file: { uri: string; name: string; type: string },
+  file: { uri: string; name: string; type: string; file?: File | Blob },
   folder: 'slide-decks' | 'icons' | 'videos',
 ): Promise<string> {
-  const response = await fetch(file.uri);
-  const blob = await response.blob();
+  // On web, use the File object directly (avoids double-read of large video files).
+  // On native, fetch the blob from the local URI.
+  const blob: Blob = file.file ?? await fetch(file.uri).then(r => r.blob());
   const path = `${folder}/${Date.now()}-${file.name}`;
   const { error } = await supabase.storage
     .from('resource-assets')

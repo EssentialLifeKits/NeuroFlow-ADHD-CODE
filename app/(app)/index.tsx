@@ -180,6 +180,8 @@ function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url
           {isDirectVideo
             ? React.createElement('video', {
                 src: url, controls: true, autoPlay: false,
+                controlsList: 'nofullscreen nodownload',
+                disablePictureInPicture: true,
                 style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
               })
             : React.createElement('iframe', {
@@ -205,7 +207,7 @@ function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url
         ]),
         React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
           isDirectVideo
-            ? React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
+            ? React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nofullscreen nodownload', disablePictureInPicture: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
             : React.createElement('iframe', { key: 'f', src: url, style: { width: '100%', height: '100%', border: 'none' }, title: 'How To Video FS', allow: 'autoplay; fullscreen' })
         ),
       ])}
