@@ -647,19 +647,34 @@ export default function ResourceViewerScreen() {
   const [cards,      setCards]      = useState<ResourceCard[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [activeId,   setActiveId]   = useState<string | null>(params.cardId ?? null);
-  // Bump this counter every time we switch cards to force full DOM teardown
+  // Bumped on every card switch to guarantee full DOM teardown of iframe/video
   const [contentKey, setContentKey] = useState(0);
+
+  // When the URL param changes (user navigated back and tapped a different card),
+  // reset activeId and contentKey so fresh content always renders
+  useEffect(() => {
+    if (params.cardId && params.cardId !== activeId) {
+      setActiveId(params.cardId);
+      setContentKey(k => k + 1);
+    }
+  }, [params.cardId]);
 
   useEffect(() => {
     fetchResourceCards()
       .then(fetched => {
         const source = fetched.length > 0 ? fetched : DEFAULT_CARDS;
         setCards(source);
-        if (!activeId && source.length > 0) setActiveId(source[0].id);
+        if (!activeId && source.length > 0) {
+          setActiveId(source[0].id);
+          setContentKey(k => k + 1);
+        }
       })
       .catch(() => {
         setCards(DEFAULT_CARDS);
-        if (!activeId) setActiveId(DEFAULT_CARDS[0].id);
+        if (!activeId) {
+          setActiveId(DEFAULT_CARDS[0].id);
+          setContentKey(k => k + 1);
+        }
       })
       .finally(() => setLoading(false));
   }, []);

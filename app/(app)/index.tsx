@@ -579,9 +579,6 @@ export default function DashboardScreen() {
           ))}
         </View>
 
-        {/* ── How To Video Card — inline player, no download ── */}
-        {howToUrl ? <HowToVideoCard title={howToTitle} desc={howToDesc} url={howToUrl} /> : null}
-
         {/* ── Middle sections: side-by-side on desktop, stacked on mobile ── */}
         <View style={[styles.middleWrapper, isDesktop && styles.middleWrapperDesktop]}>
           <View style={isDesktop ? styles.middleCol : undefined}>
