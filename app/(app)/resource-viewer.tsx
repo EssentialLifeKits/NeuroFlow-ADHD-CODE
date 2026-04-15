@@ -121,12 +121,6 @@ function isVideoUrl(url: string): boolean {
   return false;
 }
 
-/** True only for a direct streamable file URL (not Google Drive) */
-function isDirectVideoFile(url: string): boolean {
-  const lower = url.toLowerCase().split('?')[0];
-  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
-    lower.includes('/video/') || lower.includes('videos/');
-}
 
 // ─── Load PDF.js from CDN (lazy, cached on window) ───────────────────────────
 function loadPDFJS(): Promise<any> {
@@ -523,11 +517,20 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
       {/* Player: Google Drive → iframe; direct file → HTML5 video */}
       <View style={[styles.iframeContainer, { height: 320 }]}>
         {isDriveLink
-          ? React.createElement('iframe', {
-              src: embedUrl, frameBorder: 0,
-              allow: 'autoplay; fullscreen',
-              style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' },
-            })
+          ? React.createElement('div', {
+              style: { position: 'relative', width: '100%', height: '100%' },
+            },
+              React.createElement('iframe', {
+                src: embedUrl, frameBorder: 0,
+                allow: 'autoplay',
+                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' },
+              }),
+              // Block the Drive iframe's own fullscreen button (bottom-right ~52px square)
+              React.createElement('div', {
+                style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
+                onClick: (e: any) => e.stopPropagation(),
+              })
+            )
           : React.createElement('video', {
               src: url, controls: true,
               controlsList: 'nofullscreen nodownload',
@@ -559,7 +562,10 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
         ]),
         React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
           isDriveLink
-            ? React.createElement('iframe', { key: 'f', src: embedUrl, frameBorder: 0, allow: 'autoplay; fullscreen', style: { width: '100%', height: '100%', border: 'none' } })
+            ? React.createElement('div', { key: 'dwrap', style: { position: 'relative', width: '100%', height: '100%' } },
+                React.createElement('iframe', { key: 'f', src: embedUrl, frameBorder: 0, allow: 'autoplay', style: { width: '100%', height: '100%', border: 'none' } }),
+                React.createElement('div', { key: 'blk', style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' }, onClick: (e: any) => e.stopPropagation() })
+              )
             : React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nofullscreen nodownload', disablePictureInPicture: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
         ),
       ])}
@@ -692,10 +698,11 @@ export default function ResourceViewerScreen() {
               ))}
             </ScrollView>
 
-            {/* Active card detail */}
+            {/* Active card detail — key forces full remount on card switch,
+                stopping any playing video and resetting all viewer state */}
             {activeCard && (
               <View style={[styles.detailCard, { borderColor: activeCard.accent_color + '44' }]}>
-                <CardDetail card={activeCard} />
+                <CardDetail key={activeCard.id} card={activeCard} />
               </View>
             )}
 

@@ -168,6 +168,7 @@ function getGoogleDriveEmbedUrl(url: string): string {
 // ─── How To Video Card — inline player on Dashboard, no download ─────────────
 function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url: string }) {
   const [fullscreen, setFullscreen] = useState(false);
+  const [collapsed, setCollapsed]   = useState(false);
   const { width } = useWindowDimensions();
   const videoH = Math.min(width * 0.52, 300);
   const isDirectVideo = /\.(mp4|mov|webm)(\?|$)/i.test(url);
@@ -178,15 +179,20 @@ function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url
     <View style={htStyles.card}>
       <View style={htStyles.header}>
         <Text style={htStyles.title}>{title}</Text>
-        {Platform.OS === 'web' && (
-          <Pressable onPress={() => setFullscreen(true)} style={htStyles.fsBtn}>
-            <Text style={htStyles.fsBtnText}>⛶ Full Screen</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {Platform.OS === 'web' && !collapsed && (
+            <Pressable onPress={() => setFullscreen(true)} style={htStyles.fsBtn}>
+              <Text style={htStyles.fsBtnText}>⛶ Full Screen</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={() => setCollapsed(c => !c)} style={htStyles.closeBtn}>
+            <Text style={htStyles.closeBtnText}>{collapsed ? '▼ Show' : '✕ Close'}</Text>
           </Pressable>
-        )}
+        </View>
       </View>
-      {desc ? <Text style={htStyles.desc}>{desc}</Text> : null}
+      {!collapsed && desc ? <Text style={htStyles.desc}>{desc}</Text> : null}
 
-      {Platform.OS === 'web' ? (
+      {!collapsed && (Platform.OS === 'web' ? (
         <View style={[htStyles.videoWrap, { height: videoH }]}>
           {isDirectVideo
             ? React.createElement('video', {
@@ -206,7 +212,7 @@ function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url
         <Pressable onPress={() => Linking.openURL(url)} style={htStyles.mobilePlayBtn}>
           <Text style={htStyles.mobilePlayText}>▶ Watch How To Video</Text>
         </Pressable>
-      )}
+      ))}
 
       {/* Fullscreen modal — NO download button */}
       {fullscreen && Platform.OS === 'web' && React.createElement('div', {
@@ -239,8 +245,10 @@ const htStyles = StyleSheet.create({
   videoWrap:   { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' },
   fsBtn:       { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: NF_BLUE + '66' },
   fsBtnText:   { fontSize: 12, fontWeight: '700', color: NF_BLUE },
-  mobilePlayBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: NF_BLUE },
+  mobilePlayBtn:  { alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: NF_BLUE },
   mobilePlayText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  closeBtn:     { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)' },
+  closeBtnText: { fontSize: 12, fontWeight: '700', color: '#F87171' },
 });
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────

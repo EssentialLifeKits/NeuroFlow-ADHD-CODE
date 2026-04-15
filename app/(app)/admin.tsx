@@ -809,7 +809,13 @@ function InlineCardRow({
             )}
             {card.slide_deck_url && (
               <View style={inlineStyles.deckBadge}>
-                <Text style={inlineStyles.deckBadgeText}>📎 Deck</Text>
+                <Text style={inlineStyles.deckBadgeText}>
+                  {(card.slide_deck_url.includes('drive.google.com') ||
+                    /\.(mp4|mov|webm)/i.test(card.slide_deck_url) ||
+                    card.slide_deck_url.includes('/video/') ||
+                    card.slide_deck_url.includes('videos/'))
+                    ? '🎬 Video' : '📎 Deck'}
+                </Text>
               </View>
             )}
           </View>
