@@ -16,6 +16,7 @@ import {
   Animated,
   Image,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -49,6 +50,52 @@ const NF_RED    = '#F87171';
 const NF_GREEN  = '#34D399';
 const NF_ORANGE = '#FB923C';
 const ADMIN_EMAIL = 'essentiallifekits@gmail.com';
+
+// ─── Web-native file picker — bypasses expo-document-picker blob-URL issue ───
+// On web, expo-document-picker gives a blob URL which requires reading the
+// entire file into memory before uploading. This uses a hidden <input type="file">
+// instead, giving us the raw File object that Supabase can stream directly.
+function pickFileWeb(accept: string): Promise<File | null> {
+  return new Promise(resolve => {
+    if (typeof document === 'undefined') { resolve(null); return; }
+    const input = document.createElement('input') as HTMLInputElement;
+    input.type = 'file';
+    input.accept = accept;
+    input.style.cssText = 'position:fixed;top:-9999px;opacity:0;pointer-events:none;';
+    document.body.appendChild(input);
+    let settled = false;
+    const cleanup = () => { try { document.body.removeChild(input); } catch {} };
+    input.addEventListener('change', () => {
+      if (settled) return;
+      settled = true;
+      const file = input.files?.[0] ?? null;
+      cleanup();
+      resolve(file);
+    });
+    // Detect cancel — window regains focus after picker closes with no selection
+    const onWindowFocus = () => {
+      setTimeout(() => {
+        if (!settled) { settled = true; cleanup(); resolve(null); }
+      }, 500);
+    };
+    window.addEventListener('focus', onWindowFocus, { once: true });
+    input.click();
+  });
+}
+
+// Upload a File object directly to Supabase storage (no memory double-read)
+async function uploadFileToStorage(
+  file: File,
+  folder: 'slide-decks' | 'icons' | 'videos',
+): Promise<string> {
+  const path = `${folder}/${Date.now()}-${file.name}`;
+  const { error } = await supabase.storage
+    .from('resource-assets')
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (error) throw new Error(error.message);
+  const { data } = supabase.storage.from('resource-assets').getPublicUrl(path);
+  return data.publicUrl;
+}
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
 
@@ -287,20 +334,34 @@ function HowToVideoSection({
   }
 
   async function pickHowToVideo() {
+    if (Platform.OS === 'web') {
+      // Web: use native file input — gives raw File object, no blob URL overhead
+      const file = await pickFileWeb('video/mp4,video/quicktime,video/webm,video/*');
+      if (!file) return;
+      setUploadingVideo(true);
+      try {
+        const url = await uploadFileToStorage(file, 'videos');
+        setVideoUrl(url);
+        Alert.alert('Uploaded', 'Video uploaded. Tap Save to apply.');
+      } catch (e: any) {
+        Alert.alert('Upload failed', e.message);
+      } finally { setUploadingVideo(false); }
+      return;
+    }
+    // Native: use DocumentPicker
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['video/mp4', 'video/quicktime', 'video/webm', 'video/*'],
+        type: ['video/mp4', 'video/quicktime', 'video/webm'],
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setUploadingVideo(true);
       const url = await uploadResourceFile(
-        { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'video/mp4', file: (asset as any).file },
+        { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'video/mp4' },
         'videos',
       );
       setVideoUrl(url);
-      Alert.alert('Uploaded', 'Video uploaded successfully. Tap Save to apply.');
     } catch (e: any) {
       Alert.alert('Upload failed', e.message);
     } finally { setUploadingVideo(false); }
@@ -638,26 +699,28 @@ function InlineCardRow({
   }
 
   async function pickContentFile() {
+    if (Platform.OS === 'web') {
+      const file = await pickFileWeb('video/mp4,video/quicktime,video/webm,video/*,application/pdf,.pdf,.pptx,.ppt,.docx,.doc,*/*');
+      if (!file) return;
+      setUploadingDeck(true);
+      try {
+        const folder = file.type.startsWith('video/') ? 'videos' : 'slide-decks';
+        const url = await uploadFileToStorage(file, folder);
+        set('slide_deck_url', url);
+      } catch (e: any) {
+        Alert.alert('Upload failed', e.message);
+      } finally { setUploadingDeck(false); }
+      return;
+    }
+    // Native
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['video/mp4', 'video/quicktime', 'video/webm', 'video/*',
-               'application/pdf',
-               'application/vnd.ms-powerpoint',
-               'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-               'application/msword',
-               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-               '*/*'],
-        copyToCacheDirectory: true,
-      });
+      const result = await DocumentPicker.getDocumentAsync({ type: ['*/*'], copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setUploadingDeck(true);
       const mime = asset.mimeType ?? 'application/octet-stream';
       const folder = mime.startsWith('video/') ? 'videos' : 'slide-decks';
-      const url = await uploadResourceFile(
-        { uri: asset.uri, name: asset.name, type: mime, file: (asset as any).file },
-        folder,
-      );
+      const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: mime }, folder);
       set('slide_deck_url', url);
     } catch (e: any) {
       Alert.alert('Upload failed', e.message);
@@ -914,23 +977,27 @@ function NewCardForm({
   }
 
   async function pickContentFile() {
+    if (Platform.OS === 'web') {
+      const file = await pickFileWeb('video/mp4,video/quicktime,video/webm,video/*,application/pdf,.pdf,.pptx,.ppt,.docx,.doc,*/*');
+      if (!file) return;
+      setUploadingDeck(true);
+      try {
+        const folder = file.type.startsWith('video/') ? 'videos' : 'slide-decks';
+        const url = await uploadFileToStorage(file, folder);
+        set('slide_deck_url', url);
+      } catch (e: any) { Alert.alert('Upload failed', e.message); }
+      finally { setUploadingDeck(false); }
+      return;
+    }
+    // Native
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['video/mp4', 'video/quicktime', 'video/webm', 'video/*',
-               'application/pdf',
-               'application/vnd.ms-powerpoint',
-               'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-               'application/msword',
-               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-               '*/*'],
-        copyToCacheDirectory: true,
-      });
+      const result = await DocumentPicker.getDocumentAsync({ type: ['*/*'], copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setUploadingDeck(true);
       const mime = asset.mimeType ?? 'application/octet-stream';
       const folder = mime.startsWith('video/') ? 'videos' : 'slide-decks';
-      const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: mime, file: (asset as any).file }, folder);
+      const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: mime }, folder);
       set('slide_deck_url', url);
     } catch (e: any) { Alert.alert('Upload failed', e.message); }
     finally { setUploadingDeck(false); }
