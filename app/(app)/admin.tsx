@@ -266,12 +266,13 @@ function HowToVideoSection({
   settings: Record<string, string>;
   onSave: (key: string, value: string) => Promise<void>;
 }) {
-  const [videoUrl,  setVideoUrl]  = useState(settings['howto_video_url']   ?? '');
-  const [title,     setTitle]     = useState(settings['howto_video_title']  ?? 'How To Use NeuroFlow');
-  const [desc,      setDesc]      = useState(settings['howto_video_desc']   ?? 'Watch this short explainer to get the most out of your ADHD toolkit.');
-  const [saving,    setSaving]    = useState(false);
-  const [preview,   setPreview]   = useState(false);
-  const { width }   = useWindowDimensions();
+  const [videoUrl,       setVideoUrl]       = useState(settings['howto_video_url']   ?? '');
+  const [title,          setTitle]          = useState(settings['howto_video_title']  ?? 'How To Use NeuroFlow');
+  const [desc,           setDesc]           = useState(settings['howto_video_desc']   ?? 'Watch this short explainer to get the most out of your ADHD toolkit.');
+  const [saving,         setSaving]         = useState(false);
+  const [preview,        setPreview]        = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const { width } = useWindowDimensions();
 
   async function save() {
     setSaving(true);
@@ -285,23 +286,87 @@ function HowToVideoSection({
     } finally { setSaving(false); }
   }
 
+  async function pickHowToVideo() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['video/mp4', 'video/quicktime', 'video/webm', 'video/*'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      setUploadingVideo(true);
+      const url = await uploadResourceFile(
+        { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'video/mp4' },
+        'videos',
+      );
+      setVideoUrl(url);
+      Alert.alert('Uploaded', 'Video uploaded successfully. Tap Save to apply.');
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message);
+    } finally { setUploadingVideo(false); }
+  }
+
+  const isUploadedVideo = videoUrl && (
+    videoUrl.toLowerCase().includes('.mp4') ||
+    videoUrl.toLowerCase().includes('.mov') ||
+    videoUrl.toLowerCase().includes('.webm')
+  );
+
   return (
     <Card>
       <SectionHeader
         title="🎬 How To Video Card"
-        subtitle="Shown on Dashboard behind the 'How To' button — not downloadable by users"
+        subtitle="Shown as an inline player on the Dashboard — not downloadable by users"
       />
       <Field label="Video Title" value={title} onChangeText={setTitle} placeholder="How To Use NeuroFlow" />
       <Field label="Short Description" value={desc} onChangeText={setDesc} multiline placeholder="Describe what the video covers…" />
-      <Field
-        label="Video Embed URL"
-        value={videoUrl}
-        onChangeText={setVideoUrl}
-        placeholder="https://www.youtube.com/embed/…  or  NotebookLM share link"
-      />
-      <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: -8 }}>
-        Tip: use a YouTube /embed/ URL for best in-app playback. Paste any shareable link for native.
-      </Text>
+
+      {/* Upload from computer */}
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>UPLOAD VIDEO FILE (MP4 / MOV)</Text>
+        <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 8 }}>
+          Upload directly from your computer. Supported: MP4, MOV, WebM.
+        </Text>
+        {isUploadedVideo ? (
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <View style={{ flex: 1, backgroundColor: NF_GREEN + '18', borderRadius: 8, padding: 10 }}>
+              <Text style={{ fontSize: 12, color: NF_GREEN, fontWeight: '700' }}>✅ Video file uploaded</Text>
+              <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }} numberOfLines={1}>{videoUrl}</Text>
+            </View>
+            <Pressable onPress={pickHowToVideo} disabled={uploadingVideo} style={[inlineStyles.deckViewBtn, { paddingVertical: 8 }]}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: NF_ORANGE }}>Replace</Text>
+            </Pressable>
+            <Pressable onPress={() => setVideoUrl('')} style={[inlineStyles.deckViewBtn, { paddingVertical: 8 }]}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={pickHowToVideo} disabled={uploadingVideo} style={inlineStyles.deckUploadBtn}>
+            {uploadingVideo
+              ? <ActivityIndicator size="small" color={NF_BLUE} />
+              : <>
+                  <Text style={{ fontSize: 18 }}>🎬</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload Video from Computer</Text>
+                </>
+            }
+          </Pressable>
+        )}
+      </View>
+
+      {/* OR paste embed URL */}
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>— OR PASTE VIDEO URL / EMBED LINK —</Text>
+        <TextInput
+          style={s.input}
+          value={videoUrl}
+          onChangeText={setVideoUrl}
+          placeholder="https://www.youtube.com/embed/…  or  direct .mp4 link"
+          placeholderTextColor={colors.textTertiary}
+        />
+        <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
+          YouTube embed URL, Vimeo, NotebookLM, or any direct video link.
+        </Text>
+      </View>
 
       <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
         <Btn label="👁 Preview Card" onPress={() => setPreview(true)} outline color={NF_BLUE} small />
@@ -321,12 +386,20 @@ function HowToVideoSection({
             {desc ? <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 20 }}>{desc}</Text> : null}
             {videoUrl ? (
               <View style={{ width: '100%', height: Math.min(width * 0.5, 260), borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' }}>
-                {/* @ts-ignore */}
-                <iframe src={videoUrl} style={{ width: '100%', height: '100%', border: 'none' }} title="Video Preview" allow="autoplay; fullscreen" />
+                {isUploadedVideo
+                  ? React.createElement('video', {
+                      src: videoUrl, controls: true, autoPlay: false,
+                      style: { width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#000', outline: 'none' },
+                    })
+                  : React.createElement('iframe', {
+                      src: videoUrl, style: { width: '100%', height: '100%', border: 'none' },
+                      title: 'Video Preview', allow: 'autoplay; fullscreen',
+                    })
+                }
               </View>
             ) : (
               <View style={{ paddingVertical: 24, alignItems: 'center', backgroundColor: colors.bgBase, borderRadius: 12 }}>
-                <Text style={{ fontSize: 14, color: colors.textSecondary }}>🎬 No URL set yet</Text>
+                <Text style={{ fontSize: 14, color: colors.textSecondary }}>🎬 No video set yet</Text>
               </View>
             )}
             <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>This is exactly how it looks on the Dashboard</Text>
@@ -564,19 +637,26 @@ function InlineCardRow({
     } finally { setUploadingIcon(false); }
   }
 
-  async function pickSlideDeck() {
+  async function pickContentFile() {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/vnd.ms-powerpoint',
-               'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+        type: ['video/mp4', 'video/quicktime', 'video/webm', 'video/*',
+               'application/pdf',
+               'application/vnd.ms-powerpoint',
+               'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+               'application/msword',
+               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+               '*/*'],
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setUploadingDeck(true);
+      const mime = asset.mimeType ?? 'application/octet-stream';
+      const folder = mime.startsWith('video/') ? 'videos' : 'slide-decks';
       const url = await uploadResourceFile(
-        { uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'application/pdf' },
-        'slide-decks',
+        { uri: asset.uri, name: asset.name, type: mime },
+        folder,
       );
       set('slide_deck_url', url);
     } catch (e: any) {
@@ -727,37 +807,51 @@ function InlineCardRow({
             />
           </View>
 
-          {/* Slide deck upload */}
+          {/* Content file upload (video, PDF, PPTX, DOCX, etc.) */}
           <View style={s.fieldWrap}>
-            <Text style={s.fieldLabel}>SLIDE DECK (PDF / PPTX)</Text>
+            <Text style={s.fieldLabel}>CONTENT FILE (VIDEO, PDF, PPTX, DOCX, …)</Text>
             <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 6 }}>
-              Upload your NotebookLM slide deck — users can download it from the Resource Viewer page.
+              Upload MP4/MOV video, PDF, PowerPoint, Word doc, or any file from your computer.
+              The viewer auto-detects the file type.
             </Text>
             {draft.slide_deck_url ? (
-              <View style={inlineStyles.deckRow}>
-                <Text style={{ fontSize: 12, color: NF_GREEN, flex: 1 }} numberOfLines={1}>
-                  ✅ Deck uploaded
-                </Text>
-                <Pressable onPress={() => Linking.openURL(draft.slide_deck_url!)} style={inlineStyles.deckViewBtn}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE }}>View</Text>
-                </Pressable>
-                <Pressable onPress={pickSlideDeck} disabled={uploadingDeck} style={inlineStyles.deckViewBtn}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_ORANGE }}>Replace</Text>
-                </Pressable>
-                <Pressable onPress={() => set('slide_deck_url', null)} style={inlineStyles.deckViewBtn}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
-                </Pressable>
+              <View style={{ gap: 6 }}>
+                <View style={inlineStyles.deckRow}>
+                  <Text style={{ fontSize: 12, color: NF_GREEN, flex: 1 }} numberOfLines={1}>
+                    ✅ File uploaded
+                  </Text>
+                  <Pressable onPress={() => Linking.openURL(draft.slide_deck_url!)} style={inlineStyles.deckViewBtn}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE }}>View</Text>
+                  </Pressable>
+                  <Pressable onPress={pickContentFile} disabled={uploadingDeck} style={inlineStyles.deckViewBtn}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: NF_ORANGE }}>Replace</Text>
+                  </Pressable>
+                  <Pressable onPress={() => set('slide_deck_url', null)} style={inlineStyles.deckViewBtn}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
+                  </Pressable>
+                </View>
               </View>
             ) : (
-              <Pressable onPress={pickSlideDeck} disabled={uploadingDeck} style={inlineStyles.deckUploadBtn}>
-                {uploadingDeck
-                  ? <ActivityIndicator size="small" color={NF_BLUE} />
-                  : <>
-                      <Text style={{ fontSize: 18 }}>📎</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload Slide Deck</Text>
-                    </>
-                }
-              </Pressable>
+              <View style={{ gap: 8 }}>
+                <Pressable onPress={pickContentFile} disabled={uploadingDeck} style={inlineStyles.deckUploadBtn}>
+                  {uploadingDeck
+                    ? <ActivityIndicator size="small" color={NF_BLUE} />
+                    : <>
+                        <Text style={{ fontSize: 18 }}>📁</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload from Computer</Text>
+                        <Text style={{ fontSize: 10, color: colors.textTertiary }}>MP4 · MOV · PDF · PPTX · DOCX</Text>
+                      </>
+                  }
+                </Pressable>
+                <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a URL below —</Text>
+                <TextInput
+                  style={s.input}
+                  value={draft.slide_deck_url ?? ''}
+                  onChangeText={v => set('slide_deck_url', v || null)}
+                  placeholder="https://drive.google.com/…  or  direct file URL"
+                  placeholderTextColor={colors.textTertiary}
+                />
+              </View>
             )}
           </View>
 
@@ -819,17 +913,24 @@ function NewCardForm({
     finally { setUploadingIcon(false); }
   }
 
-  async function pickSlideDeck() {
+  async function pickContentFile() {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/vnd.ms-powerpoint',
-               'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+        type: ['video/mp4', 'video/quicktime', 'video/webm', 'video/*',
+               'application/pdf',
+               'application/vnd.ms-powerpoint',
+               'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+               'application/msword',
+               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+               '*/*'],
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
       setUploadingDeck(true);
-      const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'application/pdf' }, 'slide-decks');
+      const mime = asset.mimeType ?? 'application/octet-stream';
+      const folder = mime.startsWith('video/') ? 'videos' : 'slide-decks';
+      const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: mime }, folder);
       set('slide_deck_url', url);
     } catch (e: any) { Alert.alert('Upload failed', e.message); }
     finally { setUploadingDeck(false); }
@@ -898,26 +999,45 @@ function NewCardForm({
         </View>
       </View>
 
-      {/* Slide deck */}
+      {/* Content file upload */}
       <View style={s.fieldWrap}>
-        <Text style={s.fieldLabel}>SLIDE DECK (PDF / PPTX)</Text>
+        <Text style={s.fieldLabel}>CONTENT FILE (VIDEO, PDF, PPTX, DOCX, …)</Text>
+        <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 6 }}>
+          Upload MP4/MOV video, PDF, PowerPoint, Word doc, or any file from your computer.
+        </Text>
         {draft.slide_deck_url ? (
-          <View style={inlineStyles.deckRow}>
-            <Text style={{ fontSize: 12, color: NF_GREEN, flex: 1 }}>✅ Deck uploaded</Text>
-            <Pressable onPress={() => set('slide_deck_url', null)} style={inlineStyles.deckViewBtn}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
-            </Pressable>
+          <View style={{ gap: 6 }}>
+            <View style={inlineStyles.deckRow}>
+              <Text style={{ fontSize: 12, color: NF_GREEN, flex: 1 }}>✅ File uploaded</Text>
+              <Pressable onPress={pickContentFile} disabled={uploadingDeck} style={inlineStyles.deckViewBtn}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: NF_ORANGE }}>Replace</Text>
+              </Pressable>
+              <Pressable onPress={() => set('slide_deck_url', null)} style={inlineStyles.deckViewBtn}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
+              </Pressable>
+            </View>
           </View>
         ) : (
-          <Pressable onPress={pickSlideDeck} disabled={uploadingDeck} style={inlineStyles.deckUploadBtn}>
-            {uploadingDeck
-              ? <ActivityIndicator size="small" color={NF_BLUE} />
-              : <>
-                  <Text style={{ fontSize: 18 }}>📎</Text>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload Slide Deck</Text>
-                </>
-            }
-          </Pressable>
+          <View style={{ gap: 8 }}>
+            <Pressable onPress={pickContentFile} disabled={uploadingDeck} style={inlineStyles.deckUploadBtn}>
+              {uploadingDeck
+                ? <ActivityIndicator size="small" color={NF_BLUE} />
+                : <>
+                    <Text style={{ fontSize: 18 }}>📁</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload from Computer</Text>
+                    <Text style={{ fontSize: 10, color: colors.textTertiary }}>MP4 · MOV · PDF · PPTX · DOCX</Text>
+                  </>
+              }
+            </Pressable>
+            <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a URL below —</Text>
+            <TextInput
+              style={s.input}
+              value={draft.slide_deck_url ?? ''}
+              onChangeText={v => set('slide_deck_url', v || null)}
+              placeholder="https://drive.google.com/…  or  direct file URL"
+              placeholderTextColor={colors.textTertiary}
+            />
+          </View>
         )}
       </View>
 

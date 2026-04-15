@@ -57,7 +57,7 @@ export async function fetchAllResourceCards(): Promise<ResourceCard[]> {
 
 export async function uploadResourceFile(
   file: { uri: string; name: string; type: string },
-  folder: 'slide-decks' | 'icons',
+  folder: 'slide-decks' | 'icons' | 'videos',
 ): Promise<string> {
   const response = await fetch(file.uri);
   const blob = await response.blob();

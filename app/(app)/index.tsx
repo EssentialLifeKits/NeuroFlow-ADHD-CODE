@@ -6,7 +6,7 @@
  * ✅ All state, data syncing, and animations unchanged
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
@@ -156,6 +156,80 @@ function StatCard({ label, value, accent, delay }: { label: string; value: strin
   );
 }
 
+// ─── How To Video Card — inline player on Dashboard, no download ─────────────
+function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url: string }) {
+  const [fullscreen, setFullscreen] = useState(false);
+  const { width } = useWindowDimensions();
+  const videoH = Math.min(width * 0.52, 300);
+  const isDirectVideo = /\.(mp4|mov|webm)(\?|$)/i.test(url);
+
+  return (
+    <View style={htStyles.card}>
+      <View style={htStyles.header}>
+        <Text style={htStyles.title}>{title}</Text>
+        {Platform.OS === 'web' && (
+          <Pressable onPress={() => setFullscreen(true)} style={htStyles.fsBtn}>
+            <Text style={htStyles.fsBtnText}>⛶ Full Screen</Text>
+          </Pressable>
+        )}
+      </View>
+      {desc ? <Text style={htStyles.desc}>{desc}</Text> : null}
+
+      {Platform.OS === 'web' ? (
+        <View style={[htStyles.videoWrap, { height: videoH }]}>
+          {isDirectVideo
+            ? React.createElement('video', {
+                src: url, controls: true, autoPlay: false,
+                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
+              })
+            : React.createElement('iframe', {
+                src: url,
+                style: { width: '100%', height: '100%', border: 'none', borderRadius: 12 },
+                title: 'How To Video', allow: 'autoplay; fullscreen',
+              })
+          }
+        </View>
+      ) : (
+        <Pressable onPress={() => Linking.openURL(url)} style={htStyles.mobilePlayBtn}>
+          <Text style={htStyles.mobilePlayText}>▶ Watch How To Video</Text>
+        </Pressable>
+      )}
+
+      {/* Fullscreen modal — NO download button */}
+      {fullscreen && Platform.OS === 'web' && React.createElement('div', {
+        style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)', display: 'flex', flexDirection: 'column' },
+      }, [
+        React.createElement('div', { key: 'bar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)', backgroundColor: '#0b1426', flexShrink: 0 } }, [
+          React.createElement('span', { key: 't', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, title),
+          React.createElement('button', { key: 'x', onClick: () => setFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
+        ]),
+        React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
+          isDirectVideo
+            ? React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
+            : React.createElement('iframe', { key: 'f', src: url, style: { width: '100%', height: '100%', border: 'none' }, title: 'How To Video FS', allow: 'autoplay; fullscreen' })
+        ),
+      ])}
+    </View>
+  );
+}
+
+const htStyles = StyleSheet.create({
+  card: {
+    backgroundColor: '#0b1426',
+    borderRadius: 16, padding: 20,
+    borderWidth: 1.5, borderColor: NF_BLUE + '44',
+    gap: 12,
+  },
+  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title:       { fontSize: 17, fontWeight: '800', color: NF_BLUE, flex: 1 },
+  desc:        { fontSize: 13, color: '#8899bb', lineHeight: 20 },
+  videoWrap:   { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' },
+  fsBtn:       { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: NF_BLUE + '66' },
+  fsBtnText:   { fontSize: 12, fontWeight: '700', color: NF_BLUE },
+  mobilePlayBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: NF_BLUE },
+  mobilePlayText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+});
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const { width } = useWindowDimensions();
@@ -246,8 +320,7 @@ export default function DashboardScreen() {
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const ctaTranslateY = useRef(new Animated.Value(12)).current;
 
-  // How To video
-  const [howToVisible, setHowToVisible] = useState(false);
+  // How To video — loaded from settings, shown as inline card on dashboard
   const [howToUrl, setHowToUrl] = useState('');
   const [howToTitle, setHowToTitle] = useState('How To Use NeuroFlow');
   const [howToDesc, setHowToDesc] = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
@@ -468,9 +541,9 @@ export default function DashboardScreen() {
               <PulsingDot />
               <Text style={styles.todayBadgeText}>Today • {DAY_NAMES[new Date().getDay()]}</Text>
             </View>
-            <Pressable onPress={() => setHowToVisible(true)} style={styles.howToBtn}>
-              <Text style={styles.howToBtnText}>▶ How To</Text>
-            </Pressable>
+            <View style={styles.howToBtn}>
+              <Text style={styles.howToBtnText}>🎬 How To</Text>
+            </View>
             <Pressable style={styles.avatar}>
               <Text style={styles.avatarText}>{avatarLetter}</Text>
             </Pressable>
@@ -483,6 +556,9 @@ export default function DashboardScreen() {
             <StatCard key={card.label} {...card} delay={i * 90} />
           ))}
         </View>
+
+        {/* ── How To Video Card — inline player, no download ── */}
+        {howToUrl ? <HowToVideoCard title={howToTitle} desc={howToDesc} url={howToUrl} /> : null}
 
         {/* ── Middle sections: side-by-side on desktop, stacked on mobile ── */}
         <View style={[styles.middleWrapper, isDesktop && styles.middleWrapperDesktop]}>
@@ -545,55 +621,6 @@ export default function DashboardScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </Pressable>
-      </Modal>
-
-      {/* ── How To Video Modal ── */}
-      <Modal visible={howToVisible} transparent animationType="fade" onRequestClose={() => setHowToVisible(false)}>
-        <Pressable style={styles.howToOverlay} onPress={() => setHowToVisible(false)}>
-          <Pressable style={styles.howToSheet} onPress={e => e.stopPropagation()}>
-            <View style={styles.howToHeader}>
-              <Text style={styles.howToTitle}>{howToTitle}</Text>
-              <Pressable onPress={() => setHowToVisible(false)} style={styles.howToClose}>
-                <Text style={styles.howToCloseText}>✕</Text>
-              </Pressable>
-            </View>
-            {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
-            {howToUrl ? (
-              Platform.OS === 'web' ? (
-                (() => {
-                  const lower = howToUrl.toLowerCase().split('?')[0];
-                  const isDirectVideo = lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov');
-                  return (
-                    <View style={styles.howToVideoWrap}>
-                      {isDirectVideo
-                        ? React.createElement('video', {
-                            src: howToUrl,
-                            controls: true,
-                            autoPlay: false,
-                            style: { width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#000', outline: 'none' },
-                          })
-                        : React.createElement('iframe', {
-                            src: howToUrl,
-                            style: { width: '100%', height: '100%', border: 'none', borderRadius: 10 },
-                            title: 'How To Video',
-                            allow: 'autoplay; fullscreen',
-                          })
-                      }
-                    </View>
-                  );
-                })()
-              ) : (
-                <Pressable onPress={() => Linking.openURL(howToUrl)} style={[styles.howToOpenBtn, { backgroundColor: NF_BLUE }]}>
-                  <Text style={styles.howToOpenBtnText}>▶ Watch Video</Text>
-                </Pressable>
-              )
-            ) : (
-              <View style={styles.howToEmpty}>
-                <Text style={styles.howToEmptyText}>🎬 Video coming soon</Text>
-              </View>
-            )}
-          </Pressable>
         </Pressable>
       </Modal>
 

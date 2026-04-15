@@ -2,7 +2,11 @@
  * NeuroFlow — Resource Viewer
  * Shared hidden page — accessible only via a resource card's action button.
  * ADHD-friendly: one card shown at a time, large tap targets, minimal clutter.
- * Slide deck downloads directly — no extra navigation.
+ *
+ * Content auto-detection:
+ *   MP4/MOV/WebM URL  → VideoPlayer   (play + fullscreen + download)
+ *   Comma-separated   → ImageSlideViewer (one slide at a time, arrows, click-to-advance)
+ *   PDF/doc/other     → PDFSlideViewer  (PDF.js page-by-page) or SlideViewerFallback
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -26,7 +30,7 @@ import { fetchResourceCards, type ResourceCard } from '../../src/lib/adminDb';
 
 const NF_BLUE = '#4A90E2';
 
-// ─── Default cards fallback (mirrors resources.tsx) ──────────────────────────
+// ─── Default cards fallback ───────────────────────────────────────────────────
 const DEFAULT_CARDS: ResourceCard[] = [
   {
     id: 'default-1', sort_order: 0, is_active: true, created_at: '', updated_at: '',
@@ -79,50 +83,390 @@ const DEFAULT_CARDS: ResourceCard[] = [
 ];
 
 // ─── Card tab button ──────────────────────────────────────────────────────────
-function CardTab({
-  card,
-  isActive,
-  onPress,
-}: {
-  card: ResourceCard;
-  isActive: boolean;
-  onPress: () => void;
-}) {
+function CardTab({ card, isActive, onPress }: { card: ResourceCard; isActive: boolean; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.tab,
-        isActive && { backgroundColor: card.accent_color + '22', borderColor: card.accent_color },
-      ]}
+      style={[styles.tab, isActive && { backgroundColor: card.accent_color + '22', borderColor: card.accent_color }]}
     >
       {card.icon_image_url
         ? <Image source={{ uri: card.icon_image_url }} style={{ width: 20, height: 20, borderRadius: 4 }} />
         : <Text style={{ fontSize: 16 }}>{card.icon}</Text>
       }
       {isActive && (
-        <Text style={[styles.tabLabel, { color: card.accent_color }]} numberOfLines={1}>
-          {card.title}
-        </Text>
+        <Text style={[styles.tabLabel, { color: card.accent_color }]} numberOfLines={1}>{card.title}</Text>
       )}
     </Pressable>
   );
 }
 
-// ─── Detect MP4 URL ───────────────────────────────────────────────────────────
+// ─── URL type detection ───────────────────────────────────────────────────────
 function isVideoUrl(url: string): boolean {
   const lower = url.toLowerCase().split('?')[0];
-  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') || lower.includes('/video/');
+  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
+    lower.includes('/video/') || lower.includes('videos/');
 }
 
-// ─── Inline MP4 video player ──────────────────────────────────────────────────
+// ─── Load PDF.js from CDN (lazy, cached on window) ───────────────────────────
+function loadPDFJS(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === 'undefined') { reject(new Error('not web')); return; }
+    if ((window as any).__nfPdfjsLib) { resolve((window as any).__nfPdfjsLib); return; }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.onload = () => {
+      const lib = (window as any).pdfjsLib;
+      if (!lib) { reject(new Error('pdfjsLib not found after load')); return; }
+      lib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      (window as any).__nfPdfjsLib = lib;
+      resolve(lib);
+    };
+    script.onerror = () => reject(new Error('Failed to load PDF.js from CDN'));
+    document.head.appendChild(script);
+  });
+}
+
+async function renderPDFPageToDataURL(pdfDoc: any, pageNum: number, scale = 1.6): Promise<string> {
+  const page = await pdfDoc.getPage(pageNum);
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d')!;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return canvas.toDataURL('image/png');
+}
+
+// ─── PDF slide viewer (page-by-page via PDF.js CDN) ──────────────────────────
+function PDFSlideViewer({ url, accentColor }: { url: string; accentColor: string }) {
+  const [pageCount,    setPageCount]    = useState<number>(0);
+  const [currentPage,  setCurrentPage]  = useState(1);
+  const [pageImgUrl,   setPageImgUrl]   = useState<string | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [renderLoading, setRenderLoading] = useState(false);
+  const [useFallback,  setUseFallback]  = useState(false);
+  const [fullscreen,   setFullscreen]   = useState(false);
+  const pdfDocRef = useRef<any>(null);
+  const { width } = useWindowDimensions();
+  const viewerH = Math.min(width * 0.65, 520);
+
+  // Determine embed URL for fallback
+  function getEmbedUrl(rawUrl: string): string {
+    if (rawUrl.includes('drive.google.com') && rawUrl.includes('/preview')) return rawUrl;
+    if (rawUrl.includes('drive.google.com/file/d/')) {
+      const match = rawUrl.match(/\/file\/d\/([^/]+)/);
+      if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+    }
+    return `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
+  }
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    // Google Drive links → use fallback directly (can't fetch cross-origin)
+    if (url.includes('drive.google.com') || url.includes('docs.google.com')) {
+      setUseFallback(true);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    loadPDFJS()
+      .then(lib => lib.getDocument(url).promise)
+      .then(async (doc: any) => {
+        pdfDocRef.current = doc;
+        setPageCount(doc.numPages);
+        const imgUrl = await renderPDFPageToDataURL(doc, 1);
+        setPageImgUrl(imgUrl);
+        setLoading(false);
+      })
+      .catch(() => {
+        setUseFallback(true);
+        setLoading(false);
+      });
+  }, [url]);
+
+  async function goToPage(pageNum: number) {
+    if (!pdfDocRef.current || pageNum < 1 || pageNum > pageCount) return;
+    setRenderLoading(true);
+    try {
+      const imgUrl = await renderPDFPageToDataURL(pdfDocRef.current, pageNum);
+      setPageImgUrl(imgUrl);
+      setCurrentPage(pageNum);
+    } finally { setRenderLoading(false); }
+  }
+
+  function next() { goToPage(currentPage >= pageCount ? 1 : currentPage + 1); }
+  function prev() { goToPage(currentPage <= 1 ? pageCount : currentPage - 1); }
+
+  // Mobile fallback
+  if (Platform.OS !== 'web') {
+    return (
+      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
+        <Text style={styles.downloadIcon}>📄</Text>
+        <View>
+          <Text style={styles.downloadLabel}>Open Document</Text>
+          <Text style={styles.downloadSub}>Opens in your device viewer</Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  // Google Drive / unsupported → iframe fallback
+  if (useFallback) {
+    const embedUrl = getEmbedUrl(url);
+    return (
+      <View style={styles.slideViewerWrap}>
+        <View style={styles.slideToolbar}>
+          <Text style={styles.slideToolbarLabel}>Use ‹ › inside the viewer to navigate slides</Text>
+          <Pressable onPress={() => setFullscreen(true)} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
+            <Text style={[styles.slideToolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
+          </Pressable>
+        </View>
+        <View style={[styles.iframeContainer, { height: viewerH }]}>
+          {/* @ts-ignore */}
+          <iframe src={embedUrl} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 }} title="Document" allow="autoplay" />
+        </View>
+        <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
+          <Text style={{ fontSize: 16 }}>📥</Text>
+          <Text style={styles.downloadBtnFullText}>Download Document</Text>
+        </Pressable>
+        {fullscreen && Platform.OS === 'web' && React.createElement('div', {
+          style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)', display: 'flex', flexDirection: 'column' },
+        }, [
+          React.createElement('div', { key: 'bar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)', backgroundColor: '#0b1426' } }, [
+            React.createElement('span', { key: 't', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, 'Document — Full Screen'),
+            React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 10 } }, [
+              React.createElement('a', { key: 'dl', href: url, download: true, style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '📥 Download'),
+              React.createElement('button', { key: 'x', onClick: () => setFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
+            ]),
+          ]),
+          React.createElement('iframe', { key: 'fi', src: embedUrl, style: { flex: 1, width: '100%', border: 'none', backgroundColor: '#000' }, title: 'Document Fullscreen', allow: 'autoplay' }),
+        ])}
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.iframeContainer, { height: viewerH, alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={accentColor} size="large" />
+        <Text style={{ color: colors.textTertiary, fontSize: 12, marginTop: 10 }}>Loading document…</Text>
+      </View>
+    );
+  }
+
+  // PDF.js page-by-page renderer
+  return (
+    <View style={styles.slideViewerWrap}>
+      {/* Toolbar */}
+      <View style={styles.slideToolbar}>
+        <Text style={styles.slideToolbarLabel}>
+          {pageCount > 0 ? `Page ${currentPage} of ${pageCount} · tap slide or use arrows` : 'Document'}
+        </Text>
+        <Pressable onPress={() => setFullscreen(true)} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
+          <Text style={[styles.slideToolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
+        </Pressable>
+      </View>
+
+      {/* Page image — click to advance */}
+      <View style={[styles.iframeContainer, { height: viewerH }]}>
+        {React.createElement('div', {
+          onClick: next,
+          style: { width: '100%', height: '100%', position: 'relative', cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0b1426' },
+        },
+          renderLoading
+            ? React.createElement('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 } }, [
+                React.createElement('div', { key: 'spin', style: { width: 36, height: 36, border: `3px solid ${accentColor}33`, borderTopColor: accentColor, borderRadius: '50%', animation: 'spin 0.8s linear infinite' } }),
+              ])
+            : pageImgUrl
+              ? React.createElement('img', { src: pageImgUrl, style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 10, display: 'block' }, draggable: false })
+              : React.createElement('span', { style: { color: '#666', fontSize: 14 } }, 'No page rendered')
+        )}
+      </View>
+
+      {/* Arrow navigation */}
+      {pageCount > 1 && (
+        <View style={styles.slideArrowRow}>
+          <Pressable onPress={prev} style={[styles.slideArrowBtn, { borderColor: accentColor }]}>
+            <Text style={[styles.slideArrowText, { color: accentColor }]}>‹</Text>
+          </Pressable>
+          <View style={styles.slideDots}>
+            {Array.from({ length: Math.min(pageCount, 12) }).map((_, i) => {
+              const pg = Math.floor((i / Math.min(pageCount, 12)) * pageCount) + 1;
+              return (
+                <Pressable key={i} onPress={() => goToPage(pg)}>
+                  <View style={[styles.slideDot, { backgroundColor: pg === currentPage ? accentColor : accentColor + '33' }]} />
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable onPress={next} style={[styles.slideArrowBtn, { borderColor: accentColor }]}>
+            <Text style={[styles.slideArrowText, { color: accentColor }]}>›</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Single download button */}
+      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
+        <Text style={{ fontSize: 16 }}>📥</Text>
+        <Text style={styles.downloadBtnFullText}>Download Document</Text>
+      </Pressable>
+
+      {/* Fullscreen modal */}
+      {fullscreen && Platform.OS === 'web' && React.createElement('div', {
+        style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)', display: 'flex', flexDirection: 'column' },
+      }, [
+        React.createElement('div', { key: 'bar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)', backgroundColor: '#0b1426', flexShrink: 0 } }, [
+          React.createElement('span', { key: 't', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, `Page ${currentPage} of ${pageCount}`),
+          React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 10 } }, [
+            React.createElement('a', { key: 'dl', href: url, download: true, style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '📥 Download'),
+            React.createElement('button', { key: 'x', onClick: () => setFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
+          ]),
+        ]),
+        React.createElement('div', { key: 'img', onClick: next, style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '20px 80px', backgroundColor: '#000' } },
+          pageImgUrl
+            ? React.createElement('img', { src: pageImgUrl, style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }, draggable: false })
+            : null
+        ),
+        pageCount > 1 && React.createElement('div', { key: 'nav', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, padding: '16px 20px', backgroundColor: '#0b1426', flexShrink: 0 } }, [
+          React.createElement('button', { key: 'p', onClick: (e: any) => { e.stopPropagation(); prev(); }, style: { width: 44, height: 44, borderRadius: 22, border: `2px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 22, fontWeight: 700 } }, '‹'),
+          React.createElement('span', { key: 'n', style: { color: '#fff', fontSize: 14, fontWeight: 600, minWidth: 80, textAlign: 'center' } }, `${currentPage} / ${pageCount}`),
+          React.createElement('button', { key: 'nx', onClick: (e: any) => { e.stopPropagation(); next(); }, style: { width: 44, height: 44, borderRadius: 22, border: `2px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 22, fontWeight: 700 } }, '›'),
+        ]),
+      ])}
+    </View>
+  );
+}
+
+// ─── Horizontal image slide viewer ───────────────────────────────────────────
+// One image per screen. Click anywhere or arrows to advance. Auto-resets at end.
+function ImageSlideViewer({ urls, accentColor }: { urls: string[]; accentColor: string }) {
+  const [index,      setIndex]      = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const { width } = useWindowDimensions();
+  const viewerH = Math.min(width * 0.62, 500);
+
+  function next() { setIndex(i => (i + 1 >= urls.length ? 0 : i + 1)); }
+  function prev() { setIndex(i => (i - 1 < 0 ? urls.length - 1 : i - 1)); }
+
+  // Mobile: horizontal scroll with paging, one image = full width
+  if (Platform.OS !== 'web') {
+    return (
+      <View>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={{ width, height: 260 }}
+          contentContainerStyle={{ width: width * urls.length }}
+        >
+          {urls.map((u, i) => (
+            <Image key={i} source={{ uri: u }} style={{ width, height: 260, resizeMode: 'contain' }} />
+          ))}
+        </ScrollView>
+        {/* Arrow row on mobile */}
+        <View style={[styles.slideArrowRow, { marginTop: 8 }]}>
+          <Pressable onPress={prev} style={[styles.slideArrowBtn, { borderColor: accentColor }]}>
+            <Text style={[styles.slideArrowText, { color: accentColor }]}>‹</Text>
+          </Pressable>
+          <View style={styles.slideDots}>
+            {urls.map((_, i) => (
+              <View key={i} style={[styles.slideDot, { backgroundColor: i === index ? accentColor : accentColor + '33' }]} />
+            ))}
+          </View>
+          <Pressable onPress={next} style={[styles.slideArrowBtn, { borderColor: accentColor }]}>
+            <Text style={[styles.slideArrowText, { color: accentColor }]}>›</Text>
+          </Pressable>
+        </View>
+        <Pressable onPress={() => Linking.openURL(urls[index])} style={[styles.downloadBtnFull, { backgroundColor: accentColor, marginTop: 8 }]}>
+          <Text style={{ fontSize: 16 }}>📥</Text>
+          <Text style={styles.downloadBtnFullText}>Download Slide</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // Web: one image at a time, click to advance
+  return (
+    <View style={styles.slideViewerWrap}>
+      {/* Toolbar */}
+      <View style={styles.slideToolbar}>
+        <Text style={styles.slideToolbarLabel}>
+          Slide {index + 1} of {urls.length} · tap slide or use arrows
+        </Text>
+        <Pressable onPress={() => setFullscreen(true)} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
+          <Text style={[styles.slideToolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
+        </Pressable>
+      </View>
+
+      {/* Single slide — click anywhere to advance */}
+      <View style={[styles.iframeContainer, { height: viewerH }]}>
+        {React.createElement('div', {
+          onClick: next,
+          style: { width: '100%', height: '100%', cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0b1426', borderRadius: 12 },
+        },
+          React.createElement('img', {
+            src: urls[index],
+            style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 10, display: 'block' },
+            draggable: false,
+          })
+        )}
+      </View>
+
+      {/* Arrow navigation */}
+      <View style={styles.slideArrowRow}>
+        <Pressable onPress={prev} style={[styles.slideArrowBtn, { borderColor: accentColor }]}>
+          <Text style={[styles.slideArrowText, { color: accentColor }]}>‹</Text>
+        </Pressable>
+        <View style={styles.slideDots}>
+          {urls.map((_, i) => (
+            <Pressable key={i} onPress={() => setIndex(i)}>
+              <View style={[styles.slideDot, { backgroundColor: i === index ? accentColor : accentColor + '33' }]} />
+            </Pressable>
+          ))}
+        </View>
+        <Pressable onPress={next} style={[styles.slideArrowBtn, { borderColor: accentColor }]}>
+          <Text style={[styles.slideArrowText, { color: accentColor }]}>›</Text>
+        </Pressable>
+      </View>
+
+      {/* Single download button */}
+      <Pressable onPress={() => Linking.openURL(urls[index])} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
+        <Text style={{ fontSize: 16 }}>📥</Text>
+        <Text style={styles.downloadBtnFullText}>Download Slide</Text>
+      </Pressable>
+
+      {/* Fullscreen modal */}
+      {fullscreen && Platform.OS === 'web' && React.createElement('div', {
+        style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)', display: 'flex', flexDirection: 'column' },
+      }, [
+        React.createElement('div', { key: 'bar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)', backgroundColor: '#0b1426', flexShrink: 0 } }, [
+          React.createElement('span', { key: 't', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, `Slide ${index + 1} of ${urls.length}`),
+          React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 10 } }, [
+            React.createElement('a', { key: 'dl', href: urls[index], download: true, style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '📥 Download'),
+            React.createElement('button', { key: 'x', onClick: () => setFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
+          ]),
+        ]),
+        React.createElement('div', { key: 'img', onClick: next, style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '20px 80px', backgroundColor: '#000' } },
+          React.createElement('img', { src: urls[index], style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 }, draggable: false })
+        ),
+        React.createElement('div', { key: 'nav', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, padding: '16px 20px', backgroundColor: '#0b1426', flexShrink: 0 } }, [
+          React.createElement('button', { key: 'p', onClick: (e: any) => { e.stopPropagation(); prev(); }, style: { width: 44, height: 44, borderRadius: 22, border: `2px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 22, fontWeight: 700 } }, '‹'),
+          React.createElement('span', { key: 'n', style: { color: '#fff', fontSize: 14, fontWeight: 600, minWidth: 80, textAlign: 'center' } }, `${index + 1} / ${urls.length}`),
+          React.createElement('button', { key: 'nx', onClick: (e: any) => { e.stopPropagation(); next(); }, style: { width: 44, height: 44, borderRadius: 22, border: `2px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 22, fontWeight: 700 } }, '›'),
+        ]),
+      ])}
+    </View>
+  );
+}
+
+// ─── MP4/MOV video player ─────────────────────────────────────────────────────
 function VideoPlayer({ url, accentColor }: { url: string; accentColor: string }) {
   const [fullscreen, setFullscreen] = useState(false);
 
   if (Platform.OS !== 'web') {
     return (
-      <Pressable onPress={() => Linking.openURL(url)}
-        style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
+      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
         <Text style={styles.downloadIcon}>▶️</Text>
         <View>
           <Text style={styles.downloadLabel}>Play Video</Text>
@@ -145,14 +489,13 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
       {/* Native HTML5 video */}
       <View style={[styles.iframeContainer, { height: 320 }]}>
         {React.createElement('video', {
-          src: url,
-          controls: true,
+          src: url, controls: true,
           style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
           preload: 'metadata',
         })}
       </View>
 
-      {/* Download button */}
+      {/* Single download button */}
       <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
         <Text style={{ fontSize: 16 }}>📥</Text>
         <Text style={styles.downloadBtnFullText}>Download Video</Text>
@@ -160,293 +503,18 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
 
       {/* Fullscreen modal */}
       {fullscreen && Platform.OS === 'web' && React.createElement('div', {
-        style: {
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)',
-          display: 'flex', flexDirection: 'column',
-        },
+        style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)', display: 'flex', flexDirection: 'column' },
       }, [
-        React.createElement('div', {
-          key: 'fsbar',
-          style: {
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)',
-            backgroundColor: '#0b1426',
-          },
-        }, [
-          React.createElement('span', { key: 'title', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, 'Video — Full Screen'),
+        React.createElement('div', { key: 'bar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)', backgroundColor: '#0b1426' } }, [
+          React.createElement('span', { key: 't', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, 'Video — Full Screen'),
           React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 10 } }, [
-            React.createElement('a', {
-              key: 'dl',
-              href: url, download: true,
-              style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' },
-            }, '📥 Download'),
-            React.createElement('button', {
-              key: 'close', onClick: () => setFullscreen(false),
-              style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 },
-            }, '✕ Close'),
+            React.createElement('a', { key: 'dl', href: url, download: true, style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '📥 Download'),
+            React.createElement('button', { key: 'x', onClick: () => setFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
           ]),
         ]),
-        React.createElement('div', {
-          key: 'vwrap',
-          style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 },
-        },
-          React.createElement('video', {
-            key: 'fs-video', src: url, controls: true, autoPlay: true,
-            style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' },
-          })
+        React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
+          React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
         ),
-      ])}
-    </View>
-  );
-}
-
-// ─── Horizontal image slide viewer ───────────────────────────────────────────
-// One image per screen. Click anywhere or use arrows to advance. Auto-resets at end.
-function ImageSlideViewer({ urls, accentColor }: { urls: string[]; accentColor: string }) {
-  const [index, setIndex] = useState(0);
-  const [fullscreen, setFullscreen] = useState(false);
-  const { width } = useWindowDimensions();
-  const viewerH = Math.min(width * 0.60, 480);
-
-  function next() { setIndex(i => (i + 1 >= urls.length ? 0 : i + 1)); }
-  function prev() { setIndex(i => (i - 1 < 0 ? urls.length - 1 : i - 1)); }
-
-  if (Platform.OS !== 'web') {
-    return (
-      <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width: '100%' }}>
-        {urls.map((u, i) => (
-          <Image key={i} source={{ uri: u }} style={{ width, height: 220, resizeMode: 'contain' }} />
-        ))}
-      </ScrollView>
-    );
-  }
-
-  return (
-    <View style={styles.slideViewerWrap}>
-      {/* Toolbar */}
-      <View style={styles.slideToolbar}>
-        <Text style={styles.slideToolbarLabel}>
-          Slide {index + 1} of {urls.length} · tap slide or use arrows
-        </Text>
-        <Pressable onPress={() => setFullscreen(true)} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
-          <Text style={[styles.slideToolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
-        </Pressable>
-      </View>
-
-      {/* Slide image — click anywhere to advance */}
-      <View style={[styles.iframeContainer, { height: viewerH, cursor: 'pointer' } as any]}>
-        {React.createElement('div', {
-          onClick: next,
-          style: {
-            width: '100%', height: '100%', position: 'relative',
-            cursor: 'pointer', userSelect: 'none',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: '#0b1426',
-          },
-        },
-          React.createElement('img', {
-            src: urls[index],
-            style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 10, display: 'block' },
-            draggable: false,
-          })
-        )}
-      </View>
-
-      {/* Arrow navigation */}
-      <View style={styles.slideArrowRow}>
-        <Pressable onPress={prev} style={[styles.slideArrowBtn, { borderColor: accentColor }]}>
-          <Text style={[styles.slideArrowText, { color: accentColor }]}>‹</Text>
-        </Pressable>
-        {/* Dot indicators */}
-        <View style={styles.slideDots}>
-          {urls.map((_, i) => (
-            <Pressable key={i} onPress={() => setIndex(i)}>
-              <View style={[
-                styles.slideDot,
-                { backgroundColor: i === index ? accentColor : accentColor + '33' },
-              ]} />
-            </Pressable>
-          ))}
-        </View>
-        <Pressable onPress={next} style={[styles.slideArrowBtn, { borderColor: accentColor }]}>
-          <Text style={[styles.slideArrowText, { color: accentColor }]}>›</Text>
-        </Pressable>
-      </View>
-
-      {/* Fullscreen modal */}
-      {fullscreen && Platform.OS === 'web' && React.createElement('div', {
-        style: {
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)',
-          display: 'flex', flexDirection: 'column',
-        },
-      }, [
-        // Header
-        React.createElement('div', {
-          key: 'fsbar',
-          style: {
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)',
-            backgroundColor: '#0b1426', flexShrink: 0,
-          },
-        }, [
-          React.createElement('span', { key: 'title', style: { fontSize: 15, fontWeight: 700, color: '#fff' } },
-            `Slide ${index + 1} of ${urls.length}`),
-          React.createElement('button', {
-            key: 'close', onClick: () => setFullscreen(false),
-            style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 },
-          }, '✕ Close'),
-        ]),
-        // Image — click to advance
-        React.createElement('div', {
-          key: 'imgwrap',
-          onClick: () => setIndex(i => (i + 1 >= urls.length ? 0 : i + 1)),
-          style: {
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', padding: '20px 80px',
-          },
-        },
-          React.createElement('img', {
-            src: urls[index],
-            style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8 },
-            draggable: false,
-          })
-        ),
-        // Arrow nav
-        React.createElement('div', {
-          key: 'fsnav',
-          style: {
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20,
-            padding: '16px 20px', backgroundColor: '#0b1426', flexShrink: 0,
-          },
-        }, [
-          React.createElement('button', {
-            key: 'prev',
-            onClick: (e: any) => { e.stopPropagation(); setIndex(i => (i - 1 < 0 ? urls.length - 1 : i - 1)); },
-            style: { width: 44, height: 44, borderRadius: 22, border: `2px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-          }, '‹'),
-          React.createElement('span', { key: 'num', style: { color: '#fff', fontSize: 14, fontWeight: 600, minWidth: 80, textAlign: 'center' } },
-            `${index + 1} / ${urls.length}`),
-          React.createElement('button', {
-            key: 'nxt',
-            onClick: (e: any) => { e.stopPropagation(); setIndex(i => (i + 1 >= urls.length ? 0 : i + 1)); },
-            style: { width: 44, height: 44, borderRadius: 22, border: `2px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-          }, '›'),
-        ]),
-      ])}
-    </View>
-  );
-}
-
-// ─── Inline PDF/Google slide viewer (web only) ────────────────────────────────
-// Google Drive embed — native page navigation, no external toolbar button shown.
-function SlideViewer({ url, accentColor }: { url: string; accentColor: string }) {
-  const [fullscreen, setFullscreen] = useState(false);
-  const { width } = useWindowDimensions();
-  const viewerH = Math.min(width * 0.65, 520);
-
-  function getEmbedUrl(rawUrl: string): string {
-    if (rawUrl.includes('drive.google.com') && rawUrl.includes('/preview')) return rawUrl;
-    if (rawUrl.includes('drive.google.com/file/d/')) {
-      const match = rawUrl.match(/\/file\/d\/([^/]+)/);
-      if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
-    }
-    return `https://docs.google.com/viewer?url=${encodeURIComponent(rawUrl)}&embedded=true`;
-  }
-
-  const embedUrl = getEmbedUrl(url);
-
-  if (Platform.OS !== 'web') {
-    return (
-      <Pressable onPress={() => Linking.openURL(url)}
-        style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
-        <Text style={styles.downloadIcon}>📥</Text>
-        <View>
-          <Text style={styles.downloadLabel}>Open Slide Deck</Text>
-          <Text style={styles.downloadSub}>Opens in your device viewer</Text>
-        </View>
-      </Pressable>
-    );
-  }
-
-  return (
-    <View style={styles.slideViewerWrap}>
-
-      {/* ── Toolbar: only our NeuroFlow fullscreen button ── */}
-      <View style={styles.slideToolbar}>
-        <Text style={styles.slideToolbarLabel}>Use ‹ › inside the viewer to navigate slides</Text>
-        <Pressable onPress={() => setFullscreen(true)} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
-          <Text style={[styles.slideToolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
-        </Pressable>
-      </View>
-
-      {/* ── Embedded viewer — pointer-events overlay blocks Google's toolbar button ── */}
-      <View style={[styles.iframeContainer, { height: viewerH }]}>
-        {/* @ts-ignore */}
-        <iframe
-          src={embedUrl}
-          style={{ width: '100%', height: '100%', border: 'none', borderRadius: 12 }}
-          title="Slide Deck"
-          allow="autoplay"
-        />
-        {/* Overlay that covers the Google "open in new tab" button (bottom-right ~44px) */}
-        {React.createElement('div', {
-          style: {
-            position: 'absolute', bottom: 0, right: 0,
-            width: 52, height: 52,
-            backgroundColor: '#0b1426',
-            borderBottomRightRadius: 12,
-            pointerEvents: 'none',
-          },
-        })}
-      </View>
-
-      {/* ── Download button ── */}
-      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
-        <Text style={{ fontSize: 16 }}>📥</Text>
-        <Text style={styles.downloadBtnFullText}>Download Free PDF</Text>
-      </Pressable>
-
-      {/* ── Fullscreen modal overlay ── */}
-      {fullscreen && Platform.OS === 'web' && React.createElement('div', {
-        style: {
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          zIndex: 99999,
-          backgroundColor: 'rgba(0,0,0,0.95)',
-          display: 'flex', flexDirection: 'column',
-        },
-      }, [
-        React.createElement('div', {
-          key: 'fsbar',
-          style: {
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 20px',
-            borderBottom: '1px solid rgba(74,144,226,0.2)',
-            backgroundColor: '#0b1426',
-          },
-        }, [
-          React.createElement('span', { key: 'title', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, 'Slide Deck — Full Screen'),
-          React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 10 } }, [
-            React.createElement('button', {
-              key: 'dl',
-              onClick: () => Linking.openURL(url),
-              style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, backgroundColor: 'transparent', color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700 },
-            }, '📥 Download PDF'),
-            React.createElement('button', {
-              key: 'close',
-              onClick: () => setFullscreen(false),
-              style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 },
-            }, '✕ Close'),
-          ]),
-        ]),
-        React.createElement('iframe', {
-          key: 'fs-iframe',
-          src: embedUrl,
-          style: { flex: 1, width: '100%', border: 'none', backgroundColor: '#000' },
-          title: 'Slide Deck Fullscreen',
-          allow: 'autoplay',
-        }),
       ])}
     </View>
   );
@@ -454,7 +522,7 @@ function SlideViewer({ url, accentColor }: { url: string; accentColor: string })
 
 // ─── Main card detail panel ───────────────────────────────────────────────────
 function CardDetail({ card }: { card: ResourceCard }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
   useEffect(() => {
@@ -473,7 +541,7 @@ function CardDetail({ card }: { card: ResourceCard }) {
 
   return (
     <Animated.View style={[{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }, { gap: 14 }]}>
-      {/* Hero icon + title row */}
+      {/* Hero icon + title */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
         <View style={[styles.heroIconWrap, { backgroundColor: card.icon_bg }]}>
           {card.icon_image_url
@@ -488,7 +556,7 @@ function CardDetail({ card }: { card: ResourceCard }) {
         </View>
       </View>
 
-      {/* Inline content viewer — auto-detects MP4, comma-separated images, or PDF */}
+      {/* Auto-detect viewer */}
       {card.slide_deck_url ? (
         isVideoUrl(card.slide_deck_url) ? (
           <VideoPlayer url={card.slide_deck_url} accentColor={card.accent_color} />
@@ -498,11 +566,11 @@ function CardDetail({ card }: { card: ResourceCard }) {
             accentColor={card.accent_color}
           />
         ) : (
-          <SlideViewer url={card.slide_deck_url} accentColor={card.accent_color} />
+          <PDFSlideViewer url={card.slide_deck_url} accentColor={card.accent_color} />
         )
       ) : (
         <View style={styles.noDeckyBox}>
-          <Text style={styles.noDeckText}>📭 Slide deck coming soon</Text>
+          <Text style={styles.noDeckText}>📭 Content coming soon</Text>
           <Text style={styles.noDeckSub}>Check back — content will appear here.</Text>
         </View>
       )}
@@ -523,8 +591,8 @@ export default function ResourceViewerScreen() {
   const params  = useLocalSearchParams<{ cardId?: string }>();
   const { width } = useWindowDimensions();
 
-  const [cards, setCards]       = useState<ResourceCard[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [cards,    setCards]    = useState<ResourceCard[]>([]);
+  const [loading,  setLoading]  = useState(true);
   const [activeId, setActiveId] = useState<string | null>(params.cardId ?? null);
 
   useEffect(() => {
@@ -532,7 +600,6 @@ export default function ResourceViewerScreen() {
       .then(fetched => {
         const source = fetched.length > 0 ? fetched : DEFAULT_CARDS;
         setCards(source);
-        // If no cardId in params, default to first card
         if (!activeId && source.length > 0) setActiveId(source[0].id);
       })
       .catch(() => {
@@ -566,12 +633,8 @@ export default function ResourceViewerScreen() {
         ) : (
           <View style={[styles.content, maxW ? { maxWidth: maxW, alignSelf: 'center', width: '100%' } : undefined]}>
 
-            {/* Card tabs — horizontal scroll so all 6 are reachable */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tabsRow}
-            >
+            {/* Card tabs */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
               {cards.map(card => (
                 <CardTab
                   key={card.id}
@@ -603,19 +666,14 @@ const styles = StyleSheet.create({
   safe:   { flex: 1, backgroundColor: colors.bgBase },
   scroll: { padding: spacing.lg, gap: spacing.lg },
 
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
-  backBtn: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(74,144,226,0.12)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  backBtnText:  { fontSize: 22, color: NF_BLUE, lineHeight: 28, fontWeight: '600' },
-  pageTitle:    { fontSize: 22, fontWeight: '800', color: NF_BLUE, letterSpacing: -0.5 },
-  pageSub:      { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  header:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
+  backBtn:     { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(74,144,226,0.12)', justifyContent: 'center', alignItems: 'center' },
+  backBtnText: { fontSize: 22, color: NF_BLUE, lineHeight: 28, fontWeight: '600' },
+  pageTitle:   { fontSize: 22, fontWeight: '800', color: NF_BLUE, letterSpacing: -0.5 },
+  pageSub:     { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
 
   content: { gap: spacing.md },
 
-  // Tabs
   tabsRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
   tab: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -625,101 +683,46 @@ const styles = StyleSheet.create({
   },
   tabLabel: { fontSize: 13, fontWeight: '700', maxWidth: 120 },
 
-  // Detail card
   detailCard: {
     backgroundColor: colors.bgCard,
     borderRadius: radius.xl, padding: spacing.xl,
     borderWidth: 1.5, gap: spacing.md,
   },
 
-  heroIconWrap: {
-    width: 88, height: 88, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center',
-    alignSelf: 'center', marginBottom: 4,
-  },
-  heroIcon: { fontSize: 48 },
+  heroIconWrap: { width: 88, height: 88, borderRadius: 20, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 4 },
+  heroIcon:     { fontSize: 48 },
 
   accentBar: { height: 3, borderRadius: 2, width: 48, alignSelf: 'center' },
 
-  cardTitle: {
-    fontSize: 24, fontWeight: '800', color: colors.textPrimary,
-    textAlign: 'center', letterSpacing: -0.5, marginTop: 4,
-  },
-  cardDesc: {
-    fontSize: 15, color: colors.textSecondary, lineHeight: 24,
-    textAlign: 'center',
-  },
+  cardTitle: { fontSize: 24, fontWeight: '800', color: colors.textPrimary, textAlign: 'center', letterSpacing: -0.5, marginTop: 4 },
+  cardDesc:  { fontSize: 15, color: colors.textSecondary, lineHeight: 24, textAlign: 'center' },
 
-  // Download CTA
-  downloadBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 18, paddingHorizontal: 24,
-    borderRadius: radius.xl, marginTop: 8,
-  },
+  downloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18, paddingHorizontal: 24, borderRadius: radius.xl, marginTop: 8 },
   downloadIcon:  { fontSize: 28 },
   downloadLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
   downloadSub:   { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
 
-  noDeckyBox: {
-    paddingVertical: 20, alignItems: 'center', gap: 6,
-    backgroundColor: colors.bgBase, borderRadius: radius.lg,
-    borderWidth: 1, borderColor: colors.border,
-  },
+  noDeckyBox: { paddingVertical: 20, alignItems: 'center', gap: 6, backgroundColor: colors.bgBase, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border },
   noDeckText: { fontSize: 15, fontWeight: '700', color: colors.textSecondary },
   noDeckSub:  { fontSize: 12, color: colors.textTertiary, textAlign: 'center', paddingHorizontal: 20 },
 
-  // Secondary link
-  linkBtn: {
-    alignItems: 'center', paddingVertical: 14, borderRadius: radius.lg,
-    borderWidth: 1.5, marginTop: 4,
-  },
+  linkBtn:     { alignItems: 'center', paddingVertical: 14, borderRadius: radius.lg, borderWidth: 1.5, marginTop: 4 },
   linkBtnText: { fontSize: 14, fontWeight: '700' },
 
-  // Slide viewer
   slideViewerWrap: { gap: 10, marginTop: 4 },
-  iframeContainer: {
-    width: '100%', borderRadius: 12, overflow: 'hidden',
-    backgroundColor: '#1a1a2e', position: 'relative',
-  },
-  slideToolbar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 2,
-  },
-  slideToolbarLabel: { fontSize: 11, color: colors.textTertiary, flex: 1 },
-  slideToolbarBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: radius.full, borderWidth: 1.5,
-  },
-  slideToolbarBtnText: { fontSize: 12, fontWeight: '700' },
-  downloadBtnFull: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    paddingVertical: 14, borderRadius: radius.lg, marginTop: 2,
-  },
-  downloadBtnFullText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-  // keep these for native fallback
-  slideNavBtn: {
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: radius.full, borderWidth: 1.5,
-  },
-  slideNavText: { fontSize: 14, fontWeight: '700' },
-  slidePageNum: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
-  downloadBtnSmall: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 10, borderRadius: radius.lg, borderWidth: 1.5,
-  },
-  downloadBtnSmallText: { fontSize: 13, fontWeight: '700' },
+  iframeContainer: { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#1a1a2e', position: 'relative' },
 
-  // Image slide arrow navigation
-  slideArrowRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 2, marginTop: 4,
-  },
-  slideArrowBtn: {
-    width: 44, height: 44, borderRadius: 22, borderWidth: 2,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  slideToolbar:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 },
+  slideToolbarLabel:   { fontSize: 11, color: colors.textTertiary, flex: 1 },
+  slideToolbarBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 7, borderRadius: radius.full, borderWidth: 1.5 },
+  slideToolbarBtnText: { fontSize: 12, fontWeight: '700' },
+
+  downloadBtnFull:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, borderRadius: radius.lg, marginTop: 2 },
+  downloadBtnFullText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+
+  slideArrowRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2, marginTop: 4 },
+  slideArrowBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   slideArrowText: { fontSize: 26, fontWeight: '700', lineHeight: 30 },
   slideDots: { flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap', flex: 1, justifyContent: 'center' },
-  slideDot: { width: 8, height: 8, borderRadius: 4 },
+  slideDot:  { width: 8, height: 8, borderRadius: 4 },
 });
