@@ -333,16 +333,27 @@ function HowToVideoSection({
     } finally { setSaving(false); }
   }
 
+  const MAX_UPLOAD_MB = 100; // Supabase storage default limit
+
   async function pickHowToVideo() {
     if (Platform.OS === 'web') {
-      // Web: use native file input — gives raw File object, no blob URL overhead
       const file = await pickFileWeb('video/mp4,video/quicktime,video/webm,video/*');
       if (!file) return;
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > MAX_UPLOAD_MB) {
+        Alert.alert(
+          'File too large',
+          `${Math.round(sizeMB)}MB exceeds the ${MAX_UPLOAD_MB}MB upload limit.\n\nFor large videos, upload to Google Drive or YouTube and paste the share/embed link in the URL field below.`
+        );
+        return;
+      }
       setUploadingVideo(true);
       try {
         const url = await uploadFileToStorage(file, 'videos');
         setVideoUrl(url);
-        Alert.alert('Uploaded', 'Video uploaded. Tap Save to apply.');
+        // Auto-save immediately so Dashboard shows the video without needing Save button
+        await onSave('howto_video_url', url);
+        Alert.alert('Saved', 'Video uploaded and saved. It is now live on the Dashboard.');
       } catch (e: any) {
         Alert.alert('Upload failed', e.message);
       } finally { setUploadingVideo(false); }
@@ -362,6 +373,7 @@ function HowToVideoSection({
         'videos',
       );
       setVideoUrl(url);
+      await onSave('howto_video_url', url);
     } catch (e: any) {
       Alert.alert('Upload failed', e.message);
     } finally { setUploadingVideo(false); }
@@ -699,14 +711,26 @@ function InlineCardRow({
   }
 
   async function pickContentFile() {
+    const MAX_MB = 100;
     if (Platform.OS === 'web') {
       const file = await pickFileWeb('video/mp4,video/quicktime,video/webm,video/*,application/pdf,.pdf,.pptx,.ppt,.docx,.doc,*/*');
       if (!file) return;
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > MAX_MB) {
+        Alert.alert(
+          'File too large',
+          `${Math.round(sizeMB)}MB exceeds the ${MAX_MB}MB upload limit.\n\nFor large videos, upload to Google Drive or YouTube and paste the share/embed link in the URL field below.`
+        );
+        return;
+      }
       setUploadingDeck(true);
       try {
         const folder = file.type.startsWith('video/') ? 'videos' : 'slide-decks';
         const url = await uploadFileToStorage(file, folder);
         set('slide_deck_url', url);
+        // Auto-save immediately so users see the file without needing Save Card click
+        await updateResourceCard(card.id, { slide_deck_url: url });
+        Alert.alert('Saved', 'File uploaded and saved. Users can now view it.');
       } catch (e: any) {
         Alert.alert('Upload failed', e.message);
       } finally { setUploadingDeck(false); }
@@ -722,6 +746,7 @@ function InlineCardRow({
       const folder = mime.startsWith('video/') ? 'videos' : 'slide-decks';
       const url = await uploadResourceFile({ uri: asset.uri, name: asset.name, type: mime }, folder);
       set('slide_deck_url', url);
+      await updateResourceCard(card.id, { slide_deck_url: url });
     } catch (e: any) {
       Alert.alert('Upload failed', e.message);
     } finally { setUploadingDeck(false); }
@@ -977,9 +1002,18 @@ function NewCardForm({
   }
 
   async function pickContentFile() {
+    const MAX_MB = 100;
     if (Platform.OS === 'web') {
       const file = await pickFileWeb('video/mp4,video/quicktime,video/webm,video/*,application/pdf,.pdf,.pptx,.ppt,.docx,.doc,*/*');
       if (!file) return;
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > MAX_MB) {
+        Alert.alert(
+          'File too large',
+          `${Math.round(sizeMB)}MB exceeds the ${MAX_MB}MB upload limit.\n\nFor large videos, upload to Google Drive or YouTube and paste the share/embed link in the URL field below.`
+        );
+        return;
+      }
       setUploadingDeck(true);
       try {
         const folder = file.type.startsWith('video/') ? 'videos' : 'slide-decks';
