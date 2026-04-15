@@ -644,9 +644,11 @@ export default function ResourceViewerScreen() {
   const params  = useLocalSearchParams<{ cardId?: string }>();
   const { width } = useWindowDimensions();
 
-  const [cards,    setCards]    = useState<ResourceCard[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [activeId, setActiveId] = useState<string | null>(params.cardId ?? null);
+  const [cards,      setCards]      = useState<ResourceCard[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [activeId,   setActiveId]   = useState<string | null>(params.cardId ?? null);
+  // Bump this counter every time we switch cards to force full DOM teardown
+  const [contentKey, setContentKey] = useState(0);
 
   useEffect(() => {
     fetchResourceCards()
@@ -661,6 +663,12 @@ export default function ResourceViewerScreen() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  function switchCard(id: string) {
+    if (id === activeId) return;
+    setActiveId(id);
+    setContentKey(k => k + 1); // force React to fully unmount old iframe/video
+  }
 
   const activeCard = cards.find(c => c.id === activeId) ?? cards[0] ?? null;
   const isDesktop  = width > 768;
@@ -693,16 +701,16 @@ export default function ResourceViewerScreen() {
                   key={card.id}
                   card={card}
                   isActive={card.id === activeId}
-                  onPress={() => setActiveId(card.id)}
+                  onPress={() => switchCard(card.id)}
                 />
               ))}
             </ScrollView>
 
-            {/* Active card detail — key forces full remount on card switch,
-                stopping any playing video and resetting all viewer state */}
+            {/* key={contentKey} guarantees React tears down the entire subtree
+                (including any iframe/video DOM nodes) on every card switch */}
             {activeCard && (
-              <View style={[styles.detailCard, { borderColor: activeCard.accent_color + '44' }]}>
-                <CardDetail key={activeCard.id} card={activeCard} />
+              <View key={contentKey} style={[styles.detailCard, { borderColor: activeCard.accent_color + '44' }]}>
+                <CardDetail card={activeCard} />
               </View>
             )}
 
