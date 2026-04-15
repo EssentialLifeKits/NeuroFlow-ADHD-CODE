@@ -428,16 +428,19 @@ function HowToVideoSection({
 
       {/* OR paste embed URL */}
       <View style={s.fieldWrap}>
-        <Text style={s.fieldLabel}>— OR PASTE VIDEO URL / EMBED LINK —</Text>
+        <Text style={s.fieldLabel}>— OR PASTE VIDEO LINK (RECOMMENDED FOR LARGE FILES) —</Text>
         <TextInput
           style={s.input}
           value={videoUrl}
           onChangeText={setVideoUrl}
-          placeholder="https://www.youtube.com/embed/…  or  direct .mp4 link"
+          placeholder="https://drive.google.com/file/d/…/view"
           placeholderTextColor={colors.textTertiary}
         />
         <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
-          YouTube embed URL, Vimeo, NotebookLM, or any direct video link.
+          Google Drive, YouTube embed, Vimeo, or any direct video link. No size limit.
+        </Text>
+        <Text style={{ fontSize: 10, color: '#FB923C', marginTop: 2 }}>
+          ⚠️ Google Drive: Right-click file → Share → "Anyone with the link" → Copy link
         </Text>
       </View>
 
@@ -931,14 +934,17 @@ function InlineCardRow({
                       </>
                   }
                 </Pressable>
-                <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a URL below —</Text>
+                <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a Google Drive / YouTube link below —</Text>
                 <TextInput
                   style={s.input}
                   value={draft.slide_deck_url ?? ''}
                   onChangeText={v => set('slide_deck_url', v || null)}
-                  placeholder="https://drive.google.com/…  or  direct file URL"
+                  placeholder="https://drive.google.com/file/d/…/view"
                   placeholderTextColor={colors.textTertiary}
                 />
+                <Text style={{ fontSize: 10, color: '#FB923C', marginTop: 2 }}>
+                  ⚠️ Google Drive: Right-click file → Share → "Anyone with the link" → Copy link
+                </Text>
               </View>
             )}
           </View>
@@ -1130,14 +1136,17 @@ function NewCardForm({
                   </>
               }
             </Pressable>
-            <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a URL below —</Text>
+            <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a Google Drive / YouTube link below —</Text>
             <TextInput
               style={s.input}
               value={draft.slide_deck_url ?? ''}
               onChangeText={v => set('slide_deck_url', v || null)}
-              placeholder="https://drive.google.com/…  or  direct file URL"
+              placeholder="https://drive.google.com/file/d/…/view"
               placeholderTextColor={colors.textTertiary}
             />
+            <Text style={{ fontSize: 10, color: '#FB923C', marginTop: 2 }}>
+              ⚠️ Google Drive: Right-click file → Share → "Anyone with the link" → Copy link
+            </Text>
           </View>
         )}
       </View>
