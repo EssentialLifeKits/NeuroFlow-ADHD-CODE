@@ -101,7 +101,28 @@ function CardTab({ card, isActive, onPress }: { card: ResourceCard; isActive: bo
 }
 
 // ─── URL type detection ───────────────────────────────────────────────────────
+
+/** Convert any Google Drive share/view link to a /preview embed URL */
+function getGoogleDriveEmbedUrl(url: string): string {
+  if (!url.includes('drive.google.com')) return url;
+  if (url.includes('/preview')) return url; // already embed form
+  const match = url.match(/\/file\/d\/([^/?#]+)/);
+  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+  return url;
+}
+
+/** True for direct video files OR Google Drive links (which stream via iframe) */
 function isVideoUrl(url: string): boolean {
+  const lower = url.toLowerCase().split('?')[0];
+  if (lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
+      lower.includes('/video/') || lower.includes('videos/')) return true;
+  // Google Drive links that point to video files — treat as embeddable video
+  if (url.includes('drive.google.com')) return true;
+  return false;
+}
+
+/** True only for a direct streamable file URL (not Google Drive) */
+function isDirectVideoFile(url: string): boolean {
   const lower = url.toLowerCase().split('?')[0];
   return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
     lower.includes('/video/') || lower.includes('videos/');
@@ -471,9 +492,11 @@ function ImageSlideViewer({ urls, accentColor }: { urls: string[]; accentColor: 
   );
 }
 
-// ─── MP4/MOV video player ─────────────────────────────────────────────────────
+// ─── MP4/MOV/Google Drive video player ────────────────────────────────────────
 function VideoPlayer({ url, accentColor }: { url: string; accentColor: string }) {
   const [fullscreen, setFullscreen] = useState(false);
+  const isDriveLink = url.includes('drive.google.com');
+  const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
 
   if (Platform.OS !== 'web') {
     return (
@@ -497,21 +520,28 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
         </Pressable>
       </View>
 
-      {/* Native HTML5 video — controlsList removes browser's own fullscreen/download buttons */}
+      {/* Player: Google Drive → iframe; direct file → HTML5 video */}
       <View style={[styles.iframeContainer, { height: 320 }]}>
-        {React.createElement('video', {
-          src: url, controls: true,
-          controlsList: 'nofullscreen nodownload',
-          disablePictureInPicture: true,
-          style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
-          preload: 'metadata',
-        })}
+        {isDriveLink
+          ? React.createElement('iframe', {
+              src: embedUrl, frameBorder: 0,
+              allow: 'autoplay; fullscreen',
+              style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' },
+            })
+          : React.createElement('video', {
+              src: url, controls: true,
+              controlsList: 'nofullscreen nodownload',
+              disablePictureInPicture: true,
+              style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
+              preload: 'metadata',
+            })
+        }
       </View>
 
-      {/* Single download button */}
+      {/* Download button — opens in new tab for Drive links, direct download for files */}
       <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
         <Text style={{ fontSize: 16 }}>📥</Text>
-        <Text style={styles.downloadBtnFullText}>Download Video</Text>
+        <Text style={styles.downloadBtnFullText}>{isDriveLink ? 'Open in Google Drive' : 'Download Video'}</Text>
       </Pressable>
 
       {/* Fullscreen modal */}
@@ -521,12 +551,16 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
         React.createElement('div', { key: 'bar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)', backgroundColor: '#0b1426' } }, [
           React.createElement('span', { key: 't', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, 'Video — Full Screen'),
           React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 10 } }, [
-            React.createElement('a', { key: 'dl', href: url, download: true, style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '📥 Download'),
+            isDriveLink
+              ? React.createElement('a', { key: 'dl', href: url, target: '_blank', rel: 'noopener noreferrer', style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '🔗 Open Drive')
+              : React.createElement('a', { key: 'dl', href: url, download: true, style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '📥 Download'),
             React.createElement('button', { key: 'x', onClick: () => setFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
           ]),
         ]),
         React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
-          React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nofullscreen nodownload', disablePictureInPicture: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
+          isDriveLink
+            ? React.createElement('iframe', { key: 'f', src: embedUrl, frameBorder: 0, allow: 'autoplay; fullscreen', style: { width: '100%', height: '100%', border: 'none' } })
+            : React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nofullscreen nodownload', disablePictureInPicture: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
         ),
       ])}
     </View>

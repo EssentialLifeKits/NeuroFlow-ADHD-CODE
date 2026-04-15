@@ -156,12 +156,23 @@ function StatCard({ label, value, accent, delay }: { label: string; value: strin
   );
 }
 
+// ─── Google Drive URL normalizer ─────────────────────────────────────────────
+function getGoogleDriveEmbedUrl(url: string): string {
+  if (!url.includes('drive.google.com')) return url;
+  if (url.includes('/preview')) return url;
+  const match = url.match(/\/file\/d\/([^/?#]+)/);
+  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+  return url;
+}
+
 // ─── How To Video Card — inline player on Dashboard, no download ─────────────
 function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url: string }) {
   const [fullscreen, setFullscreen] = useState(false);
   const { width } = useWindowDimensions();
   const videoH = Math.min(width * 0.52, 300);
   const isDirectVideo = /\.(mp4|mov|webm)(\?|$)/i.test(url);
+  const isDriveLink = url.includes('drive.google.com');
+  const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
 
   return (
     <View style={htStyles.card}>
@@ -185,7 +196,7 @@ function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url
                 style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
               })
             : React.createElement('iframe', {
-                src: url,
+                src: embedUrl,
                 style: { width: '100%', height: '100%', border: 'none', borderRadius: 12 },
                 title: 'How To Video', allow: 'autoplay; fullscreen',
               })
@@ -208,7 +219,7 @@ function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url
         React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
           isDirectVideo
             ? React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nofullscreen nodownload', disablePictureInPicture: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
-            : React.createElement('iframe', { key: 'f', src: url, style: { width: '100%', height: '100%', border: 'none' }, title: 'How To Video FS', allow: 'autoplay; fullscreen' })
+            : React.createElement('iframe', { key: 'f', src: embedUrl, style: { width: '100%', height: '100%', border: 'none' }, title: 'How To Video FS', allow: 'autoplay; fullscreen' })
         ),
       ])}
     </View>
@@ -649,7 +660,7 @@ export default function DashboardScreen() {
                         style: { width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#000', outline: 'none' },
                       })
                     : React.createElement('iframe', {
-                        src: howToUrl,
+                        src: getGoogleDriveEmbedUrl(howToUrl),
                         style: { width: '100%', height: '100%', border: 'none', borderRadius: 10 },
                         title: 'How To Video', allow: 'autoplay; fullscreen',
                       })

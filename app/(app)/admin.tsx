@@ -899,7 +899,7 @@ function InlineCardRow({
           <View style={s.fieldWrap}>
             <Text style={s.fieldLabel}>CONTENT FILE (VIDEO, PDF, PPTX, DOCX, …)</Text>
             <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 6 }}>
-              Upload MP4/MOV video, PDF, PowerPoint, Word doc, or any file from your computer.
+              Upload files up to 100MB, or paste a Google Drive share link for large videos (free, no size limit).
               The viewer auto-detects the file type.
             </Text>
             {draft.slide_deck_url ? (
