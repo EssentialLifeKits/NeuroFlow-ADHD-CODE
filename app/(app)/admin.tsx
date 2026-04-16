@@ -1171,6 +1171,155 @@ function NewCardForm({
   );
 }
 
+// ─── Supercharge Routine CTA Card Editor ──────────────────────────────────────
+
+function CTACardSection({
+  settings, onSave,
+}: {
+  settings: Record<string, string>;
+  onSave: (key: string, value: string) => Promise<void>;
+}) {
+  const [icon,        setIcon]        = useState(settings['cta_icon']        ?? '🚀');
+  const [title,       setTitle]       = useState(settings['cta_title']       ?? 'Supercharge Routine');
+  const [desc,        setDesc]        = useState(settings['cta_desc']        ?? 'Stop leaving focus on the table. Automate your daily routines and ADHD strategy inside one view.');
+  const [btnText,     setBtnText]     = useState(settings['cta_button_text'] ?? 'Explore Automations');
+  const [btnColor,    setBtnColor]    = useState(settings['cta_button_color']?? '#4A90E2');
+  const [link,        setLink]        = useState(settings['cta_link']        ?? '/(app)/resources');
+  const [isInternal,  setIsInternal]  = useState((settings['cta_is_internal'] ?? 'true') === 'true');
+  const [saving,      setSaving]      = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        onSave('cta_icon',         icon),
+        onSave('cta_title',        title),
+        onSave('cta_desc',         desc),
+        onSave('cta_button_text',  btnText),
+        onSave('cta_button_color', btnColor),
+        onSave('cta_link',         link),
+        onSave('cta_is_internal',  isInternal ? 'true' : 'false'),
+      ]);
+      Alert.alert('Saved', 'Supercharge Routine card updated.');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Card>
+      <SectionHeader title="🚀 Supercharge Routine Card" subtitle="The promotional banner on the Dashboard" />
+      <Field label="Icon (emoji)" value={icon} onChangeText={setIcon} placeholder="🚀" />
+      <Field label="Title" value={title} onChangeText={setTitle} placeholder="Supercharge Routine" />
+      <Field label="Description" value={desc} onChangeText={setDesc} multiline placeholder="Stop leaving focus on the table…" />
+      <Field label="Button Text" value={btnText} onChangeText={setBtnText} placeholder="Explore Automations" />
+      <Field label="Button Color (hex)" value={btnColor} onChangeText={setBtnColor} placeholder="#4A90E2" />
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>LINK DESTINATION</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable
+            onPress={() => setIsInternal(true)}
+            style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}
+          >
+            <Text style={{ color: isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>Internal Page</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setIsInternal(false)}
+            style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}
+          >
+            <Text style={{ color: !isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>External URL</Text>
+          </Pressable>
+        </View>
+        <TextInput
+          style={s.input}
+          value={link}
+          onChangeText={setLink}
+          placeholder={isInternal ? '/(app)/resources' : 'https://affiliate-link.com'}
+          placeholderTextColor={colors.textTertiary}
+        />
+        {isInternal && (
+          <Text style={{ fontSize: 10, color: colors.textTertiary }}>
+            Internal paths: /(app)/resources  ·  /(app)/focus  ·  /(app)/calendar
+          </Text>
+        )}
+      </View>
+      <Btn label={saving ? 'Saving…' : '💾 Save CTA Card'} onPress={save} disabled={saving} />
+    </Card>
+  );
+}
+
+// ─── Featured Affiliate Sidebar Card Editor ────────────────────────────────────
+
+function AffiliateSection({
+  settings, onSave,
+}: {
+  settings: Record<string, string>;
+  onSave: (key: string, value: string) => Promise<void>;
+}) {
+  const [visible,  setVisible]  = useState((settings['affiliate_visible'] ?? 'false') === 'true');
+  const [icon,     setIcon]     = useState(settings['affiliate_icon']    ?? '⚡');
+  const [title,    setTitle]    = useState(settings['affiliate_title']   ?? 'Featured Affiliate');
+  const [sub,      setSub]      = useState(settings['affiliate_sub']     ?? 'Supercharge your focus flow');
+  const [link,     setLink]     = useState(settings['affiliate_link']    ?? '');
+  const [badge,    setBadge]    = useState(settings['affiliate_badge']   ?? '');
+  const [saving,   setSaving]   = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        onSave('affiliate_visible', visible ? 'true' : 'false'),
+        onSave('affiliate_icon',    icon),
+        onSave('affiliate_title',   title),
+        onSave('affiliate_sub',     sub),
+        onSave('affiliate_link',    link),
+        onSave('affiliate_badge',   badge),
+      ]);
+      Alert.alert('Saved', `Featured Affiliate ${visible ? 'is now visible in the sidebar' : 'is hidden from users'}.`);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <Card>
+      <SectionHeader title="⚡ Featured Affiliate (Sidebar)" subtitle="Affiliate card in the left sidebar — toggle to show/hide from users" />
+
+      <View style={s.toggleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.fieldLabel}>SHOW IN SIDEBAR</Text>
+          <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 2 }}>
+            {visible ? '✅ Visible to all users' : '🔒 Hidden from users (only you can see it in Admin)'}
+          </Text>
+        </View>
+        <Switch
+          value={visible}
+          onValueChange={setVisible}
+          trackColor={{ false: colors.border, true: NF_GREEN }}
+          thumbColor="#fff"
+        />
+      </View>
+
+      <Field label="Icon (emoji or letter)" value={icon} onChangeText={setIcon} placeholder="⚡" />
+      <Field label="Title" value={title} onChangeText={setTitle} placeholder="Featured Affiliate" />
+      <Field label="Subtitle / Tagline" value={sub} onChangeText={setSub} placeholder="Supercharge your focus flow" />
+      <Field label="Badge Label (optional, e.g. 'New' or 'Hot')" value={badge} onChangeText={setBadge} placeholder="Soon" />
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>AFFILIATE LINK (EXTERNAL ONLY)</Text>
+        <TextInput
+          style={s.input}
+          value={link}
+          onChangeText={setLink}
+          placeholder="https://your-affiliate-link.com"
+          placeholderTextColor={colors.textTertiary}
+          autoCapitalize="none"
+          keyboardType="url"
+        />
+        <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 2 }}>
+          ⚠️ Must be a full external URL. Leave blank to show as non-clickable.
+        </Text>
+      </View>
+      <Btn label={saving ? 'Saving…' : '💾 Save Affiliate Card'} onPress={save} disabled={saving} />
+    </Card>
+  );
+}
+
 // ─── Resources Manager Section ────────────────────────────────────────────────
 
 function ResourcesSection() {
@@ -1552,8 +1701,10 @@ export default function AdminScreen() {
         ) : (
           <>
             <EmailTemplateSection settings={settings} onSave={handleSaveSetting} />
-            <ResourcesSection />
             <HowToVideoSection settings={settings} onSave={handleSaveSetting} />
+            <CTACardSection settings={settings} onSave={handleSaveSetting} />
+            <AffiliateSection settings={settings} onSave={handleSaveSetting} />
+            <ResourcesSection />
             <AppSettingsSection settings={settings} onSave={handleSaveSetting} />
             <UserMonitorSection />
           </>

@@ -5,9 +5,10 @@
  * ✅ All existing nav, user info, affiliate, sign-out preserved
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     Animated,
+    Linking,
     Pressable,
     StyleSheet,
     Text,
@@ -15,8 +16,9 @@ import {
     Image,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
-import { colors, radius, spacing } from '../constants/theme';
+import { colors, radius } from '../constants/theme';
 import { useAuth } from '../lib/auth';
+import { getAllSettings } from '../lib/adminDb';
 
 const MOBILE_SIDEBAR_W = 280;
 const NF_BLUE = '#4A90E2';
@@ -68,12 +70,30 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
     const { user, signOut } = useAuth();
 
     const userEmail = user?.email as string | undefined;
-    // Supabase stores name in user_metadata.full_name (Google) or user_metadata.name
     const rawDisplayName = user?.user_metadata?.full_name
       ?? user?.user_metadata?.name
       ?? undefined;
     const displayName = resolveUserName(userEmail, rawDisplayName);
     const initials = resolveInitials(displayName);
+
+    // Affiliate card — loaded from DB settings
+    const [affVisible, setAffVisible] = useState(false);
+    const [affIcon,    setAffIcon]    = useState('⚡');
+    const [affTitle,   setAffTitle]   = useState('Featured Affiliate');
+    const [affSub,     setAffSub]     = useState('Supercharge your focus flow');
+    const [affLink,    setAffLink]    = useState('');
+    const [affBadge,   setAffBadge]   = useState('Soon');
+
+    useEffect(() => {
+        getAllSettings().then(s => {
+            setAffVisible(s['affiliate_visible'] === 'true');
+            if (s['affiliate_icon'])  setAffIcon(s['affiliate_icon']);
+            if (s['affiliate_title']) setAffTitle(s['affiliate_title']);
+            if (s['affiliate_sub'])   setAffSub(s['affiliate_sub']);
+            if (s['affiliate_link'])  setAffLink(s['affiliate_link']);
+            if (s['affiliate_badge'] !== undefined) setAffBadge(s['affiliate_badge']);
+        }).catch(() => {});
+    }, []);
 
     const navigateTo = (path: string) => {
         if (!isDesktop) onClose();
@@ -90,6 +110,12 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
             return pathname === '/' || pathname === '' || pathname === '/(app)' || pathname === '/(app)/index';
         }
         return pathname === itemPath || pathname.startsWith(itemPath + '/');
+    };
+
+    const handleAffiliatePress = () => {
+        if (affLink) {
+            Linking.openURL(affLink).catch(() => {});
+        }
     };
 
     return (
@@ -137,16 +163,24 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
 
             {/* Bottom */}
             <View style={styles.bottomArea}>
-                <View style={styles.affiliatePlaceholder}>
-                    <Text style={styles.affiliateIcon}>⚡</Text>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.affiliateTitle}>Featured Affiliate</Text>
-                        <Text style={styles.affiliateSub}>Supercharge your focus flow</Text>
-                    </View>
-                    <View style={styles.affiliateBadge}>
-                        <Text style={styles.affiliateBadgeText}>Soon</Text>
-                    </View>
-                </View>
+                {/* Featured Affiliate — only shown when admin has toggled it visible */}
+                {affVisible && (
+                    <Pressable
+                        onPress={affLink ? handleAffiliatePress : undefined}
+                        style={[styles.affiliatePlaceholder, affLink && { borderStyle: 'solid', borderColor: '#4A90E244' }]}
+                    >
+                        <Text style={styles.affiliateIcon}>{affIcon}</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.affiliateTitle}>{affTitle}</Text>
+                            <Text style={styles.affiliateSub}>{affSub}</Text>
+                        </View>
+                        {affBadge ? (
+                            <View style={styles.affiliateBadge}>
+                                <Text style={styles.affiliateBadgeText}>{affBadge}</Text>
+                            </View>
+                        ) : null}
+                    </Pressable>
+                )}
 
                 <View style={styles.elkBrand}>
                     <View style={styles.elkAvatar}>

@@ -1134,7 +1134,6 @@ export default function FocusScreen() {
             ]),
           ]),
           React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 4, flexShrink: 0, marginLeft: 8 } }, [
-            React.createElement('button', { key: 'fs', onClick: (e: any) => { e.stopPropagation(); setAudioFullscreen(true); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '⛶'),
             React.createElement('button', { key: 'close', onClick: (e: any) => { e.stopPropagation(); setAudioOpen(false); setAudioPos(null); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '✕'),
           ]),
         ]),
@@ -1150,16 +1149,18 @@ export default function FocusScreen() {
             allow: 'autoplay',
             title: 'Deep Work Audio Blueprint',
           }),
-          // Transparent mask over bottom-right 44×44px where Google's external link arrow appears
+          // Solid mask over bottom-right corner where Google's external link arrow appears
           React.createElement('div', {
             key: 'audio-mask',
             style: {
               position: 'absolute', bottom: 0, right: 0,
-              width: 44, height: 44,
+              width: 52, height: 52,
               backgroundColor: colors.bgCard,
               borderRadius: '0 0 16px 0',
-              pointerEvents: 'none',
+              pointerEvents: 'auto',
+              cursor: 'default',
             },
+            onClick: (e: any) => e.stopPropagation(),
           }),
         ]),
       ])}

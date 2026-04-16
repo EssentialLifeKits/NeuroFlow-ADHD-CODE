@@ -628,8 +628,9 @@ function CardDetail({ card }: { card: ResourceCard }) {
         </View>
       )}
 
-      {/* Secondary link */}
-      {card.link && card.link !== '#' && (
+      {/* Secondary link — only shown when there is no slide/video content
+          (avoids duplicating the download button already in the viewer) */}
+      {card.link && card.link !== '#' && !card.slide_deck_url && (
         <Pressable onPress={handleLink} style={[styles.linkBtn, { borderColor: card.accent_color }]}>
           <Text style={[styles.linkBtnText, { color: card.accent_color }]}>{card.link_label}</Text>
         </Pressable>

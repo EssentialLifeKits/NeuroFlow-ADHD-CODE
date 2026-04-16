@@ -347,10 +347,26 @@ export default function DashboardScreen() {
   const [howToDesc,    setHowToDesc]    = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
   const [howToVisible, setHowToVisible] = useState(false);
 
+  // Supercharge Routine CTA card — dynamic from DB
+  const [ctaIcon,    setCtaIcon]    = useState('🚀');
+  const [ctaTitle,   setCtaTitle]   = useState('Supercharge Routine');
+  const [ctaDesc,    setCtaDesc]    = useState('Stop leaving focus on the table. Automate your daily routines and ADHD strategy inside one view.');
+  const [ctaBtnText, setCtaBtnText] = useState('Explore Automations');
+  const [ctaBtnColor,setCtaBtnColor]= useState(NF_BLUE);
+  const [ctaLink,    setCtaLink]    = useState('/(app)/resources');
+  const [ctaInternal,setCtaInternal]= useState(true);
+
   useEffect(() => {
     getSetting('howto_video_url').then(v => { if (v) setHowToUrl(v); }).catch(() => {});
     getSetting('howto_video_title').then(v => { if (v) setHowToTitle(v); }).catch(() => {});
     getSetting('howto_video_desc').then(v => { if (v) setHowToDesc(v); }).catch(() => {});
+    getSetting('cta_icon').then(v => { if (v) setCtaIcon(v); }).catch(() => {});
+    getSetting('cta_title').then(v => { if (v) setCtaTitle(v); }).catch(() => {});
+    getSetting('cta_desc').then(v => { if (v) setCtaDesc(v); }).catch(() => {});
+    getSetting('cta_button_text').then(v => { if (v) setCtaBtnText(v); }).catch(() => {});
+    getSetting('cta_button_color').then(v => { if (v) setCtaBtnColor(v); }).catch(() => {});
+    getSetting('cta_link').then(v => { if (v) setCtaLink(v); }).catch(() => {});
+    getSetting('cta_is_internal').then(v => { if (v) setCtaInternal(v !== 'false'); }).catch(() => {});
   }, []);
 
   // Edit Task State
@@ -598,16 +614,20 @@ export default function DashboardScreen() {
         ]}>
           <View style={styles.ctaGlow} />
           <View style={styles.ctaContent}>
-            <Text style={styles.ctaTitle}>🚀 Supercharge Routine</Text>
-            <Text style={styles.ctaDesc}>
-              Stop leaving focus on the table. Automate your daily routines and ADHD strategy inside one view.
-            </Text>
+            <Text style={styles.ctaTitle}>{ctaIcon} {ctaTitle}</Text>
+            <Text style={styles.ctaDesc}>{ctaDesc}</Text>
             <TouchableOpacity
-              style={styles.ctaButton}
-              onPress={() => router.push('/(app)/resources')}
+              style={[styles.ctaButton, { backgroundColor: ctaBtnColor }]}
+              onPress={() => {
+                if (ctaInternal) {
+                  router.push(ctaLink as any);
+                } else {
+                  Linking.openURL(ctaLink).catch(() => {});
+                }
+              }}
               activeOpacity={0.85}
             >
-              <Text style={styles.ctaButtonText}>Explore Automations</Text>
+              <Text style={styles.ctaButtonText}>{ctaBtnText}</Text>
             </TouchableOpacity>
             <Text style={styles.ctaSub}>POWERED BY NEUROFLOW</Text>
           </View>
