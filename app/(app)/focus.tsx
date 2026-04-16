@@ -1134,6 +1134,7 @@ export default function FocusScreen() {
             ]),
           ]),
           React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 4, flexShrink: 0, marginLeft: 8 } }, [
+            React.createElement('button', { key: 'expand', onClick: (e: any) => { e.stopPropagation(); setAudioFullscreen(true); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}15`, color: NF_BLUE, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '⛶'),
             React.createElement('button', { key: 'close', onClick: (e: any) => { e.stopPropagation(); setAudioOpen(false); setAudioPos(null); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '✕'),
           ]),
         ]),
