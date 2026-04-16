@@ -112,6 +112,39 @@ function Card({ children, style }: { children: React.ReactNode; style?: any }) {
   return <View style={[s.card, style]}>{children}</View>;
 }
 
+/** Collapsible accordion wrapper — replaces Card + SectionHeader in every section */
+function AccordionCard({
+  title, subtitle, children, defaultOpen = false, style,
+}: {
+  title: string; subtitle?: string; children: React.ReactNode;
+  defaultOpen?: boolean; style?: any;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const chevron = open ? '▾' : '▸';
+  return (
+    <View style={[s.card, style]}>
+      <Pressable
+        onPress={() => setOpen(o => !o)}
+        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={s.sectionTitle}>{title}</Text>
+          {subtitle && !open && (
+            <Text style={[s.sectionSub, { marginTop: 2 }]} numberOfLines={1}>{subtitle}</Text>
+          )}
+        </View>
+        <Text style={{ fontSize: 18, color: NF_BLUE, marginLeft: 12 }}>{chevron}</Text>
+      </Pressable>
+      {open && (
+        <View style={{ marginTop: 14, gap: 14 }}>
+          {subtitle && <Text style={s.sectionSub}>{subtitle}</Text>}
+          {children}
+        </View>
+      )}
+    </View>
+  );
+}
+
 function Btn({
   label, onPress, color = NF_BLUE, outline = false, small = false, disabled = false,
 }: {
@@ -195,8 +228,7 @@ function EmailTemplateSection({
   }
 
   return (
-    <Card>
-      <SectionHeader title="✉️ Email Template Editor" subtitle="Edit content, colors, and preview the live template" />
+    <AccordionCard title="✉️ Email Template Editor" subtitle="Edit content, colors, and preview the live template">
 
       {/* Color swatches row */}
       <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -271,7 +303,7 @@ function EmailTemplateSection({
           </ScrollView>
         </View>
       </Modal>
-    </Card>
+    </AccordionCard>
   );
 }
 
@@ -296,12 +328,11 @@ function AppSettingsSection({
   }
 
   return (
-    <Card>
-      <SectionHeader title="⚙️ App Settings" subtitle="Links displayed inside the app" />
+    <AccordionCard title="⚙️ App Settings" subtitle="Links displayed inside the app">
       <Field label="Deep Work Blueprint Link" value={blueprint} onChangeText={setBlueprint} placeholder="https://…" />
       <Field label="Audio Player Link (Focus page)" value={audio} onChangeText={setAudio} placeholder="https://…" />
       <Btn label={saving ? 'Saving…' : '💾 Save Settings'} onPress={save} disabled={saving} />
-    </Card>
+    </AccordionCard>
   );
 }
 
@@ -386,11 +417,7 @@ function HowToVideoSection({
   );
 
   return (
-    <Card>
-      <SectionHeader
-        title="🎬 How To Video Card"
-        subtitle="Shown as an inline player on the Dashboard — not downloadable by users"
-      />
+    <AccordionCard title="🎬 How To Video Card" subtitle="Shown as an inline player on the Dashboard — not downloadable by users">
       <Field label="Video Title" value={title} onChangeText={setTitle} placeholder="How To Use NeuroFlow" />
       <Field label="Short Description" value={desc} onChangeText={setDesc} multiline placeholder="Describe what the video covers…" />
 
@@ -482,7 +509,7 @@ function HowToVideoSection({
           </Pressable>
         </Pressable>
       </Modal>
-    </Card>
+    </AccordionCard>
   );
 }
 
@@ -1205,8 +1232,7 @@ function CTACardSection({
   }
 
   return (
-    <Card>
-      <SectionHeader title="🚀 Supercharge Routine Card" subtitle="The promotional banner on the Dashboard" />
+    <AccordionCard title="🚀 Supercharge Routine Card" subtitle="The promotional banner on the Dashboard">
       <Field label="Icon (emoji)" value={icon} onChangeText={setIcon} placeholder="🚀" />
       <Field label="Title" value={title} onChangeText={setTitle} placeholder="Supercharge Routine" />
       <Field label="Description" value={desc} onChangeText={setDesc} multiline placeholder="Stop leaving focus on the table…" />
@@ -1242,7 +1268,7 @@ function CTACardSection({
         )}
       </View>
       <Btn label={saving ? 'Saving…' : '💾 Save CTA Card'} onPress={save} disabled={saving} />
-    </Card>
+    </AccordionCard>
   );
 }
 
@@ -1278,8 +1304,7 @@ function AffiliateSection({
   }
 
   return (
-    <Card>
-      <SectionHeader title="⚡ Featured Affiliate (Sidebar)" subtitle="Affiliate card in the left sidebar — toggle to show/hide from users" />
+    <AccordionCard title="⚡ Featured Affiliate (Sidebar)" subtitle="Affiliate card in the left sidebar — toggle to show/hide from users">
 
       <View style={s.toggleRow}>
         <View style={{ flex: 1 }}>
@@ -1316,7 +1341,7 @@ function AffiliateSection({
         </Text>
       </View>
       <Btn label={saving ? 'Saving…' : '💾 Save Affiliate Card'} onPress={save} disabled={saving} />
-    </Card>
+    </AccordionCard>
   );
 }
 
@@ -1427,23 +1452,20 @@ function ResourcesSection() {
   }
 
   return (
-    <Card>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <SectionHeader title="🗂 Resources Manager" subtitle="Tap ✏️ on any card to edit inline" />
-        <Pressable
-          onPress={() => setShowPreview(p => !p)}
-          style={{
-            flexDirection: 'row', alignItems: 'center', gap: 6,
-            backgroundColor: showPreview ? NF_BLUE + '22' : colors.bgBase,
-            borderWidth: 1, borderColor: showPreview ? NF_BLUE : colors.border,
-            borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2,
-          }}
-        >
-          <Text style={{ fontSize: 12, fontWeight: '700', color: showPreview ? NF_BLUE : colors.textSecondary }}>
-            {showPreview ? '✕ Close Preview' : '👁 User View'}
-          </Text>
-        </Pressable>
-      </View>
+    <AccordionCard title="🗂 Resources Manager" subtitle="Tap ✏️ on any card to edit inline">
+      <Pressable
+        onPress={() => setShowPreview(p => !p)}
+        style={{
+          flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+          backgroundColor: showPreview ? NF_BLUE + '22' : colors.bgBase,
+          borderWidth: 1, borderColor: showPreview ? NF_BLUE : colors.border,
+          borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+        }}
+      >
+        <Text style={{ fontSize: 12, fontWeight: '700', color: showPreview ? NF_BLUE : colors.textSecondary }}>
+          {showPreview ? '✕ Close Preview' : '👁 User View'}
+        </Text>
+      </Pressable>
 
       {showPreview && previewCards.length > 0 && (
         <>
@@ -1477,7 +1499,7 @@ function ResourcesSection() {
           onCancel={() => setAddingNew(false)}
         />
       )}
-    </Card>
+    </AccordionCard>
   );
 }
 
@@ -1555,8 +1577,9 @@ interface UserRow {
 }
 
 function UserMonitorSection() {
-  const [users, setUsers]     = useState<UserRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [users,       setUsers]       = useState<UserRow[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showLeads,   setShowLeads]   = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -1571,76 +1594,98 @@ function UserMonitorSection() {
     })();
   }, []);
 
-  // A user is "active" if they have an email and are onboarded,
-  // OR if they are the admin (essentiallifekits@gmail.com)
-  function isActive(u: UserRow) {
-    if (u.email?.toLowerCase() === ADMIN_EMAIL) return true;
-    return u.onboarded === true;
+  const adminUser  = users.find(u => u.email?.toLowerCase() === ADMIN_EMAIL);
+  const otherUsers = users.filter(u => u.email?.toLowerCase() !== ADMIN_EMAIL);
+  const activeCount = otherUsers.filter(u => u.onboarded === true).length;
+
+  function fmtDate(d: string) {
+    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   return (
-    <Card style={{ paddingBottom: 0 }}>
-      <SectionHeader
-        title={`👥 User Monitor (${users.length})`}
-        subtitle="All registered NeuroFlow accounts · Green = active"
-      />
+    <AccordionCard
+      title={`👥 User Monitor`}
+      subtitle={`${otherUsers.length} registered users · ${activeCount} active`}
+    >
       {loading && <ActivityIndicator color={NF_BLUE} style={{ marginVertical: 12 }} />}
-      {!loading && users.length === 0 && (
-        <Text style={s.emptyText}>No users found.</Text>
-      )}
-      {/* Scrollable container — max height so it scrolls when many users */}
-      {!loading && users.length > 0 && (
-        <ScrollView
-          style={{ maxHeight: 420 }}
-          nestedScrollEnabled
-          showsVerticalScrollIndicator={true}
-        >
-          {users.map((u, idx) => {
-            const active = isActive(u);
-            const joinedDate = new Date(u.created_at).toLocaleDateString('en-US', {
-              month: 'short', day: 'numeric', year: 'numeric',
-            });
-            return (
-              <View key={u.id} style={[s.userRow, idx === users.length - 1 && { borderBottomWidth: 0 }]}>
-                {/* Avatar */}
-                <View style={s.userAvatar}>
-                  <Text style={s.userAvatarText}>
-                    {(u.display_name ?? u.email)?.[0]?.toUpperCase() ?? '?'}
-                  </Text>
-                </View>
 
-                {/* Info */}
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={s.userName}>{u.display_name ?? '—'}</Text>
-                  <Text style={s.userEmail}>{u.email}</Text>
-                  <Text style={s.userSince}>Joined {joinedDate}</Text>
+      {!loading && (
+        <>
+          {/* ── Admin row ── */}
+          <View style={{ backgroundColor: NF_BLUE + '12', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: NF_BLUE + '33' }}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>🛡️ Admin Account</Text>
+            {adminUser ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={[s.userAvatar, { backgroundColor: NF_BLUE }]}>
+                  <Text style={s.userAvatarText}>A</Text>
                 </View>
-
-                {/* Status indicator */}
+                <View style={{ flex: 1 }}>
+                  <Text style={s.userName}>{adminUser.display_name ?? 'Essential Life Kits'}</Text>
+                  <Text style={s.userEmail}>{adminUser.email}</Text>
+                  <Text style={s.userSince}>Joined {fmtDate(adminUser.created_at)}</Text>
+                </View>
                 <View style={{ alignItems: 'center', gap: 4 }}>
-                  {active ? (
-                    <>
-                      {/* Glowing green dot */}
-                      <View style={s.activeDotWrap}>
-                        <View style={s.activeDotGlow} />
-                        <View style={s.activeDot} />
-                      </View>
-                      <Text style={s.activeLabel}>Active</Text>
-                    </>
-                  ) : (
-                    <>
-                      <View style={s.pendingDot} />
-                      <Text style={s.pendingLabel}>Pending</Text>
-                    </>
-                  )}
+                  <View style={s.activeDotWrap}><View style={s.activeDotGlow} /><View style={s.activeDot} /></View>
+                  <Text style={s.activeLabel}>Active</Text>
                 </View>
               </View>
-            );
-          })}
-        </ScrollView>
+            ) : (
+              <Text style={{ fontSize: 12, color: NF_BLUE }}>essentiallifekits@gmail.com · Active</Text>
+            )}
+          </View>
+
+          {/* ── User count summary ── */}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1, backgroundColor: NF_GREEN + '12', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: NF_GREEN + '33', alignItems: 'center' }}>
+              <Text style={{ fontSize: 24, fontWeight: '900', color: NF_GREEN }}>{activeCount}</Text>
+              <Text style={{ fontSize: 11, color: NF_GREEN, fontWeight: '700', marginTop: 2 }}>ACTIVE USERS</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: colors.bgBase, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center' }}>
+              <Text style={{ fontSize: 24, fontWeight: '900', color: colors.textPrimary }}>{otherUsers.length}</Text>
+              <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700', marginTop: 2 }}>TOTAL USERS</Text>
+            </View>
+          </View>
+
+          {/* ── Lead capture list (hidden until toggled) ── */}
+          <Pressable
+            onPress={() => setShowLeads(l => !l)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12, backgroundColor: colors.bgBase, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>
+              📋 Lead List ({otherUsers.length} contacts)
+            </Text>
+            <Text style={{ fontSize: 13, color: NF_BLUE }}>{showLeads ? '▾ Hide' : '▸ Reveal'}</Text>
+          </Pressable>
+
+          {showLeads && (
+            <ScrollView style={{ maxHeight: 360 }} nestedScrollEnabled showsVerticalScrollIndicator>
+              {otherUsers.length === 0 && (
+                <Text style={[s.emptyText, { padding: 12 }]}>No users yet.</Text>
+              )}
+              {otherUsers.map((u, idx) => (
+                <View key={u.id} style={[s.userRow, idx === otherUsers.length - 1 && { borderBottomWidth: 0 }]}>
+                  <View style={s.userAvatar}>
+                    <Text style={s.userAvatarText}>{(u.display_name ?? u.email)?.[0]?.toUpperCase() ?? '?'}</Text>
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={s.userName}>{u.display_name ?? '—'}</Text>
+                    <Text style={s.userEmail}>{u.email}</Text>
+                    <Text style={s.userSince}>Joined {fmtDate(u.created_at)}</Text>
+                  </View>
+                  <View style={{ alignItems: 'center', gap: 4 }}>
+                    {u.onboarded ? (
+                      <><View style={s.activeDotWrap}><View style={s.activeDotGlow} /><View style={s.activeDot} /></View><Text style={s.activeLabel}>Active</Text></>
+                    ) : (
+                      <><View style={s.pendingDot} /><Text style={s.pendingLabel}>Pending</Text></>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </>
       )}
-      <View style={{ height: 8 }} />
-    </Card>
+    </AccordionCard>
   );
 }
 

@@ -1137,30 +1137,20 @@ export default function FocusScreen() {
             React.createElement('button', { key: 'close', onClick: (e: any) => { e.stopPropagation(); setAudioOpen(false); setAudioPos(null); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '✕'),
           ]),
         ]),
-        // Wrapper to mask the native Google Drive "open in new tab" arrow
+        // Clip the iframe to hide Google Drive's "open externally" icon.
+        // The icon sits at the far-right of the controls bar. Extending the
+        // iframe 60px wider than the container and clipping with overflow:hidden
+        // pushes the icon off-screen — no color-matching overlay needed.
         React.createElement('div', {
           key: 'audio-iframe-wrap',
-          style: { position: 'relative', width: '100%', height: 80 },
+          style: { overflow: 'hidden', width: '100%', height: 80, borderRadius: '0 0 16px 16px' },
         }, [
           React.createElement('iframe', {
             key: 'audio-iframe',
             src: 'https://drive.google.com/file/d/1yEcTiYAp-rPW61fwIJL8JfVH5QMhzby7/preview',
-            style: { width: '100%', height: 80, border: 'none', borderRadius: '0 0 16px 16px', backgroundColor: colors.bgCard },
+            style: { width: 'calc(100% + 64px)', height: 80, border: 'none', backgroundColor: '#fff', display: 'block' },
             allow: 'autoplay',
             title: 'Deep Work Audio Blueprint',
-          }),
-          // Solid mask over bottom-right corner where Google's external link arrow appears
-          React.createElement('div', {
-            key: 'audio-mask',
-            style: {
-              position: 'absolute', bottom: 0, right: 0,
-              width: 52, height: 52,
-              backgroundColor: colors.bgCard,
-              borderRadius: '0 0 16px 0',
-              pointerEvents: 'auto',
-              cursor: 'default',
-            },
-            onClick: (e: any) => e.stopPropagation(),
           }),
         ]),
       ])}
