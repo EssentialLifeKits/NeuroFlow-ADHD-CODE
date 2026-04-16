@@ -1710,6 +1710,12 @@ export default function AdminScreen() {
     setSettings(prev => ({ ...prev, [key]: value }));
   }
 
+  useEffect(() => {
+    if (user !== undefined && !isAdmin) {
+      router.replace('/(app)');
+    }
+  }, [user, isAdmin]);
+
   if (!isAdmin) {
     return (
       <SafeAreaView style={s.safe}>
