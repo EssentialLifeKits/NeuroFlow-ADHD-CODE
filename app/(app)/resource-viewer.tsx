@@ -9,7 +9,7 @@
  *   PDF/doc/other     → PDFSlideViewer  (PDF.js page-by-page) or SlideViewerFallback
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -24,7 +24,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { colors, radius, spacing } from '../../src/constants/theme';
 import { fetchResourceCards, type ResourceCard } from '../../src/lib/adminDb';
 
@@ -488,9 +488,31 @@ function ImageSlideViewer({ urls, accentColor }: { urls: string[]; accentColor: 
 
 // ─── MP4/MOV/Google Drive video player ────────────────────────────────────────
 function VideoPlayer({ url, accentColor }: { url: string; accentColor: string }) {
-  const [fullscreen, setFullscreen] = useState(false);
+  const [driveFullscreen, setDriveFullscreen] = useState(false);
+  const videoRef = useRef<any>(null);
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
+
+  // Auto-pause video when navigating away from the page
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (videoRef.current) videoRef.current.pause();
+      };
+    }, [])
+  );
+
+  // ⛶ button: for direct videos, call requestFullscreen() on the SAME element
+  // (no duplicate video). For Drive iframes, show overlay.
+  const handleCustomFullscreen = () => {
+    if (isDriveLink) {
+      setDriveFullscreen(true);
+    } else if (videoRef.current?.requestFullscreen) {
+      videoRef.current.requestFullscreen();
+    } else if (videoRef.current?.webkitRequestFullscreen) {
+      videoRef.current.webkitRequestFullscreen(); // Safari
+    }
+  };
 
   if (Platform.OS !== 'web') {
     return (
@@ -509,7 +531,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
       {/* Toolbar */}
       <View style={styles.slideToolbar}>
         <Text style={styles.slideToolbarLabel}>▶ Video Player</Text>
-        <Pressable onPress={() => setFullscreen(true)} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
+        <Pressable onPress={handleCustomFullscreen} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
           <Text style={[styles.slideToolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
         </Pressable>
       </View>
@@ -526,7 +548,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
                 allow: 'autoplay',
                 style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' },
               }),
-              // Block the Drive iframe's own fullscreen button (bottom-right ~52px square)
+              // Block the Drive iframe's own "open in new tab" button
               React.createElement('div', {
                 style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
                 onClick: (e: any) => e.stopPropagation(),
@@ -535,9 +557,11 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
           </View>
         )
         : React.createElement('div', {
-            style: { width: '100%', height: 320, borderRadius: 12, overflow: 'visible', backgroundColor: '#000', position: 'relative' },
+            // Plain web div — no RN View overhead that could clip browser controls
+            style: { width: '100%', height: 320, borderRadius: 12, backgroundColor: '#000', position: 'relative' },
           },
           React.createElement('video', {
+            ref: videoRef,
             src: url, controls: true,
             controlsList: 'nodownload',
             style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block' },
@@ -546,32 +570,28 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
         )
       }
 
-      {/* Download button — opens in new tab for Drive links, direct download for files */}
+      {/* Download button */}
       <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
         <Text style={{ fontSize: 16 }}>📥</Text>
         <Text style={styles.downloadBtnFullText}>{isDriveLink ? 'Open in Google Drive' : 'Download Video'}</Text>
       </Pressable>
 
-      {/* Fullscreen modal */}
-      {fullscreen && Platform.OS === 'web' && React.createElement('div', {
+      {/* Fullscreen overlay — Drive iframes only (direct videos use requestFullscreen on same element) */}
+      {driveFullscreen && isDriveLink && Platform.OS === 'web' && React.createElement('div', {
         style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)', display: 'flex', flexDirection: 'column' },
       }, [
         React.createElement('div', { key: 'bar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)', backgroundColor: '#0b1426' } }, [
           React.createElement('span', { key: 't', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, 'Video — Full Screen'),
           React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 10 } }, [
-            isDriveLink
-              ? React.createElement('a', { key: 'dl', href: url, target: '_blank', rel: 'noopener noreferrer', style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '🔗 Open Drive')
-              : React.createElement('a', { key: 'dl', href: url, download: true, style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '📥 Download'),
-            React.createElement('button', { key: 'x', onClick: () => setFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
+            React.createElement('a', { key: 'dl', href: url, target: '_blank', rel: 'noopener noreferrer', style: { padding: '6px 16px', borderRadius: 8, border: `1px solid ${accentColor}`, color: accentColor, cursor: 'pointer', fontSize: 13, fontWeight: 700, textDecoration: 'none' } }, '🔗 Open Drive'),
+            React.createElement('button', { key: 'x', onClick: () => setDriveFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
           ]),
         ]),
         React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
-          isDriveLink
-            ? React.createElement('div', { key: 'dwrap', style: { position: 'relative', width: '100%', height: '100%' } },
-                React.createElement('iframe', { key: 'f', src: embedUrl, frameBorder: 0, allow: 'autoplay', style: { width: '100%', height: '100%', border: 'none' } }),
-                React.createElement('div', { key: 'blk', style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' }, onClick: (e: any) => e.stopPropagation() })
-              )
-            : React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nodownload', style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
+          React.createElement('div', { key: 'dwrap', style: { position: 'relative', width: '100%', height: '100%' } },
+            React.createElement('iframe', { key: 'f', src: embedUrl, frameBorder: 0, allow: 'autoplay', style: { width: '100%', height: '100%', border: 'none' } }),
+            React.createElement('div', { key: 'blk', style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' }, onClick: (e: any) => e.stopPropagation() })
+          )
         ),
       ])}
     </View>
