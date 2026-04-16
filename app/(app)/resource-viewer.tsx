@@ -515,9 +515,10 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
       </View>
 
       {/* Player: Google Drive → iframe; direct file → HTML5 video */}
-      <View style={[styles.iframeContainer, { height: 320 }, !isDriveLink && { overflow: 'visible' }]}>
-        {isDriveLink
-          ? React.createElement('div', {
+      {isDriveLink
+        ? (
+          <View style={[styles.iframeContainer, { height: 320 }]}>
+            {React.createElement('div', {
               style: { position: 'relative', width: '100%', height: '100%' },
             },
               React.createElement('iframe', {
@@ -530,15 +531,20 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
                 style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
                 onClick: (e: any) => e.stopPropagation(),
               })
-            )
-          : React.createElement('video', {
-              src: url, controls: true,
-              controlsList: 'nodownload',
-              style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
-              preload: 'metadata',
-            })
-        }
-      </View>
+            )}
+          </View>
+        )
+        : React.createElement('div', {
+            style: { width: '100%', height: 320, borderRadius: 12, overflow: 'visible', backgroundColor: '#000', position: 'relative' },
+          },
+          React.createElement('video', {
+            src: url, controls: true,
+            controlsList: 'nodownload',
+            style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block' },
+            preload: 'metadata',
+          })
+        )
+      }
 
       {/* Download button — opens in new tab for Drive links, direct download for files */}
       <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
