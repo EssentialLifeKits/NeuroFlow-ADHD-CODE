@@ -1214,6 +1214,9 @@ export default function FocusScreen() {
           }),
         ),
 
+        // Prominent EXIT button — fixed bottom-center, always visible
+        React.createElement('button', { key: 'exit-btn', onClick: () => setAudioFullscreen(false), style: { position: 'absolute', bottom: 52, left: '50%', transform: 'translateX(-50%)', padding: '12px 32px', borderRadius: 12, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}18`, color: NF_BLUE, cursor: 'pointer', fontSize: 14, fontWeight: 700, letterSpacing: 0.3, zIndex: 2, backdropFilter: 'blur(8px)', whiteSpace: 'nowrap' } }, '← Back to Player'),
+
         // Bottom badge
         React.createElement('div', { key: 'badge', style: { position: 'absolute', bottom: 24, fontSize: 11, color: '#4b5563', zIndex: 1 } }, 'Built for your brain ✨ · NeuroFlow ADHD Focus Planner'),
       ])}
