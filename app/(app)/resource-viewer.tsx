@@ -515,7 +515,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
       </View>
 
       {/* Player: Google Drive → iframe; direct file → HTML5 video */}
-      <View style={[styles.iframeContainer, { height: 320 }]}>
+      <View style={[styles.iframeContainer, { height: 320 }, !isDriveLink && { overflow: 'visible' }]}>
         {isDriveLink
           ? React.createElement('div', {
               style: { position: 'relative', width: '100%', height: '100%' },
