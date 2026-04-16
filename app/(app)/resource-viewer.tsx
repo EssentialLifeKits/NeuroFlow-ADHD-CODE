@@ -533,8 +533,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
             )
           : React.createElement('video', {
               src: url, controls: true,
-              controlsList: 'nofullscreen nodownload',
-              disablePictureInPicture: true,
+              controlsList: 'nodownload',
               style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
               preload: 'metadata',
             })
@@ -566,7 +565,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
                 React.createElement('iframe', { key: 'f', src: embedUrl, frameBorder: 0, allow: 'autoplay', style: { width: '100%', height: '100%', border: 'none' } }),
                 React.createElement('div', { key: 'blk', style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' }, onClick: (e: any) => e.stopPropagation() })
               )
-            : React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nofullscreen nodownload', disablePictureInPicture: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
+            : React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nodownload', style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
         ),
       ])}
     </View>
