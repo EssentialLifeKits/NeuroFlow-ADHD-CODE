@@ -496,6 +496,20 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
 
+  // Inject CSS once to fully hide the grayed-out native fullscreen button
+  // from the browser's video shadow DOM — cannot be removed via controlsList alone.
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-fs-btn')) {
+      const style = document.createElement('style');
+      style.id = 'nf-hide-fs-btn';
+      style.textContent = [
+        'video::-webkit-media-controls-fullscreen-button { display: none !important; }',
+        'video::-webkit-media-controls-picture-in-picture-button { display: none !important; }',
+      ].join(' ');
+      document.head.appendChild(style);
+    }
+  }, []);
+
   // Pause inline video when navigating away
   useFocusEffect(
     useCallback(() => {
