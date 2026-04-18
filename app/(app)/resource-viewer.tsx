@@ -557,14 +557,16 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
           </View>
         )
         : React.createElement('div', {
-            // Plain web div — no RN View overhead that could clip browser controls
-            style: { width: '100%', height: 320, borderRadius: 12, backgroundColor: '#000', position: 'relative' },
+            // overflow:hidden clips corners visually; video element has NO borderRadius
+            // so its pointer-event hit area is fully rectangular — mouse reaches the
+            // bottom-right corner without "leaving" the element (which hides controls).
+            style: { width: '100%', height: 320, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000', position: 'relative' },
           },
           React.createElement('video', {
             ref: videoRef,
             src: url, controls: true,
             controlsList: 'nodownload',
-            style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block' },
+            style: { width: '100%', height: '100%', backgroundColor: '#000', outline: 'none', display: 'block' },
             preload: 'metadata',
           })
         )
