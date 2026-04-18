@@ -491,8 +491,31 @@ function ImageSlideViewer({ urls, accentColor }: { urls: string[]; accentColor: 
 function VideoPlayer({ url, accentColor }: { url: string; accentColor: string }) {
   const videoRef = useRef<any>(null);
   const driveContainerRef = useRef<any>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
+
+  // Hide the grayed-out native fullscreen button from video shadow DOM
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-fs-btn')) {
+      const s = document.createElement('style');
+      s.id = 'nf-hide-fs-btn';
+      s.textContent = 'video::-webkit-media-controls-fullscreen-button { display: none !important; }';
+      document.head.appendChild(s);
+    }
+  }, []);
+
+  // Track fullscreen state to show/hide the exit button overlay
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
 
   // Pause inline video when navigating away
   useFocusEffect(
@@ -503,13 +526,18 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
     }, [])
   );
 
-  // TRUE OS fullscreen — takes over the entire screen, outside browser chrome
+  // TRUE OS fullscreen — use container div so exit button is inside fullscreen context
   const openFullscreen = () => {
-    const el = isDriveLink ? driveContainerRef.current : videoRef.current;
+    const el = driveContainerRef.current;
     if (!el) return;
     if (el.requestFullscreen) el.requestFullscreen();
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+  };
+
+  const exitFullscreen = () => {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
   };
 
   if (Platform.OS !== 'web') {
@@ -534,12 +562,12 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
         </Pressable>
       </View>
 
-      {/* Inline player */}
+      {/* Inline player — container goes fullscreen, exit button lives inside it */}
       <View style={[styles.iframeContainer, { height: 320 }]}>
         {isDriveLink
           ? React.createElement('div', {
               ref: driveContainerRef,
-              style: { position: 'relative', width: '100%', height: '100%' },
+              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000' },
             },
               React.createElement('iframe', {
                 src: embedUrl, frameBorder: 0,
@@ -549,15 +577,30 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
               React.createElement('div', {
                 style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
                 onClick: (e: any) => e.stopPropagation(),
-              })
+              }),
+              // Exit button — only visible in fullscreen (hidden inline via CSS)
+              React.createElement('button', {
+                onClick: exitFullscreen,
+                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
+              }, '✕ Exit Full Screen')
             )
-          : React.createElement('video', {
-              ref: videoRef,
-              src: url, controls: true,
-              controlsList: 'nodownload',
-              style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block' },
-              preload: 'metadata',
-            })
+          : React.createElement('div', {
+              ref: driveContainerRef,
+              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12 },
+            },
+              React.createElement('video', {
+                ref: videoRef,
+                src: url, controls: true,
+                controlsList: 'nodownload',
+                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block' },
+                preload: 'metadata',
+              }),
+              // Exit button — only visible in fullscreen
+              React.createElement('button', {
+                onClick: exitFullscreen,
+                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
+              }, '✕ Exit Full Screen')
+            )
         }
       </View>
 
