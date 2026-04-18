@@ -563,8 +563,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
           React.createElement('video', {
             ref: videoRef,
             src: url, controls: true,
-            controlsList: 'nofullscreen nodownload',
-            disablePictureInPicture: true,
+            controlsList: 'nodownload',
             style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block' },
             preload: 'metadata',
           })
