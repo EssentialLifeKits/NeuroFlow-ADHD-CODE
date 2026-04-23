@@ -25,7 +25,7 @@ function BrandHeader() {
   return (
     <View style={hStyles.brandWrapper}>
       <Image
-        source={require('../../assets/neuroflow-logo.jpg')}
+        source={require('../../assets/neuroflow-logo.png')}
         style={hStyles.logoImage}
       />
       <Text style={hStyles.brandName}>NeuroFlow</Text>
