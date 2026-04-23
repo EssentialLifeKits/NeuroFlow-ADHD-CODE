@@ -41,7 +41,7 @@ const NAV_ITEMS = [
 function NFLogo({ size = 28 }: { size?: number }) {
     return (
         <Image
-            source={require('../../assets/neuroflow-logo.jpg')}
+            source={require('../../assets/neuroflow-logo.png')}
             style={{ width: size, height: size, borderRadius: size * 0.25 }}
         />
     );
