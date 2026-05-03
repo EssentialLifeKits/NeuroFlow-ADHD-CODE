@@ -8,6 +8,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "remotion:studio": "remotion studio src/remotion/index.ts",
+    "remotion:render": "remotion render src/remotion/index.ts NeuroFlowPromo out/neuroflow-promo-9x16.mp4",
+    "remotion:still": "remotion still src/remotion/index.ts NeuroFlowPromo --frame=150 --scale=0.25 out/neuroflow-promo-check.png",
+    "remotion:voiceover": "node scripts/generate-neuroflow-voiceover.mjs",
     "migrate": "npx ts-node --project tsconfig.node.json src/scripts/migrate.ts",
     "migrate:reminders": "npx ts-node --project tsconfig.node.json src/scripts/migrate-reminders.ts"
   },
@@ -44,13 +48,16 @@
     "tailwindcss": "^3.3.2"
   },
   "devDependencies": {
+    "@remotion/cli": "^4.0.456",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.0.0",
     "@types/react": "~19.1.0",
     "@vercel/node": "^5.6.15",
     "prettier": "^3.8.1",
+    "remotion": "^4.0.456",
     "ts-node": "^10.9.2",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "zod": "^4.3.6"
   },
   "private": true
 }
