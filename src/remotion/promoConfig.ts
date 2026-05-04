@@ -5,15 +5,15 @@ export const promoConfig: NeuroFlowPromoProps = {
   tagline: 'Calm organization for busy brains.',
   callToAction: 'Click the link to learn more',
   offerLine: 'One dashboard. One-time purchase.',
-  voiceoverFile: '',
+  voiceoverFile: 'remotion/neuroflow-promo/voiceover/neuroflow-promo.mp3',
   musicFile: '',
   assets: {
-    logo: '',
+    logo: 'logo.png',
     heroVideo: '',
-    dashboardScreen: '',
-    calendarScreen: '',
-    focusScreen: '',
-    resourcesScreen: '',
+    dashboardScreen: 'dashboard-screen.png',
+    calendarScreen: 'calendar-screen.png',
+    focusScreen: 'focus-screen.png',
+    resourcesScreen: 'resources-screen.png',
   },
   script: [
     {

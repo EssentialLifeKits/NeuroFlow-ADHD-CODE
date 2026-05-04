@@ -3,7 +3,6 @@ import {
   Audio,
   Img,
   Sequence,
-  Video,
   interpolate,
   spring,
   staticFile,
@@ -48,314 +47,349 @@ const sceneTimings = [
 ];
 
 const palette = {
-  ink: '#17211b',
-  moss: '#436c50',
-  sage: '#a7c8af',
-  mint: '#dff1e6',
-  lavender: '#d8d3f1',
-  peach: '#f5cdbb',
-  cream: '#fbf8ef',
+  appBlack: '#05070d',
+  panel: '#171922',
+  panelSoft: '#20232f',
+  blue: '#4c98f0',
+  deepBlue: '#0b5eb3',
+  electric: '#6bb1ff',
+  text: '#f5f7ff',
+  muted: '#9699aa',
+  line: '#263a60',
+  green: '#2fd4a4',
+  red: '#ff7377',
+  orange: '#ff9b3d',
 };
 
 const assetPath = (filename?: string) =>
   filename ? staticFile(`remotion/neuroflow-promo/${filename}`) : null;
 
-const useSceneProgress = (start: number, duration: number) => {
-  const frame = useCurrentFrame();
-  return interpolate(frame, [start, start + duration], [0, 1], {
+const sceneProgress = (frame: number, index: number) => {
+  const scene = sceneTimings[index];
+  return interpolate(frame, [scene.start, scene.start + scene.duration], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   });
 };
 
-const FitCaption = ({children}: {children: string}) => {
-  return (
-    <div
-      style={{
-        fontSize: 70,
-        lineHeight: 1.04,
-        fontWeight: 800,
-        letterSpacing: 0,
-        color: palette.ink,
-        textWrap: 'balance',
-      }}
-    >
-      {children}
-    </div>
-  );
-};
-
-const PhoneFrame = ({
-  image,
-  label,
-  accent,
-}: {
-  image?: string;
-  label: string;
-  accent: string;
-}) => {
-  const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const float = Math.sin(frame / fps) * 10;
-  const src = assetPath(image);
-
-  return (
-    <div
-      style={{
-        width: 630,
-        height: 940,
-        borderRadius: 54,
-        background: '#fffdf7',
-        border: `8px solid ${palette.ink}`,
-        boxShadow: '0 28px 70px rgba(23, 33, 27, 0.18)',
-        overflow: 'hidden',
-        transform: `translateY(${float}px)`,
-        position: 'relative',
-      }}
-    >
-      <div
-        style={{
-          height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: palette.ink,
-        }}
-      >
-        <div
-          style={{
-            width: 130,
-            height: 16,
-            borderRadius: 999,
-            background: '#fffdf7',
-            opacity: 0.88,
-          }}
-        />
-      </div>
-      {src ? (
-        <Img
-          src={src}
-          style={{
-            width: '100%',
-            height: 'calc(100% - 64px)',
-            objectFit: 'cover',
-          }}
-        />
-      ) : (
-        <div
-          style={{
-            width: '100%',
-            height: 'calc(100% - 64px)',
-            padding: 42,
-            background: `linear-gradient(160deg, ${palette.cream}, ${accent})`,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 26,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 42,
-              fontWeight: 800,
-              color: palette.ink,
-              lineHeight: 1.06,
-            }}
-          >
-            {label}
-          </div>
-          {[0, 1, 2].map((item) => (
-            <div
-              key={item}
-              style={{
-                height: 116,
-                borderRadius: 28,
-                background: 'rgba(255, 255, 255, 0.72)',
-                border: '3px solid rgba(23, 33, 27, 0.09)',
-                padding: 24,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 16,
-              }}
-            >
-              <div
-                style={{
-                  width: item === 0 ? 260 : item === 1 ? 360 : 310,
-                  height: 18,
-                  borderRadius: 999,
-                  background: palette.ink,
-                  opacity: 0.72,
-                }}
-              />
-              <div
-                style={{
-                  width: item === 0 ? 390 : item === 1 ? 280 : 420,
-                  height: 14,
-                  borderRadius: 999,
-                  background: palette.moss,
-                  opacity: 0.45,
-                }}
-              />
-            </div>
-          ))}
-          <div
-            style={{
-              marginTop: 'auto',
-              height: 132,
-              borderRadius: 34,
-              background: palette.ink,
-              color: palette.cream,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 34,
-              fontWeight: 800,
-            }}
-          >
-            Calm next step
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const Scene = ({
-  index,
-  children,
-}: {
-  index: number;
-  children: ReactNode;
-}) => {
+const Scene = ({index, children}: {index: number; children: ReactNode}) => {
   const timing = sceneTimings[index];
   const frame = useCurrentFrame();
   const localFrame = frame - timing.start;
   const opacity = interpolate(
     localFrame,
-    [0, 18, timing.duration - 18, timing.duration],
+    [0, 16, timing.duration - 18, timing.duration],
     [0, 1, 1, 0],
     {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'},
   );
-  const scale = spring({frame: Math.max(0, localFrame), fps: 30, config: {damping: 22}});
 
   return (
     <Sequence from={timing.start} durationInFrames={timing.duration}>
-      <AbsoluteFill
-        style={{
-          opacity,
-          transform: `scale(${interpolate(scale, [0, 1], [0.98, 1])})`,
-        }}
-      >
-        {children}
-      </AbsoluteFill>
+      <AbsoluteFill style={{opacity}}>{children}</AbsoluteFill>
     </Sequence>
   );
 };
 
-const Background = ({heroVideo}: {heroVideo?: string}) => {
-  const frame = useCurrentFrame();
-  const videoSrc = assetPath(heroVideo);
-  const drift = interpolate(frame, [0, 1050], [0, -90]);
+const BrandMark = ({logo, size = 84}: {logo?: string; size?: number}) => {
+  const logoSrc = assetPath(logo);
+
+  if (!logoSrc) {
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: Math.round(size * 0.22),
+          background: '#000',
+          color: palette.electric,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: Math.round(size * 0.38),
+          fontWeight: 900,
+        }}
+      >
+        NF
+      </div>
+    );
+  }
 
   return (
-    <AbsoluteFill style={{background: palette.cream, overflow: 'hidden'}}>
-      {videoSrc ? (
-        <Video
-          src={videoSrc}
-          muted
-          loop
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.18),
+        overflow: 'hidden',
+        background: '#000',
+        position: 'relative',
+        boxShadow: '0 0 34px rgba(76, 152, 240, 0.38)',
+      }}
+    >
+      <Img
+        src={logoSrc}
+        style={{
+          position: 'absolute',
+          width: size * 1.5,
+          height: size * 1.5,
+          left: size * -0.25,
+          top: size * -0.08,
+          objectFit: 'cover',
+        }}
+      />
+    </div>
+  );
+};
+
+const BrandHeader = ({brandName, logo}: {brandName: string; logo?: string}) => (
+  <div
+    style={{
+      position: 'absolute',
+      top: 70,
+      left: 64,
+      right: 64,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 24,
+      zIndex: 10,
+    }}
+  >
+    <BrandMark logo={logo} size={78} />
+    <div
+      style={{
+        fontSize: 38,
+        color: palette.blue,
+        fontWeight: 900,
+        letterSpacing: 0,
+      }}
+    >
+      {brandName}
+    </div>
+  </div>
+);
+
+const DashboardBackdrop = ({
+  image,
+  pan = 0,
+  zoom = 1.1,
+  opacity = 0.74,
+}: {
+  image?: string;
+  pan?: number;
+  zoom?: number;
+  opacity?: number;
+}) => {
+  const src = assetPath(image);
+
+  return (
+    <AbsoluteFill style={{background: palette.appBlack, overflow: 'hidden'}}>
+      {src ? (
+        <Img
+          src={src}
           style={{
-            width: '100%',
+            position: 'absolute',
             height: '100%',
-            objectFit: 'cover',
-            opacity: 0.22,
-            filter: 'saturate(0.8) contrast(0.9)',
+            width: 'auto',
+            minWidth: '100%',
+            left: '50%',
+            top: '50%',
+            transform: `translate(-50%, -50%) translateX(${pan}px) scale(${zoom})`,
+            opacity,
+            filter: 'saturate(1.08) contrast(1.05)',
           }}
         />
       ) : null}
-      <div
+      <AbsoluteFill
         style={{
-          position: 'absolute',
-          inset: 0,
-          background: `linear-gradient(180deg, ${palette.mint}, ${palette.cream} 48%, ${palette.lavender})`,
-          opacity: videoSrc ? 0.82 : 1,
+          background:
+            'linear-gradient(180deg, rgba(5,7,13,0.55) 0%, rgba(5,7,13,0.15) 36%, rgba(5,7,13,0.78) 100%)',
         }}
       />
-      <div
+      <AbsoluteFill
         style={{
-          position: 'absolute',
-          width: 760,
-          height: 760,
-          left: -190,
-          top: 160 + drift,
-          borderRadius: '50%',
-          background: palette.peach,
-          opacity: 0.52,
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          width: 980,
-          height: 980,
-          right: -420,
-          bottom: -190 - drift,
-          borderRadius: '50%',
-          background: palette.sage,
-          opacity: 0.54,
+          background:
+            'linear-gradient(90deg, rgba(5,7,13,0.92) 0%, rgba(5,7,13,0.22) 42%, rgba(5,7,13,0.72) 100%)',
         }}
       />
     </AbsoluteFill>
   );
 };
 
-const BrandLockup = ({
-  brandName,
-  logo,
+const CaptionCard = ({
+  eyebrow,
+  title,
+  body,
+  bottom = 150,
 }: {
-  brandName: string;
-  logo?: string;
+  eyebrow?: string;
+  title: string;
+  body?: string;
+  bottom?: number;
 }) => {
-  const logoSrc = assetPath(logo);
+  const frame = useCurrentFrame();
+  const entrance = spring({frame, fps: 30, config: {damping: 24, stiffness: 85}});
 
   return (
     <div
       style={{
         position: 'absolute',
-        top: 92,
-        left: 74,
-        right: 74,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        left: 56,
+        right: 56,
+        bottom,
+        padding: '44px 42px',
+        borderRadius: 34,
+        background: 'rgba(23, 25, 34, 0.88)',
+        border: `2px solid ${palette.line}`,
+        boxShadow: '0 28px 80px rgba(0, 0, 0, 0.46)',
+        transform: `translateY(${interpolate(entrance, [0, 1], [34, 0])}px)`,
       }}
     >
-      <div style={{display: 'flex', alignItems: 'center', gap: 22}}>
-        {logoSrc ? (
-          <Img
-            src={logoSrc}
-            style={{width: 82, height: 82, objectFit: 'contain', borderRadius: 20}}
-          />
-        ) : (
+      {eyebrow ? (
+        <div
+          style={{
+            color: palette.electric,
+            fontSize: 28,
+            fontWeight: 900,
+            marginBottom: 18,
+            letterSpacing: 0,
+          }}
+        >
+          {eyebrow}
+        </div>
+      ) : null}
+      <div
+        style={{
+          color: palette.text,
+          fontSize: 68,
+          lineHeight: 1.02,
+          fontWeight: 950,
+          letterSpacing: 0,
+          textWrap: 'balance',
+        }}
+      >
+        {title}
+      </div>
+      {body ? (
+        <div
+          style={{
+            color: palette.muted,
+            fontSize: 33,
+            lineHeight: 1.22,
+            fontWeight: 700,
+            marginTop: 24,
+          }}
+        >
+          {body}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const FeatureStack = ({items}: {items: Array<{label: string; color: string}>}) => {
+  const frame = useCurrentFrame();
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 58,
+        right: 58,
+        top: 312,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 22,
+      }}
+    >
+      {items.map((item, index) => {
+        const local = frame - 135 - index * 9;
+        const entry = spring({frame: Math.max(0, local), fps: 30, config: {damping: 20}});
+
+        return (
           <div
+            key={item.label}
             style={{
-              width: 82,
-              height: 82,
-              borderRadius: 22,
-              background: palette.ink,
-              color: palette.cream,
+              height: 104,
+              borderRadius: 26,
+              background: 'rgba(23, 25, 34, 0.9)',
+              border: `2px solid ${palette.line}`,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 31,
-              fontWeight: 900,
+              padding: '0 30px',
+              gap: 24,
+              transform: `translateX(${interpolate(entry, [0, 1], [-60, 0])}px)`,
+              opacity: interpolate(entry, [0, 1], [0, 1]),
             }}
           >
-            NF
+            <div
+              style={{
+                width: 14,
+                height: 62,
+                borderRadius: 999,
+                background: item.color,
+                boxShadow: `0 0 28px ${item.color}`,
+              }}
+            />
+            <div style={{color: palette.text, fontSize: 39, fontWeight: 900}}>
+              {item.label}
+            </div>
           </div>
-        )}
-        <div style={{fontSize: 34, fontWeight: 800, color: palette.ink}}>
-          {brandName}
-        </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const ScreenshotPanel = ({
+  image,
+  label,
+  pan = 0,
+}: {
+  image?: string;
+  label: string;
+  pan?: number;
+}) => {
+  const src = assetPath(image);
+
+  return (
+    <div
+      style={{
+        width: 860,
+        height: 940,
+        borderRadius: 34,
+        overflow: 'hidden',
+        background: palette.panel,
+        border: `3px solid ${palette.line}`,
+        boxShadow: '0 28px 90px rgba(0,0,0,0.56)',
+        position: 'relative',
+      }}
+    >
+      {src ? (
+        <Img
+          src={src}
+          style={{
+            height: '100%',
+            width: 'auto',
+            minWidth: '100%',
+            transform: `translateX(${pan}px)`,
+            objectFit: 'cover',
+          }}
+        />
+      ) : null}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: '36px 38px',
+          background: 'linear-gradient(0deg, rgba(5,7,13,0.96), rgba(5,7,13,0))',
+          color: palette.text,
+          fontSize: 42,
+          fontWeight: 950,
+        }}
+      >
+        {label}
       </div>
     </div>
   );
@@ -375,192 +409,128 @@ export const NeuroFlowPromo = ({
   const {fps} = useVideoConfig();
   const audioSrc = voiceoverFile ? staticFile(voiceoverFile) : null;
   const musicSrc = musicFile ? staticFile(`remotion/neuroflow-promo/${musicFile}`) : null;
-  const currentScene = sceneTimings.findIndex(
-    (scene) => frame >= scene.start && frame < scene.start + scene.duration,
-  );
-  const sceneIndex = currentScene === -1 ? sceneTimings.length - 1 : currentScene;
-  const progress = useSceneProgress(
-    sceneTimings[sceneIndex].start,
-    sceneTimings[sceneIndex].duration,
-  );
+  const p0 = sceneProgress(frame, 0);
+  const p2 = sceneProgress(frame, 2);
+  const p3 = sceneProgress(frame, 3);
 
   return (
-    <AbsoluteFill style={{fontFamily: 'Inter, Arial, sans-serif'}}>
-      <Background heroVideo={assets.heroVideo} />
+    <AbsoluteFill style={{fontFamily: 'Inter, Arial, sans-serif', background: palette.appBlack}}>
       {audioSrc ? <Audio src={audioSrc} /> : null}
       {musicSrc ? <Audio src={musicSrc} volume={0.13} /> : null}
-      <BrandLockup brandName={brandName} logo={assets.logo} />
 
       <Scene index={0}>
-        <div style={{padding: '310px 76px 0'}}>
-          <div style={{fontSize: 40, color: palette.moss, fontWeight: 800}}>
-            {tagline}
-          </div>
-          <div style={{height: 34}} />
-          <FitCaption>{script[0]?.caption ?? tagline}</FitCaption>
-          <div
-            style={{
-              marginTop: 64,
-              fontSize: 34,
-              lineHeight: 1.22,
-              color: palette.moss,
-              width: 760,
-              fontWeight: 700,
-            }}
-          >
-            A softer way to see what matters next.
-          </div>
-        </div>
+        <DashboardBackdrop image={assets.dashboardScreen} pan={-210 + p0 * 70} zoom={1.18} />
+        <BrandHeader brandName={brandName} logo={assets.logo} />
+        <CaptionCard
+          eyebrow={tagline}
+          title={script[0]?.caption ?? 'Your day does not need to feel scattered.'}
+          body="A dashboard that feels like the product: dark, focused, calm, and built for real routines."
+        />
       </Scene>
 
       <Scene index={1}>
-        <div
-          style={{
-            height: '100%',
-            padding: '300px 76px 0',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 36,
-          }}
-        >
-          <FitCaption>{script[1]?.caption ?? 'Tasks, reminders, focus time.'}</FitCaption>
-          {['Tasks', 'Reminders', 'Focus sessions', 'Helpful resources'].map((item, idx) => (
-            <div
-              key={item}
-              style={{
-                width: interpolate(progress, [0, 1], [620, 890 - idx * 42]),
-                padding: '30px 34px',
-                borderRadius: 32,
-                background: 'rgba(255, 253, 247, 0.78)',
-                color: palette.ink,
-                fontSize: 36,
-                fontWeight: 800,
-                boxShadow: '0 16px 42px rgba(23, 33, 27, 0.11)',
-              }}
-            >
-              {item}
-            </div>
-          ))}
-        </div>
+        <DashboardBackdrop image={assets.calendarScreen} pan={-250} zoom={1.12} opacity={0.62} />
+        <BrandHeader brandName={brandName} logo={assets.logo} />
+        <FeatureStack
+          items={[
+            {label: 'Tasks in one view', color: palette.blue},
+            {label: 'Calendar reminders', color: palette.green},
+            {label: 'Focus sessions', color: palette.red},
+            {label: 'Resources nearby', color: palette.orange},
+          ]}
+        />
+        <CaptionCard
+          title={script[1]?.caption ?? 'Tasks, reminders, focus time, resources.'}
+          bottom={138}
+        />
       </Scene>
 
       <Scene index={2}>
-        <div
-          style={{
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingTop: 120,
-          }}
-        >
-          <PhoneFrame
-            image={assets.dashboardScreen}
-            label="Dashboard"
-            accent={palette.mint}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              left: 76,
-              right: 76,
-              bottom: 174,
-            }}
-          >
-            <FitCaption>{script[2]?.caption ?? brandName}</FitCaption>
-          </div>
+        <DashboardBackdrop image={assets.dashboardScreen} pan={-160 + p2 * 95} zoom={1.08} />
+        <BrandHeader brandName={brandName} logo={assets.logo} />
+        <div style={{position: 'absolute', left: 110, top: 310}}>
+          <ScreenshotPanel image={assets.dashboardScreen} label="Dashboard" pan={-430} />
         </div>
+        <CaptionCard
+          eyebrow="Meet the system"
+          title={script[2]?.caption ?? 'Meet NeuroFlow ADHD.'}
+          body="The actual dashboard leads the visual language, not a generic background."
+          bottom={116}
+        />
       </Scene>
 
       <Scene index={3}>
+        <DashboardBackdrop image={assets.focusScreen} pan={-170 + p3 * 80} zoom={1.1} />
+        <BrandHeader brandName={brandName} logo={assets.logo} />
         <div
           style={{
-            height: '100%',
+            position: 'absolute',
+            top: 278,
+            left: 54,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            flexDirection: 'column',
             gap: 26,
-            paddingTop: 110,
           }}
         >
-          <div style={{transform: 'scale(0.72) rotate(-5deg) translateX(70px)'}}>
-            <PhoneFrame image={assets.calendarScreen} label="Calendar" accent={palette.peach} />
-          </div>
-          <div style={{transform: 'scale(0.72) rotate(5deg) translateX(-70px)'}}>
-            <PhoneFrame image={assets.focusScreen} label="Focus" accent={palette.lavender} />
-          </div>
-          <div
-            style={{
-              position: 'absolute',
-              left: 76,
-              right: 76,
-              bottom: 158,
-            }}
-          >
-            <FitCaption>{script[3]?.caption ?? 'Plan. Focus. Remember.'}</FitCaption>
+          <ScreenshotPanel image={assets.calendarScreen} label="Plan" pan={-540} />
+          <div style={{transform: 'translateY(-510px) translateX(92px) scale(0.82)'}}>
+            <ScreenshotPanel image={assets.focusScreen} label="Focus" pan={-360} />
           </div>
         </div>
+        <CaptionCard title={script[3]?.caption ?? 'Plan. Focus. Remember. Return.'} bottom={120} />
       </Scene>
 
       <Scene index={4}>
-        <div
-          style={{
-            height: '100%',
-            padding: '330px 76px 0',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 50,
-          }}
-        >
-          <FitCaption>{script[4]?.caption ?? offerLine}</FitCaption>
-          <div
-            style={{
-              width: 830,
-              padding: '42px 46px',
-              borderRadius: 38,
-              background: palette.ink,
-              color: palette.cream,
-              fontSize: 46,
-              lineHeight: 1.08,
-              fontWeight: 900,
-            }}
-          >
-            {offerLine}
-          </div>
-        </div>
+        <DashboardBackdrop image={assets.resourcesScreen} pan={-190} zoom={1.13} />
+        <BrandHeader brandName={brandName} logo={assets.logo} />
+        <CaptionCard
+          eyebrow="Simple ownership"
+          title={script[4]?.caption ?? offerLine}
+          body="Built as a one-time dashboard purchase, so customers can get organized without rebuilding a system from scratch."
+          bottom={180}
+        />
       </Scene>
 
       <Scene index={5}>
+        <DashboardBackdrop image={assets.resourcesScreen} pan={-260} zoom={1.16} opacity={0.58} />
+        <BrandHeader brandName={brandName} logo={assets.logo} />
         <div
           style={{
-            height: '100%',
-            padding: '330px 76px 0',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
+            position: 'absolute',
+            left: 56,
+            right: 56,
+            bottom: 144,
+            padding: '54px 44px',
+            borderRadius: 36,
+            background: `linear-gradient(135deg, ${palette.deepBlue}, ${palette.blue})`,
+            boxShadow: '0 30px 90px rgba(76, 152, 240, 0.38)',
           }}
         >
-          <div>
-            <div style={{fontSize: 46, color: palette.moss, fontWeight: 800}}>
-              {brandName}
-            </div>
-            <div style={{height: 34}} />
-            <FitCaption>{script[5]?.caption ?? callToAction}</FitCaption>
+          <div
+            style={{
+              color: palette.text,
+              fontSize: 72,
+              lineHeight: 1.02,
+              fontWeight: 950,
+              letterSpacing: 0,
+              textWrap: 'balance',
+            }}
+          >
+            {script[5]?.caption ?? callToAction}
           </div>
           <div
             style={{
-              marginBottom: 150,
+              marginTop: 32,
               width: '100%',
-              minHeight: 126,
-              borderRadius: 44,
-              background: palette.ink,
-              color: palette.cream,
+              minHeight: 112,
+              borderRadius: 28,
+              background: '#05070d',
+              color: palette.text,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 44,
-              fontWeight: 900,
-              boxShadow: '0 24px 60px rgba(23, 33, 27, 0.24)',
+              fontSize: 38,
+              fontWeight: 950,
             }}
           >
             {callToAction}
@@ -571,20 +541,21 @@ export const NeuroFlowPromo = ({
       <div
         style={{
           position: 'absolute',
-          left: 76,
-          right: 76,
-          bottom: 62,
-          height: 8,
+          left: 58,
+          right: 58,
+          bottom: 54,
+          height: 9,
           borderRadius: 999,
-          background: 'rgba(23, 33, 27, 0.13)',
+          background: 'rgba(76, 152, 240, 0.18)',
           overflow: 'hidden',
+          zIndex: 20,
         }}
       >
         <div
           style={{
-            width: `${(frame / (35 * fps)) * 100}%`,
+            width: `${Math.min(100, (frame / (35 * fps)) * 100)}%`,
             height: '100%',
-            background: palette.ink,
+            background: palette.blue,
           }}
         />
       </div>
