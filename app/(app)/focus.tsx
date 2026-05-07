@@ -30,6 +30,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -473,6 +474,8 @@ function ViewLogsButton({ onPress, style, textStyle }: { onPress: () => void; st
 export default function FocusScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 1024;
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Timer state
@@ -781,22 +784,22 @@ export default function FocusScreen() {
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         {/* ── Header ── */}
-        <Animated.View style={[s.header, { opacity: headerOpacity, transform: [{ translateY: headerTranslateY }] }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Animated.View style={[s.header, !isDesktop && s.headerMobile, { opacity: headerOpacity, transform: [{ translateY: headerTranslateY }] }]}>
+          <View style={s.headerLeft}>
             <TouchableOpacity onPress={() => router.push('/(app)/calendar')} style={s.backBtn} activeOpacity={0.7}>
               <ArrowLeft size={16} color={NF_BLUE} />
             </TouchableOpacity>
-            <View>
+            <View style={s.titleGroup}>
               <Text style={s.title}>Hyperfocus Lotus</Text>
               <Text style={s.subtitle}>Deep work, ADHD-friendly</Text>
             </View>
           </View>
-          <View style={s.headerRight}>
+          <View style={[s.headerRight, !isDesktop && s.headerRightMobile]}>
             <View style={s.todayBadge}>
               <PulsingDot />
               <Text style={s.todayBadgeText}>Today • {DAY_NAMES[new Date().getDay()]}</Text>
             </View>
-            <View style={s.statsBox}>
+            <View style={[s.statsBox, !isDesktop && s.statsBoxMobile]}>
               <Text style={[s.statsValue, { color: cfg.color }]}>{totalMin}m</Text>
               <Text style={s.statsLabel}>focused today</Text>
             </View>
@@ -1230,14 +1233,19 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bgBase },
   scroll: { padding: spacing.lg, gap: spacing.lg },
 
-  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.sm },
+  headerMobile: { flexWrap: 'wrap' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
+  titleGroup: { flex: 1, minWidth: 0 },
   title: { fontSize: typography.fontSizeXxl, fontWeight: '700', color: NF_BLUE },
   subtitle: { fontSize: typography.fontSizeSm, color: colors.textSecondary, marginTop: 2 },
   backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,144,226,0.12)', justifyContent: 'center', alignItems: 'center', marginTop: 4 },
   headerRight: { alignItems: 'flex-end', gap: 8 },
+  headerRightMobile: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   todayBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(52, 211, 153, 0.25)' },
   todayBadgeText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
   statsBox: { alignItems: 'flex-end' },
+  statsBoxMobile: { alignItems: 'flex-start' },
   statsValue: { fontSize: typography.fontSizeXl, fontWeight: '800' },
   statsLabel: { fontSize: typography.fontSizeXs, color: colors.textMuted, fontWeight: '600' },
 

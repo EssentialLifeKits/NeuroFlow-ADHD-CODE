@@ -573,17 +573,17 @@ export default function CalendarScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* ── Top Bar ── */}
-        <Animated.View style={[s.topBar, { opacity: fadeAnim }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Animated.View style={[s.topBar, !isDesktop && s.topBarMobile, { opacity: fadeAnim }]}>
+          <View style={s.topLeft}>
             <TouchableOpacity onPress={() => router.push('/(app)/')} style={s.backBtn} activeOpacity={0.7}>
               <Text style={s.backBtnText}>‹</Text>
             </TouchableOpacity>
-            <View>
+            <View style={s.titleGroup}>
               <Text style={s.pageTitle}>Content Calendar</Text>
               <Text style={s.pageSub}>{MONTH_NAMES[month]} {year}</Text>
             </View>
           </View>
-          <View style={s.topRight}>
+          <View style={[s.topRight, !isDesktop && s.topRightMobile]}>
             {/* Today•Tue indicator with pulsing blue dot */}
             <View style={s.todayIndicator}>
               <PulsingDot />
@@ -717,11 +717,15 @@ const s = StyleSheet.create({
   scrollDesktop: { padding: spacing.lg, gap: spacing.lg },
 
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 },
+  topBarMobile: { alignItems: 'stretch' },
+  topLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
+  titleGroup: { flex: 1, minWidth: 0 },
   pageTitle: { fontSize: typography.fontSizeXl, fontWeight: '800', color: NF_BLUE, letterSpacing: -0.5 },
   pageSub: { fontSize: typography.fontSizeSm, color: colors.textSecondary },
   backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,144,226,0.12)', justifyContent: 'center', alignItems: 'center' },
   backBtnText: { fontSize: 22, color: NF_BLUE, lineHeight: 28, fontWeight: '600' },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  topRightMobile: { width: '100%', justifyContent: 'flex-start' },
   todayIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: radius.full, borderWidth: 1, borderColor: 'rgba(52, 211, 153, 0.25)' },
   todayIndicatorText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, letterSpacing: 0.3 },
   viewToggle: { flexDirection: 'row', backgroundColor: colors.bgCard, borderRadius: radius.full, padding: 3, borderWidth: 1, borderColor: colors.border },

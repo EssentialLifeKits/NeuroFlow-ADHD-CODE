@@ -247,17 +247,17 @@ export default function ResourcesScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Header */}
-        <Animated.View style={[styles.header, { opacity: headerOpacity }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Animated.View style={[styles.header, !isDesktop && styles.headerMobile, { opacity: headerOpacity }]}>
+          <View style={styles.headerLeft}>
             <Pressable onPress={() => router.push('/(app)/focus')} style={styles.backBtn}>
               <Text style={styles.backBtnText}>‹</Text>
             </Pressable>
-            <View>
+            <View style={styles.titleGroup}>
               <Text style={styles.pageTitle}>Resources</Text>
               <Text style={styles.pageSub}>Tools & guides for focus masters</Text>
             </View>
           </View>
-          <View style={styles.todayIndicator}>
+          <View style={[styles.todayIndicator, !isDesktop && styles.todayIndicatorMobile]}>
             <PulsingDot />
             <Text style={styles.todayIndicatorText}>Today • {DAY_NAMES[new Date().getDay()]}</Text>
           </View>
@@ -291,8 +291,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    marginBottom: 4 
+    marginBottom: 4,
+    gap: spacing.sm,
   },
+  headerMobile: { flexWrap: 'wrap' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
+  titleGroup: { flex: 1, minWidth: 0 },
   pageTitle: {
     fontSize: typography.fontSizeXl,
     fontWeight: '800',
@@ -310,6 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(52, 211, 153, 0.1)', paddingHorizontal: 12, paddingVertical: 6,
     borderRadius: radius.full, borderWidth: 1, borderColor: 'rgba(52, 211, 153, 0.25)'
   },
+  todayIndicatorMobile: { maxWidth: '100%' },
   todayIndicatorText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
 
   // Grid container
