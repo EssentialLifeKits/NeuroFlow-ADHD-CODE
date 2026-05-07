@@ -10,17 +10,19 @@ import {
     Animated,
     Linking,
     Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     View,
     Image,
+    useWindowDimensions,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { colors, radius } from '../constants/theme';
 import { useAuth } from '../lib/auth';
 import { getAllSettings } from '../lib/adminDb';
 
-const MOBILE_SIDEBAR_W = 280;
+const MOBILE_SIDEBAR_W = 292;
 const NF_BLUE = '#4A90E2';
 const NF_BLUE_DARK = '#0056b3';
 const NF_BLUE_MID = '#1A6DBE';
@@ -119,7 +121,11 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
     };
 
     return (
-        <>
+        <ScrollView
+            style={styles.contentScroll}
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+        >
             {/* Blue header */}
             <View style={[styles.gradientHeader, isDesktop && styles.gradientHeaderDesktop]}>
                 <View style={styles.logoArea}>
@@ -138,7 +144,7 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
             </View>
 
             {/* Nav */}
-            <View style={styles.navArea}>
+            <View style={[styles.navArea, !isDesktop && styles.navAreaMobile]}>
                 {NAV_ITEMS.map((item) => {
                     const isActive = isNavActive(item.path);
                     return (
@@ -162,7 +168,7 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
             </View>
 
             {/* Bottom */}
-            <View style={styles.bottomArea}>
+            <View style={[styles.bottomArea, !isDesktop && styles.bottomAreaMobile]}>
                 {/* Featured Affiliate — only shown when admin has toggled it visible */}
                 {affVisible && (
                     <Pressable
@@ -204,12 +210,14 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
                     <Text style={styles.signOutText}>Sign Out</Text>
                 </Pressable>
             </View>
-        </>
+        </ScrollView>
     );
 }
 
 // ── Main Sidebar export ───────────────────────────────────────────────────────
 export default function Sidebar({ visible, onClose, isDesktop = false }: SidebarProps) {
+    const { width } = useWindowDimensions();
+    const mobilePanelWidth = Math.min(MOBILE_SIDEBAR_W, Math.max(260, width - 32));
     const slideAnim = useRef(new Animated.Value(-MOBILE_SIDEBAR_W)).current;
     const overlayOpacity = useRef(new Animated.Value(0)).current;
 
@@ -222,11 +230,11 @@ export default function Sidebar({ visible, onClose, isDesktop = false }: Sidebar
             ]).start();
         } else {
             Animated.parallel([
-                Animated.timing(slideAnim, { toValue: -MOBILE_SIDEBAR_W, duration: 210, useNativeDriver: true }),
+                Animated.timing(slideAnim, { toValue: -mobilePanelWidth, duration: 210, useNativeDriver: true }),
                 Animated.timing(overlayOpacity, { toValue: 0, duration: 210, useNativeDriver: true }),
             ]).start();
         }
-    }, [visible, isDesktop]);
+    }, [visible, isDesktop, mobilePanelWidth]);
 
     // ── Desktop: static column (no overlay, no animation) ────────────────────
     if (isDesktop) {
@@ -243,7 +251,7 @@ export default function Sidebar({ visible, onClose, isDesktop = false }: Sidebar
             <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
                 <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
             </Animated.View>
-            <Animated.View style={[styles.sidebarMobile, { transform: [{ translateX: slideAnim }] }]}>
+            <Animated.View style={[styles.sidebarMobile, { width: mobilePanelWidth, transform: [{ translateX: slideAnim }] }]}>
                 <SidebarContent isDesktop={false} onClose={onClose} />
             </Animated.View>
         </View>
@@ -251,6 +259,9 @@ export default function Sidebar({ visible, onClose, isDesktop = false }: Sidebar
 }
 
 const styles = StyleSheet.create({
+    contentScroll: { flex: 1 },
+    content: { flexGrow: 1 },
+
     overlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.65)',
@@ -270,7 +281,6 @@ const styles = StyleSheet.create({
     sidebarMobile: {
         position: 'absolute',
         top: 0, left: 0, bottom: 0,
-        width: MOBILE_SIDEBAR_W,
         backgroundColor: colors.bgSecondary,
         borderRightWidth: 1,
         borderRightColor: colors.border,
@@ -280,10 +290,10 @@ const styles = StyleSheet.create({
 
     gradientHeader: {
         backgroundColor: NF_BLUE_DARK,
-        paddingTop: 52,
-        paddingHorizontal: 20,
-        paddingBottom: 20,
-        gap: 16,
+        paddingTop: 44,
+        paddingHorizontal: 18,
+        paddingBottom: 18,
+        gap: 14,
         shadowColor: NF_BLUE,
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.5,
@@ -298,7 +308,7 @@ const styles = StyleSheet.create({
     },
 
     logoArea: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    logoText: { fontWeight: '800', fontSize: 22, color: '#fff', letterSpacing: -0.4 },
+    logoText: { fontWeight: '800', fontSize: 22, color: '#fff' },
 
     headerUserArea: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     headerAvatar: {
@@ -311,9 +321,11 @@ const styles = StyleSheet.create({
     headerUserName: { fontSize: 13, fontWeight: '700', color: '#fff' },
     headerUserPlan: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 1 },
 
-    navArea: { flex: 1, paddingHorizontal: 12, paddingVertical: 16, gap: 4 },
+    navArea: { paddingHorizontal: 12, paddingVertical: 16, gap: 4 },
+    navAreaMobile: { paddingTop: 14, paddingBottom: 14 },
     navItem: {
         flexDirection: 'row', alignItems: 'center', gap: 12,
+        minHeight: 48,
         paddingVertical: 12, paddingHorizontal: 16,
         borderRadius: radius.md, position: 'relative',
     },
@@ -325,16 +337,20 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 3, borderBottomRightRadius: 3, marginTop: -12,
     },
     navIcon: { fontSize: 18 },
-    navLabel: { fontSize: 14, fontWeight: '500', color: colors.textSecondary },
+    navLabel: { fontSize: 14, fontWeight: '500', color: colors.textSecondary, flex: 1 },
     navLabelActive: { color: NF_BLUE, fontWeight: '700' },
 
     bottomArea: {
+        marginTop: 'auto',
         paddingHorizontal: 12,
         paddingBottom: 36,
         borderTopWidth: 1,
         borderTopColor: colors.border,
         paddingTop: 16,
         gap: 10,
+    },
+    bottomAreaMobile: {
+        paddingBottom: 24,
     },
 
     affiliatePlaceholder: {

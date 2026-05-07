@@ -255,6 +255,7 @@ const htStyles = StyleSheet.create({
 export default function DashboardScreen() {
   const { width } = useWindowDimensions();
   const isDesktop = width > DESKTOP_BREAKPOINT;
+  const isMobile = !isDesktop;
 
   const { user } = useAuth();
   const router = useRouter();
@@ -459,18 +460,18 @@ export default function DashboardScreen() {
             {topPending.map((task) => {
               const conf = getCategoryConf(task);
               return (
-                <Pressable key={task.id} style={styles.taskRow} onPress={() => handleEdit(task)}>
+                <Pressable key={task.id} style={[styles.taskRow, isMobile && styles.taskRowMobile]} onPress={() => handleEdit(task)}>
                   <TaskThumbnail stickerId={task.sticker_id} fallbackEmoji={conf.emoji} color={conf.color} />
                   <View style={styles.taskInfo}>
-                    <Text style={styles.taskTitle} numberOfLines={1}>
+                    <Text style={styles.taskTitle} numberOfLines={2}>
                       {task.title}
                     </Text>
-                    <Text style={styles.taskMeta}>
+                    <Text style={styles.taskMeta} numberOfLines={1}>
                       {task.due_date ?? 'Today'}
                       {task.due_time ? ` · ${formatTime12(task.due_time)}` : ''}
                     </Text>
                   </View>
-                  <View style={styles.badgesCol}>
+                  <View style={[styles.badgesCol, isMobile && styles.badgesColMobile]}>
                     <View style={[styles.statusBadge, { backgroundColor: (task.status === 'draft' ? '#F59E0B' : '#34D399') + '22' }]}>
                       <Text style={[styles.statusBadgeText, { color: task.status === 'draft' ? '#F59E0B' : '#34D399' }]}>{task.status === 'draft' ? 'Pending/Draft' : 'Active'}</Text>
                     </View>
@@ -509,14 +510,14 @@ export default function DashboardScreen() {
         {draftTasks.map((task) => {
           const conf = getCategoryConf(task);
           return (
-            <Pressable key={task.id} style={styles.draftRow} onPress={() => handleEdit(task)}>
+            <Pressable key={task.id} style={[styles.draftRow, isMobile && styles.draftRowMobile]} onPress={() => handleEdit(task)}>
               <View style={[styles.draftColorBar, { backgroundColor: conf.color }]} />
               <TaskThumbnail stickerId={task.sticker_id} fallbackEmoji={conf.emoji} color={conf.color} />
               <View style={styles.taskInfo}>
-                <Text style={styles.taskTitle} numberOfLines={1}>
+                <Text style={styles.taskTitle} numberOfLines={2}>
                   {task.title || 'Untitled Draft'}
                 </Text>
-                <Text style={styles.taskMeta}>
+                <Text style={styles.taskMeta} numberOfLines={1}>
                   {task.due_date ?? 'No date'}
                   {task.due_time ? ` · ${formatTime12(task.due_time)}` : ''}
                 </Text>
@@ -544,9 +545,9 @@ export default function DashboardScreen() {
       <Pressable onPress={() => router.push('/(app)/focus')} style={styles.focusCard}>
         <View style={styles.focusCardLeft}>
           <Text style={styles.focusEmoji}>🪷</Text>
-          <View>
-            <Text style={styles.focusTitle}>Hyperfocus Lotus</Text>
-            <Text style={styles.focusSub}>
+          <View style={styles.focusCopy}>
+            <Text style={styles.focusTitle} numberOfLines={1}>Hyperfocus Lotus</Text>
+            <Text style={styles.focusSub} numberOfLines={2}>
               {focusMinToday ? `${focusMinToday}m focused today` : 'Start your first focus session'}
             </Text>
           </View>
@@ -562,25 +563,31 @@ export default function DashboardScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
-        contentContainerStyle={[styles.scroll, isDesktop && styles.scrollDesktop]}
+        contentContainerStyle={[styles.scroll, isDesktop ? styles.scrollDesktop : styles.scrollMobile]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Header ── */}
-        <Animated.View style={[styles.header, { opacity: headerOpacity, transform: [{ translateY: headerTranslateY }] }]}>
-          <View style={styles.headerLeft}>
-            <PulsingOrb />
+        <Animated.View style={[
+          styles.header,
+          isMobile && styles.headerMobile,
+          { opacity: headerOpacity, transform: [{ translateY: headerTranslateY }] },
+        ]}>
+          <View style={[styles.headerLeft, isMobile && styles.headerLeftMobile]}>
+            <View style={isMobile && styles.orbMobileWrap}>
+              <PulsingOrb />
+            </View>
             <View style={styles.greetingBlock}>
               <Text style={styles.greeting}>{greeting},</Text>
-              <Text style={styles.name}>{greetingName} {greetingEmoji}</Text>
+              <Text style={[styles.name, isMobile && styles.nameMobile]} numberOfLines={2}>{greetingName} {greetingEmoji}</Text>
             </View>
           </View>
-          <View style={styles.headerRight}>
+          <View style={[styles.headerRight, isMobile && styles.headerRightMobile]}>
             <View style={styles.todayBadge}>
               <PulsingDot />
               <Text style={styles.todayBadgeText}>Today • {DAY_NAMES[new Date().getDay()]}</Text>
             </View>
             <Pressable onPress={() => setHowToVisible(true)} style={styles.howToBtn}>
-              <Text style={styles.howToBtnText}>▶ How To</Text>
+              <Text style={styles.howToBtnText}>How To</Text>
             </Pressable>
             <Pressable style={styles.avatar}>
               <Text style={styles.avatarText}>{avatarLetter}</Text>
@@ -589,7 +596,7 @@ export default function DashboardScreen() {
         </Animated.View>
 
         {/* ── Stat cards — horizontal row, spacious on desktop ── */}
-        <View style={[styles.cardRow, isDesktop && styles.cardRowDesktop]}>
+        <View style={[styles.cardRow, isDesktop && styles.cardRowDesktop, isMobile && styles.cardRowMobile]}>
           {statCards.map((card, i) => (
             <StatCard key={card.label} {...card} delay={i * 90} />
           ))}
@@ -717,15 +724,29 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bgBase },
   scroll: { padding: spacing.lg, gap: spacing.lg },
+  scrollMobile: { width: '100%', maxWidth: 430, alignSelf: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.lg, gap: spacing.lg },
   scrollDesktop: { padding: spacing.xl, gap: spacing.xl },
 
   // Header
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerMobile: { flexDirection: 'column', alignItems: 'stretch', gap: spacing.md },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1 },
+  headerLeftMobile: { width: '100%' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerRightMobile: {
+    width: '100%',
+    justifyContent: 'space-between',
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+  },
+  orbMobileWrap: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center', transform: [{ scale: 0.78 }] },
   greetingBlock: { flex: 1 },
   greeting: { fontSize: typography.fontSizeMd, color: colors.textSecondary },
   name: { fontSize: typography.fontSizeXl, fontWeight: '700', color: NF_BLUE },
+  nameMobile: { fontSize: 20, lineHeight: 24 },
   todayBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(52, 211, 153, 0.1)', borderRadius: 999, borderWidth: 1, borderColor: 'rgba(52, 211, 153, 0.25)' },
   todayBadgeText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
 
@@ -740,10 +761,12 @@ const styles = StyleSheet.create({
   // Stat cards
   cardRow: { flexDirection: 'row', gap: spacing.sm },
   cardRowDesktop: { gap: spacing.md },
+  cardRowMobile: { flexDirection: 'column', gap: spacing.sm },
   card: {
     flex: 1,
     borderRadius: radius.lg,
-    padding: spacing.sm,
+    paddingHorizontal: 6,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
@@ -785,13 +808,15 @@ const styles = StyleSheet.create({
   taskListContainer: { backgroundColor: colors.bgCard, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   taskListContent: { padding: spacing.md, gap: spacing.sm },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, backgroundColor: colors.bgElevated, borderRadius: radius.md },
+  taskRowMobile: { gap: 6, paddingHorizontal: 8 },
   taskThumb: { width: 40, height: 40, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
-  taskInfo: { flex: 1 },
+  taskInfo: { flex: 1, minWidth: 0 },
   taskTitle: { fontSize: typography.fontSizeSm, color: colors.textPrimary, fontWeight: '600' },
   taskMeta: { fontSize: typography.fontSizeXs, color: colors.textSecondary, marginTop: 2 },
   taskBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.full },
   taskBadgeText: { fontSize: 9, fontWeight: '700' },
   badgesCol: { alignItems: 'flex-end', gap: 3 },
+  badgesColMobile: { maxWidth: 86 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
   statusBadgeText: { fontSize: 8, fontWeight: '700', letterSpacing: 0.3 },
   taskDeleteBtn: { padding: 4, marginLeft: 4 },
@@ -802,6 +827,7 @@ const styles = StyleSheet.create({
   draftCountText: { fontSize: 10, fontWeight: '700', color: '#F59E0B' },
   draftListContainer: { backgroundColor: colors.bgCard, borderRadius: radius.lg, borderWidth: 1, borderColor: '#F59E0B' + '33', overflow: 'hidden', padding: spacing.sm, gap: spacing.xs },
   draftRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, backgroundColor: colors.bgElevated, borderRadius: radius.md, borderWidth: 1, borderColor: '#F59E0B' + '22' },
+  draftRowMobile: { gap: 6, paddingHorizontal: 8 },
   draftColorBar: { width: 3, height: 32, borderRadius: 2 },
   draftBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: '#F59E0B' + '22' },
   draftBadgeText: { fontSize: 9, fontWeight: '700', color: '#F59E0B' },
@@ -815,6 +841,7 @@ const styles = StyleSheet.create({
   },
   focusCardLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, flex: 1 },
   focusEmoji: { fontSize: 32 },
+  focusCopy: { flex: 1, minWidth: 0 },
   focusTitle: { fontSize: typography.fontSizeMd, fontWeight: '700', color: colors.textPrimary },
   focusSub: { fontSize: typography.fontSizeXs, color: colors.textSecondary, marginTop: 2 },
   startChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: NF_BLUE, borderRadius: radius.full, paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
