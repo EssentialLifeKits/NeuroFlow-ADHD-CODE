@@ -30,58 +30,6 @@ import { fetchResourceCards, type ResourceCard } from '../../src/lib/adminDb';
 
 const NF_BLUE = '#4A90E2';
 
-// ─── Default cards fallback ───────────────────────────────────────────────────
-const DEFAULT_CARDS: ResourceCard[] = [
-  {
-    id: 'default-1', sort_order: 0, is_active: true, created_at: '', updated_at: '',
-    title: 'Deep Work Blueprint',
-    description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
-    icon: '📘', icon_bg: NF_BLUE + '18', accent_color: NF_BLUE,
-    link: '#', link_label: 'Download Free →',
-    slide_deck_url: null, icon_image_url: null,
-  },
-  {
-    id: 'default-2', sort_order: 1, is_active: true, created_at: '', updated_at: '',
-    title: 'Focus Timer Templates',
-    description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
-    icon: '⏱', icon_bg: 'rgba(52,211,153,0.12)', accent_color: '#34D399',
-    link: '#', link_label: 'Explore Templates →',
-    slide_deck_url: null, icon_image_url: null,
-  },
-  {
-    id: 'default-3', sort_order: 2, is_active: true, created_at: '', updated_at: '',
-    title: 'Task Batching System',
-    description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
-    icon: '📋', icon_bg: 'rgba(251,146,60,0.12)', accent_color: '#FB923C',
-    link: '#', link_label: 'Get the System →',
-    slide_deck_url: null, icon_image_url: null,
-  },
-  {
-    id: 'default-4', sort_order: 3, is_active: true, created_at: '', updated_at: '',
-    title: 'ADHD Habit Stacker',
-    description: 'Anchor new routines to existing ones — build habits without constant reminders.',
-    icon: '🔗', icon_bg: 'rgba(248,113,113,0.12)', accent_color: '#F87171',
-    link: '#', link_label: 'Learn More →',
-    slide_deck_url: null, icon_image_url: null,
-  },
-  {
-    id: 'default-5', sort_order: 4, is_active: true, created_at: '', updated_at: '',
-    title: 'Brain Dump Toolkit',
-    description: 'Capture every thought, idea, and obligation into a trusted external system.',
-    icon: '🧠', icon_bg: NF_BLUE + '14', accent_color: NF_BLUE,
-    link: '#', link_label: 'Get Toolkit →',
-    slide_deck_url: null, icon_image_url: null,
-  },
-  {
-    id: 'default-6', sort_order: 5, is_active: true, created_at: '', updated_at: '',
-    title: 'Productivity Analytics',
-    description: 'Track focus streaks, energy patterns, and see your real daily output.',
-    icon: '📊', icon_bg: 'rgba(96,165,250,0.12)', accent_color: '#60A5FA',
-    link: '#', link_label: 'Track Progress →',
-    slide_deck_url: null, icon_image_url: null,
-  },
-];
-
 // ─── Card tab button ──────────────────────────────────────────────────────────
 function CardTab({ card, isActive, onPress }: { card: ResourceCard; isActive: boolean; onPress: () => void }) {
   return (
@@ -687,6 +635,7 @@ export default function ResourceViewerScreen() {
 
   const [cards,      setCards]      = useState<ResourceCard[]>([]);
   const [loading,    setLoading]    = useState(true);
+  const [loadError,  setLoadError]  = useState<string | null>(null);
   const [activeId,   setActiveId]   = useState<string | null>(params.cardId ?? null);
   // Bumped on every card switch to guarantee full DOM teardown of iframe/video
   const [contentKey, setContentKey] = useState(0);
@@ -703,19 +652,17 @@ export default function ResourceViewerScreen() {
   useEffect(() => {
     fetchResourceCards()
       .then(fetched => {
-        const source = fetched.length > 0 ? fetched : DEFAULT_CARDS;
-        setCards(source);
-        if (!activeId && source.length > 0) {
-          setActiveId(source[0].id);
+        setCards(fetched);
+        setLoadError(null);
+        if (!activeId && fetched.length > 0) {
+          setActiveId(fetched[0].id);
           setContentKey(k => k + 1);
         }
+        if (fetched.length === 0) setLoadError('No active resource content is configured yet.');
       })
       .catch(() => {
-        setCards(DEFAULT_CARDS);
-        if (!activeId) {
-          setActiveId(DEFAULT_CARDS[0].id);
-          setContentKey(k => k + 1);
-        }
+        setCards([]);
+        setLoadError('Unable to load the latest resource content. Check the preview environment and refresh.');
       })
       .finally(() => setLoading(false));
   }, []);
@@ -747,6 +694,11 @@ export default function ResourceViewerScreen() {
 
         {loading ? (
           <ActivityIndicator color={NF_BLUE} style={{ marginTop: 48 }} />
+        ) : loadError ? (
+          <View style={styles.noDeckyBox}>
+            <Text style={styles.noDeckText}>Unable to load resources</Text>
+            <Text style={styles.noDeckSub}>{loadError}</Text>
+          </View>
         ) : (
           <View style={[styles.content, maxW ? { maxWidth: maxW, alignSelf: 'center', width: '100%' } : undefined]}>
 

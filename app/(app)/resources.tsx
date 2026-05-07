@@ -8,6 +8,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Pressable,
   ScrollView,
@@ -70,46 +71,6 @@ interface Resource {
   accent: string;
 }
 
-// Default cards — always shown immediately; DB data overlays on top when it loads
-const DEFAULT_RESOURCES: Resource[] = [
-  {
-    id: 'default-1',
-    title: 'Deep Work Blueprint',
-    description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
-    icon: '📘', iconBg: NF_BLUE + '18', link: '#', linkLabel: 'Open Resource →', accent: NF_BLUE,
-  },
-  {
-    id: 'default-2',
-    title: 'Focus Timer Templates',
-    description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
-    icon: '⏱', iconBg: 'rgba(52, 211, 153, 0.12)', link: '#', linkLabel: 'Open Resource →', accent: '#34D399',
-  },
-  {
-    id: 'default-3',
-    title: 'Task Batching System',
-    description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
-    icon: '📋', iconBg: 'rgba(251, 146, 60, 0.12)', link: '#', linkLabel: 'Open Resource →', accent: '#FB923C',
-  },
-  {
-    id: 'default-4',
-    title: 'ADHD Habit Stacker',
-    description: 'Anchor new routines to existing ones — build habits without constant reminders.',
-    icon: '🔗', iconBg: 'rgba(248, 113, 113, 0.12)', link: '#', linkLabel: 'Open Resource →', accent: '#F87171',
-  },
-  {
-    id: 'default-5',
-    title: 'Brain Dump Toolkit',
-    description: 'Capture every thought, idea, and obligation into a trusted external system.',
-    icon: '🧠', iconBg: NF_BLUE + '14', link: '#', linkLabel: 'Open Resource →', accent: NF_BLUE,
-  },
-  {
-    id: 'default-6',
-    title: 'Productivity Analytics',
-    description: 'Track focus streaks, energy patterns, and see your real daily output.',
-    icon: '📊', iconBg: 'rgba(96, 165, 250, 0.12)', link: '#', linkLabel: 'Open Resource →', accent: '#60A5FA',
-  },
-];
-
 // ─── Resource Card ────────────────────────────────────────────────────────────
 function ResourceCard({ resource, delay, cardWidth, onPress }: { resource: Resource; delay: number; cardWidth: any; onPress: () => void }) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -171,8 +132,9 @@ export default function ResourcesScreen() {
   const { width } = useWindowDimensions();
   const router = useRouter();
   const headerOpacity = useRef(new Animated.Value(0)).current;
-  // Start with hardcoded defaults — always visible instantly
-  const [resources, setResources] = useState<Resource[]>(DEFAULT_RESOURCES);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Animate header once on mount
   useEffect(() => {
@@ -190,8 +152,13 @@ export default function ResourcesScreen() {
   const syncCards = useCallback(() => {
     fetchResourceCards()
       .then(cards => {
-        if (cards.length > 0) {
-          setResources(cards.map(c => ({
+        if (cards.length === 0) {
+          setResources([]);
+          setLoadError('No active resource cards are configured yet.');
+          return;
+        }
+
+        setResources(cards.map(c => ({
             id: c.id,
             title: c.title,
             description: c.description,
@@ -200,10 +167,14 @@ export default function ResourcesScreen() {
             link: c.link,
             linkLabel: c.link_label,
             accent: c.accent_color,
-          })));
-        }
+        })));
+        setLoadError(null);
       })
-      .catch(() => {/* keep defaults */});
+      .catch(() => {
+        setResources([]);
+        setLoadError('Unable to load the latest resources. Check the preview environment and refresh.');
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   // Fetch on focus + poll every 8s for saved changes
@@ -263,18 +234,28 @@ export default function ResourcesScreen() {
           </View>
         </Animated.View>
 
-        {/* Resource Cards Grid — defaults show immediately, DB data overlays when loaded */}
-        <View style={styles.gridContainer}>
-          {resources.map((resource, i) => (
-            <ResourceCard
-              key={resource.id}
-              resource={resource}
-              delay={i * 80}
-              cardWidth={cardWidth}
-              onPress={() => router.push({ pathname: '/(app)/resource-viewer', params: { cardId: resource.id } } as any)}
-            />
-          ))}
-        </View>
+        {loading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator color={NF_BLUE} />
+            <Text style={styles.stateText}>Loading latest resources...</Text>
+          </View>
+        ) : loadError ? (
+          <View style={styles.loadingState}>
+            <Text style={styles.stateText}>{loadError}</Text>
+          </View>
+        ) : (
+          <View style={styles.gridContainer}>
+            {resources.map((resource, i) => (
+              <ResourceCard
+                key={resource.id}
+                resource={resource}
+                delay={i * 80}
+                cardWidth={cardWidth}
+                onPress={() => router.push({ pathname: '/(app)/resource-viewer', params: { cardId: resource.id } } as any)}
+              />
+            ))}
+          </View>
+        )}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -324,6 +305,18 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: 8,
   },
+  loadingState: {
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  stateText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
 
   // Cards
   card: {

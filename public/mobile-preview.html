@@ -93,9 +93,13 @@
     <section class="device" aria-label="Mobile device preview">
       <div class="speaker"></div>
       <div class="screen">
-        <iframe src="/" title="NeuroFlow app mobile preview"></iframe>
+        <iframe id="mobile-app-frame" src="/" title="NeuroFlow app mobile preview"></iframe>
       </div>
     </section>
   </main>
+  <script>
+    const frame = document.getElementById('mobile-app-frame');
+    frame.src = `/?mobilePreview=${Date.now()}`;
+  </script>
 </body>
 </html>

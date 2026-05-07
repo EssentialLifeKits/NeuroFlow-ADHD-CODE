@@ -513,31 +513,6 @@ function HowToVideoSection({
   );
 }
 
-// ─── Default cards — mirror of resources.tsx DEFAULT_RESOURCES ───────────────
-// Used as fallback when DB resource_cards table is empty, so the preview always
-// shows the 6 real cards exactly as users see them.
-
-const DEFAULT_RESOURCE_CARDS: ResourceCard[] = [
-  { id: 'default-1', sort_order: 0, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
-    title: 'Deep Work Blueprint', description: 'Science-backed protocols for ADHD deep focus — no willpower required.',
-    icon: '📘', icon_bg: NF_BLUE + '18', accent_color: NF_BLUE, link: '#', link_label: 'Open Resource →' },
-  { id: 'default-2', sort_order: 1, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
-    title: 'Focus Timer Templates', description: 'Pre-built Pomodoro + body-doubling schedules tuned for ADHD brains.',
-    icon: '⏱', icon_bg: 'rgba(52,211,153,0.12)', accent_color: '#34D399', link: '#', link_label: 'Open Resource →' },
-  { id: 'default-3', sort_order: 2, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
-    title: 'Task Batching System', description: 'Group your tasks into energy-matched batches so decisions are eliminated.',
-    icon: '📋', icon_bg: 'rgba(251,146,60,0.12)', accent_color: '#FB923C', link: '#', link_label: 'Open Resource →' },
-  { id: 'default-4', sort_order: 3, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
-    title: 'ADHD Habit Stacker', description: 'Anchor new routines to existing ones — build habits without constant reminders.',
-    icon: '🔗', icon_bg: 'rgba(248,113,113,0.12)', accent_color: '#F87171', link: '#', link_label: 'Open Resource →' },
-  { id: 'default-5', sort_order: 4, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
-    title: 'Brain Dump Toolkit', description: 'Capture every thought, idea, and obligation into a trusted external system.',
-    icon: '🧠', icon_bg: NF_BLUE + '14', accent_color: NF_BLUE, link: '#', link_label: 'Open Resource →' },
-  { id: 'default-6', sort_order: 5, is_active: true, created_at: '', updated_at: '', slide_deck_url: null, icon_image_url: null,
-    title: 'Productivity Analytics', description: 'Track focus streaks, energy patterns, and see your real daily output.',
-    icon: '📊', icon_bg: 'rgba(96,165,250,0.12)', accent_color: '#60A5FA', link: '#', link_label: 'Open Resource →' },
-];
-
 // ─── Full user-facing resource card (exact match to resources.tsx) ────────────
 
 function LiveResourceCard({ card, cardWidth }: { card: ResourceCard; cardWidth: any }) {
@@ -597,17 +572,15 @@ function LiveResourceGrid({ cards }: { cards: ResourceCard[] }) {
     ? ('100%' as any)
     : (width - sidePadding - totalGapWidth) / columns;
 
-  // If DB has no records yet, fall back to the exact same defaults the user page shows
-  const source = cards.length > 0 ? cards : DEFAULT_RESOURCE_CARDS;
-  const active = source.filter(c => c.is_active);
+  const active = cards.filter(c => c.is_active);
 
   return (
     <View>
       <Text style={liveCardStyles.previewLabel}>LIVE PREVIEW — AS USERS SEE IT</Text>
       <View style={liveCardStyles.grid}>
-        {active.map(card => (
-          <LiveResourceCard key={card.id} card={card} cardWidth={cardWidth} />
-        ))}
+        {active.length > 0
+          ? active.map(card => <LiveResourceCard key={card.id} card={card} cardWidth={cardWidth} />)
+          : <Text style={liveCardStyles.emptyText}>No active resource cards are configured.</Text>}
       </View>
     </View>
   );
@@ -629,6 +602,7 @@ const liveCardStyles = StyleSheet.create({
   cardTitle:   { fontSize: 17, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.3 },
   cardDesc:    { fontSize: 14, color: colors.textSecondary, lineHeight: 22 },
   cardLink:    { fontSize: 14, fontWeight: '700', marginTop: 6 },
+  emptyText:   { fontSize: 13, color: colors.textSecondary },
 });
 
 // ─── Resource Card Visual Preview ─────────────────────────────────────────────
@@ -1404,26 +1378,9 @@ function ResourcesSection() {
     setLoading(true);
     try {
       const fetched = await fetchAllResourceCards();
-      if (fetched.length > 0) {
-        setCards(fetched);
-      } else {
-        for (const c of DEFAULT_RESOURCE_CARDS) {
-          try {
-            await createResourceCard({
-              title: c.title, description: c.description,
-              icon: c.icon, icon_bg: c.icon_bg,
-              accent_color: c.accent_color, link: c.link,
-              link_label: c.link_label, sort_order: c.sort_order,
-              is_active: c.is_active,
-              slide_deck_url: null, icon_image_url: null,
-            });
-          } catch {}
-        }
-        const seeded = await fetchAllResourceCards();
-        setCards(seeded.length > 0 ? seeded : DEFAULT_RESOURCE_CARDS);
-      }
+      setCards(fetched);
     } catch {
-      setCards(DEFAULT_RESOURCE_CARDS);
+      setCards([]);
     } finally { setLoading(false); }
   }, []);
 
@@ -1431,7 +1388,7 @@ function ResourcesSection() {
   const silentRefresh = useCallback(async () => {
     try {
       const fetched = await fetchAllResourceCards();
-      if (fetched.length > 0) setCards(fetched);
+      setCards(fetched);
     } catch {}
   }, []);
 

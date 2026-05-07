@@ -37,6 +37,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Play, Pause, Square, Trash2, ArrowLeft } from 'lucide-react-native';
 import { useAuth } from '../../src/lib/auth';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
+import { getSetting } from '../../src/lib/adminDb';
 import {
   getOrCreateProfile,
   createFocusSession,
@@ -53,6 +54,16 @@ import {
 // ─── NeuroFlow Blue ───────────────────────────────────────────────────────────
 const NF_BLUE = '#4A90E2';
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const DEFAULT_BLUEPRINT_URL = 'https://drive.google.com/file/d/13VjjxS5zr4BXc-icAp9SDY8YGd_lEzM2/preview';
+const DEFAULT_AUDIO_URL = 'https://drive.google.com/file/d/1yEcTiYAp-rPW61fwIJL8JfVH5QMhzby7/preview';
+
+function getGoogleDriveEmbedUrl(url: string): string {
+  if (!url.includes('drive.google.com')) return url;
+  if (url.includes('/preview')) return url;
+  const match = url.match(/\/file\/d\/([^/?#]+)/);
+  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
+  return url;
+}
 
 /** Shows exact duration: 45s · 1m 30s · 5m */
 function formatDuration(mins: number): string {
@@ -507,10 +518,12 @@ export default function FocusScreen() {
   // PDF popup
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfFullscreen, setPdfFullscreen] = useState(false);
+  const [blueprintUrl, setBlueprintUrl] = useState(DEFAULT_BLUEPRINT_URL);
 
   // Audio player PiP
   const [audioOpen, setAudioOpen] = useState(false);
   const [audioFullscreen, setAudioFullscreen] = useState(false);
+  const [audioUrl, setAudioUrl] = useState(DEFAULT_AUDIO_URL);
   // Drag state — starts fixed bottom-right, switches to left/top when dragged
   const [audioPos, setAudioPos] = useState<{ left: number; top: number } | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; startLeft: number; startTop: number } | null>(null);
@@ -532,6 +545,15 @@ export default function FocusScreen() {
   const loopOuter = useRef<Animated.CompositeAnimation | null>(null);
   const loopMiddle = useRef<Animated.CompositeAnimation | null>(null);
   const loopOrb = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    getSetting('blueprint_link')
+      .then(v => { if (v) setBlueprintUrl(getGoogleDriveEmbedUrl(v)); })
+      .catch(() => {});
+    getSetting('audio_link')
+      .then(v => { if (v) setAudioUrl(getGoogleDriveEmbedUrl(v)); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -1073,7 +1095,7 @@ export default function FocusScreen() {
             </View>
             {/* PDF iframe */}
             {React.createElement('iframe', {
-              src: 'https://drive.google.com/file/d/13VjjxS5zr4BXc-icAp9SDY8YGd_lEzM2/preview',
+              src: blueprintUrl,
               style: {
                 width: '100%',
                 flex: 1,
@@ -1151,7 +1173,7 @@ export default function FocusScreen() {
         }, [
           React.createElement('iframe', {
             key: 'audio-iframe',
-            src: 'https://drive.google.com/file/d/1yEcTiYAp-rPW61fwIJL8JfVH5QMhzby7/preview',
+            src: audioUrl,
             style: { width: 'calc(100% + 64px)', height: 80, border: 'none', backgroundColor: '#fff', display: 'block' },
             allow: 'autoplay',
             title: 'Deep Work Audio Blueprint',
@@ -1210,7 +1232,7 @@ export default function FocusScreen() {
         React.createElement('div', { key: 'player-wrap', style: { width: '100%', maxWidth: 560, borderRadius: 16, overflow: 'hidden', border: `1px solid rgba(74,144,226,0.25)`, boxShadow: '0 0 40px rgba(74,144,226,0.15)', position: 'relative', zIndex: 1 } },
           React.createElement('iframe', {
             key: 'audio-iframe-fs',
-            src: 'https://drive.google.com/file/d/1yEcTiYAp-rPW61fwIJL8JfVH5QMhzby7/preview',
+            src: audioUrl,
             style: { width: '100%', height: 100, border: 'none', display: 'block', backgroundColor: '#0e0e1a' },
             allow: 'autoplay',
             title: 'Deep Work Audio Blueprint',
