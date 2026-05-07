@@ -198,12 +198,10 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
                     </View>
                 </View>
 
-                {userEmail === 'essentiallifekits@gmail.com' && (
-                    <Pressable onPress={() => navigateTo('/(app)/admin')} style={styles.adminBtn}>
-                        <Text style={styles.adminIcon}>🛡️</Text>
-                        <Text style={styles.adminText}>Admin Portal</Text>
-                    </Pressable>
-                )}
+                <Pressable onPress={() => navigateTo('/(app)/admin')} style={styles.adminBtn}>
+                    <Text style={styles.adminIcon}>🛡️</Text>
+                    <Text style={styles.adminText}>Admin Portal</Text>
+                </Pressable>
 
                 <Pressable onPress={handleSignOut} style={styles.signOutBtn}>
                     <Text style={styles.signOutIcon}>🚪</Text>
@@ -384,10 +382,10 @@ const styles = StyleSheet.create({
     elkSub: { fontSize: 10, color: colors.textTertiary, marginTop: 1 },
 
     adminBtn: {
-        flexDirection: 'row', alignItems: 'center', gap: 10,
-        paddingVertical: 11, paddingHorizontal: 16,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+        paddingVertical: 13, paddingHorizontal: 16,
         backgroundColor: NF_BLUE + '12',
-        borderWidth: 1, borderColor: NF_BLUE + '33',
+        borderWidth: 1, borderColor: NF_BLUE + '44',
         borderRadius: radius.md,
     },
     adminIcon: { fontSize: 16 },
