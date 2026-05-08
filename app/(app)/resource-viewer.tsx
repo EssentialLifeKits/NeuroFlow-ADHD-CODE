@@ -59,6 +59,25 @@ function getGoogleDriveEmbedUrl(url: string): string {
   return url;
 }
 
+function getDrivePreviewFrameStyle(isPhone: boolean) {
+  if (!isPhone) {
+    return { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' };
+  }
+
+  return {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '138%',
+    height: '138%',
+    transform: 'translate(-50%, -50%) scale(0.725)',
+    transformOrigin: 'center center',
+    borderRadius: 12,
+    backgroundColor: '#000',
+    border: 'none',
+  };
+}
+
 /** True for direct video files OR Google Drive links (which stream via iframe) */
 function isVideoUrl(url: string): boolean {
   const lower = url.toLowerCase().split('?')[0];
@@ -524,7 +543,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
               React.createElement('iframe', {
                 src: embedUrl, frameBorder: 0,
                 allow: 'autoplay; fullscreen',
-                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' },
+                style: getDrivePreviewFrameStyle(isPhone),
               }),
               React.createElement('div', {
                 style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },

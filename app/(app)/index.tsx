@@ -165,6 +165,25 @@ function getGoogleDriveEmbedUrl(url: string): string {
   return url;
 }
 
+function getDrivePreviewFrameStyle(isMobile: boolean) {
+  if (!isMobile) {
+    return { width: '100%', height: '100%', border: 'none', borderRadius: 10, backgroundColor: '#000' };
+  }
+
+  return {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '138%',
+    height: '138%',
+    transform: 'translate(-50%, -50%) scale(0.725)',
+    transformOrigin: 'center center',
+    border: 'none',
+    borderRadius: 10,
+    backgroundColor: '#000',
+  };
+}
+
 // ─── How To Video Card — inline player on Dashboard, no download ─────────────
 function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url: string }) {
   const [fullscreen, setFullscreen] = useState(false);
@@ -693,7 +712,7 @@ export default function DashboardScreen() {
                       })
                     : React.createElement('iframe', {
                         src: getGoogleDriveEmbedUrl(howToUrl),
-                        style: { width: '100%', height: '100%', border: 'none', borderRadius: 10, backgroundColor: '#000' },
+                        style: getDrivePreviewFrameStyle(isMobile),
                         title: 'How To Video', allow: 'autoplay; fullscreen',
                       })
                   }

@@ -65,6 +65,53 @@ function getGoogleDriveEmbedUrl(url: string): string {
   return url;
 }
 
+function getGoogleDriveFileId(url: string): string | null {
+  return url.match(/\/file\/d\/([^/?#]+)/)?.[1] ?? url.match(/[?&]id=([^&#]+)/)?.[1] ?? null;
+}
+
+function getGoogleDriveDownloadUrl(url: string): string {
+  const id = getGoogleDriveFileId(url);
+  return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
+}
+
+function getDriveDocumentFrameStyle(isMobile: boolean) {
+  if (!isMobile) {
+    return { width: '100%', height: '100%', border: 'none', backgroundColor: '#fff', display: 'block' };
+  }
+
+  return {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '138%',
+    height: '138%',
+    transform: 'translate(-50%, -50%) scale(0.725)',
+    transformOrigin: 'center center',
+    border: 'none',
+    backgroundColor: '#fff',
+    display: 'block',
+  };
+}
+
+function getDriveAudioFrameStyle(isMobile: boolean) {
+  if (!isMobile) {
+    return { width: '100%', height: '100%', border: 'none', backgroundColor: '#fff', display: 'block' };
+  }
+
+  return {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '138%',
+    height: '138%',
+    transform: 'translate(-50%, -50%) scale(0.725)',
+    transformOrigin: 'center center',
+    border: 'none',
+    backgroundColor: '#fff',
+    display: 'block',
+  };
+}
+
 /** Shows exact duration: 45s · 1m 30s · 5m */
 function formatDuration(mins: number): string {
   const totalSec = Math.round(mins * 60);
@@ -487,6 +534,7 @@ export default function FocusScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width > 1024;
+  const isMobile = !isDesktop;
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   // Timer state
@@ -1094,17 +1142,22 @@ export default function FocusScreen() {
               </View>
             </View>
             {/* PDF iframe */}
-            {React.createElement('iframe', {
-              src: blueprintUrl,
+            {React.createElement('div', {
               style: {
                 width: '100%',
                 flex: 1,
-                border: 'none',
                 borderRadius: '0 0 16px 16px',
                 minHeight: pdfFullscreen ? '80vh' : 480,
+                overflow: 'hidden',
+                position: 'relative',
+                backgroundColor: '#fff',
               },
-              title: 'NeuroFlow Deep Work Blueprint',
-            })}
+            }, React.createElement('iframe', {
+                src: blueprintUrl,
+                style: getDriveDocumentFrameStyle(isMobile),
+                title: 'NeuroFlow Deep Work Blueprint',
+                allow: 'autoplay',
+              }))}
           </View>
         </View>
       </Modal>
@@ -1163,21 +1216,32 @@ export default function FocusScreen() {
             React.createElement('button', { key: 'close', onClick: (e: any) => { e.stopPropagation(); setAudioOpen(false); setAudioPos(null); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '✕'),
           ]),
         ]),
-        // Clip the iframe to hide Google Drive's "open externally" icon.
-        // The icon sits at the far-right of the controls bar. Extending the
-        // iframe 60px wider than the container and clipping with overflow:hidden
-        // pushes the icon off-screen — no color-matching overlay needed.
         React.createElement('div', {
-          key: 'audio-iframe-wrap',
-          style: { overflow: 'hidden', width: '100%', height: 80, borderRadius: '0 0 16px 16px' },
+          key: 'audio-wrap',
+          style: { width: '100%', height: 96, padding: audioUrl.includes('drive.google.com') ? 0 : 12, backgroundColor: colors.bgBase, borderRadius: '0 0 16px 16px', overflow: 'hidden', position: 'relative' },
         }, [
-          React.createElement('iframe', {
-            key: 'audio-iframe',
-            src: audioUrl,
-            style: { width: 'calc(100% + 64px)', height: 80, border: 'none', backgroundColor: '#fff', display: 'block' },
-            allow: 'autoplay',
-            title: 'Deep Work Audio Blueprint',
-          }),
+          audioUrl.includes('drive.google.com')
+            ? [
+                React.createElement('iframe', {
+                  key: 'audio-drive-player',
+                  src: getGoogleDriveEmbedUrl(audioUrl),
+                  style: { ...getDriveAudioFrameStyle(isMobile), filter: 'brightness(0.62) saturate(0.85)' },
+                  allow: 'autoplay',
+                  title: 'Deep Work Audio Blueprint',
+                }),
+                React.createElement('div', {
+                  key: 'audio-tint',
+                  style: { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(11,20,38,0.42), rgba(11,20,38,0.18))', pointerEvents: 'none', mixBlendMode: 'multiply' },
+                }),
+              ]
+            : React.createElement('audio', {
+                key: 'audio-player',
+                src: getGoogleDriveDownloadUrl(audioUrl),
+                controls: true,
+                preload: 'metadata',
+                style: { width: '100%', display: 'block' },
+                title: 'Deep Work Audio Blueprint',
+              }),
         ]),
       ])}
 
@@ -1228,15 +1292,30 @@ export default function FocusScreen() {
         // Tagline
         React.createElement('div', { key: 'tag', style: { fontSize: 13, color: '#6b7280', marginBottom: 36, textAlign: 'center', maxWidth: 380, lineHeight: 1.6, position: 'relative', zIndex: 1 } }, 'Science-backed protocols for deep focus — no willpower required.'),
 
-        // iframe player
-        React.createElement('div', { key: 'player-wrap', style: { width: '100%', maxWidth: 560, borderRadius: 16, overflow: 'hidden', border: `1px solid rgba(74,144,226,0.25)`, boxShadow: '0 0 40px rgba(74,144,226,0.15)', position: 'relative', zIndex: 1 } },
-          React.createElement('iframe', {
-            key: 'audio-iframe-fs',
-            src: audioUrl,
-            style: { width: '100%', height: 100, border: 'none', display: 'block', backgroundColor: '#0e0e1a' },
-            allow: 'autoplay',
-            title: 'Deep Work Audio Blueprint',
-          }),
+        // audio player
+        React.createElement('div', { key: 'player-wrap', style: { width: '100%', maxWidth: 560, height: 112, borderRadius: 16, overflow: 'hidden', border: `1px solid rgba(74,144,226,0.25)`, boxShadow: '0 0 40px rgba(74,144,226,0.15)', position: 'relative', zIndex: 1, backgroundColor: '#0e0e1a' } },
+          audioUrl.includes('drive.google.com')
+            ? [
+                React.createElement('iframe', {
+                  key: 'audio-drive-player-fs',
+                  src: getGoogleDriveEmbedUrl(audioUrl),
+                  style: { ...getDriveAudioFrameStyle(false), filter: 'brightness(0.62) saturate(0.85)' },
+                  allow: 'autoplay',
+                  title: 'Deep Work Audio Blueprint',
+                }),
+                React.createElement('div', {
+                  key: 'audio-tint-fs',
+                  style: { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(11,20,38,0.42), rgba(11,20,38,0.18))', pointerEvents: 'none', mixBlendMode: 'multiply' },
+                }),
+              ]
+            : React.createElement('audio', {
+                key: 'audio-player-fs',
+                src: getGoogleDriveDownloadUrl(audioUrl),
+                controls: true,
+                preload: 'metadata',
+                style: { width: '100%', display: 'block', backgroundColor: '#0e0e1a' },
+                title: 'Deep Work Audio Blueprint',
+              }),
         ),
 
         // Prominent EXIT button — fixed bottom-center, always visible
