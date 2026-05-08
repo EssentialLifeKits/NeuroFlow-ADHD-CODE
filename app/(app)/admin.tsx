@@ -165,6 +165,29 @@ function Btn({
   );
 }
 
+function PreviewEmailButton({ onPress }: { onPress: () => void }) {
+  if (Platform.OS === 'web') {
+    return React.createElement('button', {
+      type: 'button',
+      onClick: onPress,
+      onMouseDown: onPress,
+      onPointerDown: onPress,
+      style: {
+        border: `1px solid ${NF_BLUE}`,
+        background: 'transparent',
+        color: NF_BLUE,
+        borderRadius: 10,
+        padding: '6px 10px',
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: 'pointer',
+      },
+    }, '👁 Preview Email');
+  }
+
+  return <Btn label="👁 Preview Email" onPress={onPress} outline color={NF_BLUE} small />;
+}
+
 function Field({
   label, value, onChangeText, placeholder, multiline = false,
 }: {
@@ -193,6 +216,127 @@ function ColorSwatch({ color, label }: { color: string; label: string }) {
   );
 }
 
+const SAMPLE_THUMBNAIL =
+  'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=320&q=80';
+
+function normalizeHex(value: string, fallback: string) {
+  const trimmed = value.trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed.toUpperCase();
+  if (/^[0-9A-Fa-f]{6}$/.test(trimmed)) return `#${trimmed.toUpperCase()}`;
+  return fallback;
+}
+
+function WebColorInput({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  if (Platform.OS !== 'web') {
+    return <ColorSwatch color={value} label="Selected" />;
+  }
+
+  return React.createElement('input', {
+    type: 'color',
+    value: normalizeHex(value, NF_BLUE),
+    onChange: (e: any) => onChange(e.target.value.toUpperCase()),
+    style: {
+      width: 86,
+      height: 46,
+      padding: 0,
+      border: '1px solid rgba(255,255,255,0.22)',
+      borderRadius: 10,
+      background: '#0e0e1a',
+      cursor: 'pointer',
+    },
+    title: 'Open color wheel',
+  });
+}
+
+function ColorWheelField({
+  label,
+  color,
+  onChange,
+}: {
+  label: string;
+  color: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <View style={{ flex: 1, minWidth: 220, gap: 8 }}>
+      <Text style={s.fieldLabel}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <WebColorInput value={color} onChange={onChange} />
+        <View style={{ flex: 1, minWidth: 120 }}>
+          <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>Hex</Text>
+          <TextInput
+            style={s.input}
+            value={color}
+            onChangeText={v => onChange(normalizeHex(v, v))}
+            placeholder="#4A90E2"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="characters"
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function EmailMiniPreview({
+  headerColor,
+  accentColor,
+  footerText,
+  compact = false,
+}: {
+  headerColor: string;
+  accentColor: string;
+  footerText: string;
+  compact?: boolean;
+}) {
+  const pad = compact ? 16 : 24;
+  return (
+    <View style={{ backgroundColor: '#15152a', borderRadius: 18, borderWidth: 1, borderColor: '#2a2a3e', overflow: 'hidden' }}>
+      <View style={{ backgroundColor: '#1a1a2e', padding: compact ? 14 : 20, borderBottomWidth: 1, borderBottomColor: '#2a2a3e', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+          <Image source={require('../../assets/neuroflow-logo.png')} style={{ width: compact ? 20 : 28, height: compact ? 20 : 28, borderRadius: 5 }} />
+          <Text style={{ fontSize: compact ? 14 : 18, fontWeight: '800', color: headerColor }} numberOfLines={1}>NeuroFlow <Text style={{ fontSize: compact ? 8 : 11, color: '#8b8b9e', fontWeight: '500' }}>Focus Planner</Text></Text>
+        </View>
+        <View style={{ backgroundColor: accentColor + '22', borderWidth: 1, borderColor: accentColor + '66', paddingHorizontal: compact ? 8 : 10, paddingVertical: 4, borderRadius: 20 }}>
+          <Text style={{ color: accentColor, fontSize: compact ? 8 : 10, fontWeight: '800' }}>⏰ DEADLINE</Text>
+        </View>
+      </View>
+
+      <View style={{ padding: pad }}>
+        <Text style={{ fontSize: compact ? 11 : 13, color: '#9ca3af', marginBottom: 6 }}>Hi Erik 👋</Text>
+        <Text style={{ fontSize: compact ? 14 : 18, fontWeight: '800', color: '#f0f0f5', marginBottom: 5 }}>🎯 It's time: Test Suva Seeds Video 10:30pm</Text>
+        <Text style={{ fontSize: compact ? 11 : 13, color: '#9ca3af', marginBottom: compact ? 14 : 20 }}>Your scheduled task is happening now.</Text>
+
+        <View style={{ backgroundColor: '#1e1e35', borderWidth: 1, borderColor: accentColor + '55', borderLeftWidth: 4, borderLeftColor: accentColor, borderRadius: 12, padding: compact ? 12 : 16, marginBottom: compact ? 14 : 20, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: compact ? 12 : 15, fontWeight: '800', color: '#f0f0f5', marginBottom: 9 }} numberOfLines={2}>⏰ Test Suva Seeds Video 10:30pm</Text>
+            <View style={{ flexDirection: 'row', gap: compact ? 14 : 24, flexWrap: 'wrap' }}>
+              <View>
+                <Text style={{ fontSize: compact ? 8 : 10, fontWeight: '800', color: '#7b8190', textTransform: 'uppercase' }}>Date</Text>
+                <Text style={{ fontSize: compact ? 10 : 13, fontWeight: '700', color: '#e5e7eb', marginTop: 3 }}>📅 Thursday, May 7, 2026</Text>
+              </View>
+              <View>
+                <Text style={{ fontSize: compact ? 8 : 10, fontWeight: '800', color: '#7b8190', textTransform: 'uppercase' }}>Time</Text>
+                <Text style={{ fontSize: compact ? 10 : 13, fontWeight: '700', color: '#e5e7eb', marginTop: 3 }}>🕐 10:30 PM</Text>
+              </View>
+            </View>
+          </View>
+          <View style={{ width: compact ? 82 : 132, aspectRatio: 1.25, borderRadius: 10, borderWidth: 2, borderColor: accentColor, overflow: 'hidden', backgroundColor: '#0e0e1a' }}>
+            <Image source={{ uri: SAMPLE_THUMBNAIL }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          </View>
+        </View>
+
+        <Text style={{ fontSize: compact ? 10 : 12, color: '#9ca3af', lineHeight: compact ? 16 : 20 }}>Open NeuroFlow and stay in your flow state. You've got this! 🌸</Text>
+      </View>
+
+      <View style={{ backgroundColor: '#0e0e1a', padding: compact ? 12 : 16, borderTopWidth: 1, borderTopColor: '#2a2a3e' }}>
+        <Text style={{ fontSize: compact ? 8 : 10, color: '#5b6170', textAlign: 'center' }}>{footerText}</Text>
+        <Text style={{ fontSize: compact ? 7 : 9, color: '#394050', textAlign: 'center', marginTop: 6 }}>Add neuroflow.reminders@gmail.com to your contacts to ensure all alerts reach your inbox.</Text>
+      </View>
+    </View>
+  );
+}
+
 // ─── Email Template Editor ────────────────────────────────────────────────────
 
 function EmailTemplateSection({
@@ -201,6 +345,8 @@ function EmailTemplateSection({
   settings: Record<string, string>;
   onSave: (key: string, value: string) => Promise<void>;
 }) {
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 760;
   const [fromEmail,    setFromEmail]    = useState(settings['from_email'] ?? '');
   const [subjectTask,  setSubjectTask]  = useState(settings['email_subject_task'] ?? '🎯 Now: {{title}}');
   const [subjectRem,   setSubjectRem]   = useState(settings['email_subject_reminder'] ?? '⏰ Reminder: {{title}}');
@@ -229,80 +375,64 @@ function EmailTemplateSection({
 
   return (
     <AccordionCard title="✉️ Email Template Editor" subtitle="Edit content, colors, and preview the live template">
+      <View style={{ gap: spacing.md, position: 'relative' }}>
 
-      {/* Color swatches row */}
       <View style={{ flexDirection: 'row', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <ColorSwatch color={headerColor} label="Header" />
         <ColorSwatch color={accentColor} label="Accent" />
         <View style={{ flex: 1 }} />
-        <Btn label="👁 Preview Email" onPress={() => setPreviewOpen(true)} outline color={NF_BLUE} small />
+        <PreviewEmailButton onPress={() => setPreviewOpen(true)} />
+      </View>
+
+      <View style={{ flexDirection: 'row', gap: 18, flexWrap: 'wrap' }}>
+        <ColorWheelField label="Header / Brand Color" color={headerColor} onChange={setHeaderColor} />
+        <ColorWheelField label="Accent / Card Border Color" color={accentColor} onChange={setAccentColor} />
       </View>
 
       <Field label="From Email Address" value={fromEmail} onChangeText={setFromEmail} placeholder="NeuroFlow <reminders@keepzbrandai.com>" />
       <Field label="At-Time Subject  (use {{title}})" value={subjectTask} onChangeText={setSubjectTask} />
       <Field label="Reminder Subject  (use {{title}})" value={subjectRem} onChangeText={setSubjectRem} />
-      <Field label="Header / Brand Color (hex)" value={headerColor} onChangeText={setHeaderColor} placeholder="#4A90E2" />
-      <Field label="Accent / Card Border Color (hex)" value={accentColor} onChangeText={setAccentColor} placeholder="#4A90E2" />
       <Field label="Footer Text" value={footerText} onChangeText={setFooterText} multiline />
 
       <Btn label={saving ? 'Saving…' : '💾 Save Email Config'} onPress={save} disabled={saving} />
 
-      {/* Live Preview Modal */}
-      <Modal visible={previewOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setPreviewOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: '#0e0e1a' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary }}>📧 Email Preview</Text>
-            <Pressable onPress={() => setPreviewOpen(false)} style={{ paddingHorizontal: 14, paddingVertical: 6, backgroundColor: colors.bgCard, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
-              <Text style={{ color: colors.textSecondary, fontWeight: '600', fontSize: 13 }}>✕ Close</Text>
-            </Pressable>
-          </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
-            <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 12, textAlign: 'center' }}>
-              Live preview — reflects your current color + content settings
-            </Text>
-            {/* Render the HTML preview as styled boxes since iframe isn't available natively */}
-            <View style={{ backgroundColor: '#15152a', borderRadius: 20, borderWidth: 1, borderColor: '#2a2a3e', overflow: 'hidden' }}>
-              {/* Header bar */}
-              <View style={{ backgroundColor: '#1a1a2e', padding: 20, borderBottomWidth: 1, borderBottomColor: '#2a2a3e', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: headerColor }}>NeuroFlow <Text style={{ fontSize: 11, color: '#6b7280', fontWeight: '400' }}>Focus Planner</Text></Text>
-                <View style={{ backgroundColor: accentColor + '22', borderWidth: 1, borderColor: accentColor + '55', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
-                  <Text style={{ color: accentColor, fontSize: 10, fontWeight: '700' }}>✅ TASK</Text>
-                </View>
+      {/* Floating live preview window */}
+      {previewOpen && (
+          <View style={{
+            position: isNarrow ? 'relative' : 'absolute',
+            right: isNarrow ? undefined : 0,
+            top: isNarrow ? undefined : 54,
+            width: isNarrow ? '100%' : '44%',
+            minWidth: isNarrow ? undefined : 420,
+            maxWidth: 760,
+            maxHeight: isNarrow ? undefined : 420,
+            backgroundColor: '#11111f',
+            borderRadius: 18,
+            borderWidth: 1,
+            borderColor: accentColor + '88',
+            overflow: 'hidden',
+            zIndex: 30,
+            boxShadow: Platform.OS === 'web' && !isNarrow ? '0 24px 70px rgba(0,0,0,0.45)' : undefined,
+          } as any}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <View>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: colors.textPrimary }}>📧 Email Preview</Text>
+                <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }}>Updates live while this window stays open</Text>
               </View>
-              {/* Body */}
-              <View style={{ padding: 24 }}>
-                <Text style={{ fontSize: 13, color: '#9ca3af', marginBottom: 6 }}>Hi there 👋</Text>
-                <Text style={{ fontSize: 18, fontWeight: '700', color: '#f0f0f5', marginBottom: 4 }}>🎯 It's time: <Text style={{ fontWeight: '800' }}>Your Task Title</Text></Text>
-                <Text style={{ fontSize: 13, color: '#9ca3af', marginBottom: 20 }}>Your scheduled task is happening now.</Text>
-                {/* Card block */}
-                <View style={{ backgroundColor: '#1e1e35', borderWidth: 1, borderColor: accentColor + '44', borderLeftWidth: 4, borderLeftColor: accentColor, borderRadius: 10, padding: 16, marginBottom: 20 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#f0f0f5', marginBottom: 10 }}>✅ Your Task Title</Text>
-                  <View style={{ flexDirection: 'row', gap: 24 }}>
-                    <View>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase' }}>DATE</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#e5e7eb', marginTop: 3 }}>📅 Saturday, April 5, 2026</Text>
-                    </View>
-                    <View>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase' }}>TIME</Text>
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#e5e7eb', marginTop: 3 }}>🕐 9:00 AM</Text>
-                    </View>
-                  </View>
-                </View>
-                <Text style={{ fontSize: 12, color: '#9ca3af', lineHeight: 20 }}>Open NeuroFlow and stay in your flow state. You've got this! 🌸</Text>
-              </View>
-              {/* Footer */}
-              <View style={{ backgroundColor: '#0e0e1a', padding: 16, borderTopWidth: 1, borderTopColor: '#2a2a3e' }}>
-                <Text style={{ fontSize: 10, color: '#4b5563', textAlign: 'center' }}>{footerText}</Text>
-              </View>
+              <Pressable onPress={() => setPreviewOpen(false)} style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.bgCard, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12 }}>✕ Close</Text>
+              </Pressable>
             </View>
-
-            <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 16, textAlign: 'center', lineHeight: 18 }}>
-              Subject (at-time): {subjectTask.replace('{{title}}', 'Your Task Title')}{'\n'}
-              Subject (reminder): {subjectRem.replace('{{title}}', 'Your Task Title')}
-            </Text>
-          </ScrollView>
-        </View>
-      </Modal>
+            <ScrollView style={{ maxHeight: isNarrow ? undefined : 356 }} contentContainerStyle={{ padding: isNarrow ? 12 : 18 }}>
+              <EmailMiniPreview headerColor={headerColor} accentColor={accentColor} footerText={footerText} compact={isNarrow ? true : true} />
+              <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 14, textAlign: 'center', lineHeight: 16 }}>
+                At-time: {subjectTask.replace('{{title}}', 'Test Suva Seeds Video 10:30pm')}{'\n'}
+                Reminder: {subjectRem.replace('{{title}}', 'Test Suva Seeds Video 10:30pm')}
+              </Text>
+            </ScrollView>
+          </View>
+      )}
+      </View>
     </AccordionCard>
   );
 }

@@ -102,7 +102,13 @@
     const appOrigin = window.location.protocol === 'file:'
       ? 'http://localhost:8081'
       : window.location.origin;
-    frame.src = `${appOrigin}/?mobilePreview=${Date.now()}`;
+    const params = new URLSearchParams(window.location.search);
+    const requestedPath = params.get('path') || '/';
+    const safePath = requestedPath.startsWith('/') && !requestedPath.startsWith('//')
+      ? requestedPath
+      : '/';
+    const joiner = safePath.includes('?') ? '&' : '?';
+    frame.src = `${appOrigin}${safePath}${joiner}mobilePreview=${Date.now()}`;
   </script>
 </body>
 </html>

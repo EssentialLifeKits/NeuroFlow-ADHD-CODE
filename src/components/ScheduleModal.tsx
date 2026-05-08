@@ -257,6 +257,13 @@ export default function ScheduleModal({
 
   const handleClose = () => { onClose(); };
 
+  const selectedEmailThumbnail = () => {
+    if (!attachedFile) return null;
+    if (capturedThumbnail) return capturedThumbnail;
+    if (attachedFile.type === 'image' && attachedFile.uri?.startsWith('data:image/')) return attachedFile.uri;
+    return null;
+  };
+
   const handleSchedule = async () => {
     if (!taskDetails.trim()) return;
     const dateStr = [
@@ -314,7 +321,7 @@ export default function ScheduleModal({
     };
 
     let savedTaskId: string | null = null;
-    if (initialData?.id) { await editTask(initialData.id, taskInput); }
+    if (initialData?.id) { await editTask(initialData.id, taskInput); savedTaskId = initialData.id; }
     else { savedTaskId = await addTask(taskInput); }
 
     // Schedule email reminder via Resend — always fires for every task with an email
@@ -339,6 +346,7 @@ export default function ScheduleModal({
             reminderOffset: apiOffset,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             taskId: savedTaskId,
+            thumbnail: selectedEmailThumbnail(),
           }),
         });
         const result = await resp.json();

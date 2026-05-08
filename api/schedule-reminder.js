@@ -15,6 +15,8 @@ const GMAIL_PASS   = process.env.GMAIL_APP_PASSWORD ?? '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
 const SUPABASE_URL    = process.env.SUPABASE_URL ?? process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+const NEUROFLOW_LOGO_URL = process.env.NEUROFLOW_LOGO_URL
+  ?? 'https://neuro-flow-adhd-code-i9is.vercel.app/remotion/neuroflow-promo/logo.png';
 
 function getGmailTransporter() {
   return nodemailer.createTransport({
@@ -63,9 +65,81 @@ const CATEGORY_META = {
   deadline:    { color: '#FB923C', emoji: '⏰', label: 'Deadline' },
 };
 
-function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function normalizeHex(value, fallback) {
+  const color = String(value ?? '').trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(color)) return color;
+  return fallback;
+}
+
+function applyTemplate(template, replacements) {
+  return String(template ?? '').replace(/\{\{(\w+)\}\}/g, (_, key) => replacements[key] ?? '');
+}
+
+async function getEmailSettings() {
+  const defaults = {
+    subjectTask: '🎯 Now: {{title}}',
+    subjectReminder: '⏰ Reminder: {{title}}',
+    headerColor: '#4A90E2',
+    accentColor: '#4A90E2',
+    footerText: 'Sent by NeuroFlow · ADHD Focus Planner · Built for your brain ✨',
+  };
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return defaults;
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/app_settings?select=key,value&key=in.(email_subject_task,email_subject_reminder,email_header_color,email_accent_color,email_footer_text)`;
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'apikey': SUPABASE_SERVICE_KEY,
+      },
+    });
+    if (!res.ok) return defaults;
+    const rows = await res.json();
+    const map = Object.fromEntries((rows ?? []).map(row => [row.key, row.value]));
+    return {
+      subjectTask: map.email_subject_task || defaults.subjectTask,
+      subjectReminder: map.email_subject_reminder || defaults.subjectReminder,
+      headerColor: normalizeHex(map.email_header_color, defaults.headerColor),
+      accentColor: normalizeHex(map.email_accent_color, defaults.accentColor),
+      footerText: map.email_footer_text || defaults.footerText,
+    };
+  } catch (e) {
+    console.warn('[schedule-reminder] email settings fallback:', e);
+    return defaults;
+  }
+}
+
+function buildThumbnailHtml(thumbnail, accentColor) {
+  if (!thumbnail || typeof thumbnail !== 'string') return '';
+  const src = thumbnail.startsWith('data:image/') || thumbnail.startsWith('https://')
+    ? thumbnail
+    : '';
+  if (!src) return '';
+
+  return `<td width="148" valign="middle" style="padding-left:18px;">
+    <div style="width:140px;height:104px;border:3px solid ${accentColor};border-radius:12px;overflow:hidden;background:#0e0e1a;">
+      <img src="${src}" alt="Task thumbnail" width="140" height="104" style="display:block;width:140px;height:104px;object-fit:cover;border:0;"/>
+    </div>
+  </td>`;
+}
+
+function buildEmailHtml({ title, dueDate, dueTime, category, userName, type, thumbnail, settings }) {
   const cat = CATEGORY_META[category?.toLowerCase()] ?? CATEGORY_META['task'];
   const isReminder = type === 'reminder';
+  const safeTitle = escapeHtml(title);
+  const safeUserName = escapeHtml(userName || 'there');
+  const headerColor = normalizeHex(settings?.headerColor, '#4A90E2');
+  const accentColor = normalizeHex(settings?.accentColor, '#4A90E2');
+  const footerText = escapeHtml(settings?.footerText || 'Sent by NeuroFlow · ADHD Focus Planner · Built for your brain ✨');
   const formattedDate = new Date(dueDate + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
@@ -73,8 +147,10 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
   const formattedTime = `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-  const headline = isReminder ? `⏰ Reminder: <strong>${title}</strong>` : `🎯 It's time: <strong>${title}</strong>`;
+  const headline = isReminder ? `⏰ Reminder: <strong>${safeTitle}</strong>` : `🎯 It's time: <strong>${safeTitle}</strong>`;
   const subline  = isReminder ? `Your scheduled task is coming up soon.` : `Your scheduled task is happening now.`;
+  const thumbnailHtml = buildThumbnailHtml(thumbnail, accentColor);
+  const cardTableWidth = thumbnailHtml ? '100%' : 'auto';
 
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>NeuroFlow Reminder</title></head>
 <body style="margin:0;padding:0;background:#0e0e1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
@@ -83,24 +159,29 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type }) {
 <table width="560" cellpadding="0" cellspacing="0" style="background:#15152a;border-radius:20px;border:1px solid #2a2a3e;overflow:hidden;max-width:560px;width:100%;">
 <tr><td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);padding:28px 32px;border-bottom:1px solid #2a2a3e;">
 <table width="100%" cellpadding="0" cellspacing="0"><tr>
-<td><span style="font-size:22px;font-weight:800;color:#4A90E2;">NeuroFlow</span><span style="font-size:13px;color:#6b7280;margin-left:8px;">Focus Planner</span></td>
+<td><img src="${NEUROFLOW_LOGO_URL}" alt="NeuroFlow" width="28" height="28" style="display:inline-block;width:28px;height:28px;border-radius:6px;vertical-align:middle;margin-right:10px;"/><span style="font-size:22px;font-weight:800;color:${headerColor};vertical-align:middle;">NeuroFlow</span><span style="font-size:13px;color:#8b8b9e;margin-left:8px;vertical-align:middle;">Focus Planner</span></td>
 <td align="right"><span style="background:${cat.color}22;border:1px solid ${cat.color}55;color:${cat.color};font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;">${cat.emoji} ${cat.label.toUpperCase()}</span></td>
 </tr></table></td></tr>
 <tr><td style="padding:32px;">
-<p style="margin:0 0 8px;font-size:14px;color:#9ca3af;">Hi ${userName || 'there'} 👋</p>
+<p style="margin:0 0 8px;font-size:14px;color:#9ca3af;">Hi ${safeUserName} 👋</p>
 <h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#f0f0f5;">${headline}</h1>
 <p style="margin:0 0 28px;font-size:14px;color:#9ca3af;">${subline}</p>
-<div style="background:#1e1e35;border:1px solid ${cat.color}44;border-left:4px solid ${cat.color};border-radius:12px;padding:20px 24px;margin-bottom:28px;">
-<p style="margin:0 0 12px;font-size:18px;font-weight:700;color:#f0f0f5;">${cat.emoji} ${title}</p>
+<div style="background:#1e1e35;border:1px solid ${accentColor}55;border-left:4px solid ${accentColor};border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+<table width="${cardTableWidth}" cellpadding="0" cellspacing="0"><tr>
+<td valign="middle">
+<p style="margin:0 0 12px;font-size:18px;font-weight:700;color:#f0f0f5;">${cat.emoji} ${safeTitle}</p>
 <table cellpadding="0" cellspacing="0"><tr>
 <td style="padding-right:24px;"><p style="margin:0;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;">DATE</p><p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#e5e7eb;">📅 ${formattedDate}</p></td>
 <td><p style="margin:0;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;">TIME</p><p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#e5e7eb;">🕐 ${formattedTime}</p></td>
+</tr></table>
+</td>
+${thumbnailHtml}
 </tr></table></div>
 <p style="margin:0 0 24px;font-size:13px;color:#9ca3af;line-height:1.6;">${isReminder ? 'Head to your NeuroFlow planner to review your task.' : "Open NeuroFlow and stay in your flow state. You've got this! 🌸"}</p>
 </td></tr>
 <tr><td style="background:#0e0e1a;padding:20px 32px;border-top:1px solid #2a2a3e;">
-<p style="margin:0 0 6px;font-size:11px;color:#4b5563;text-align:center;">Sent by NeuroFlow · ADHD Focus Planner &nbsp;·&nbsp;<span style="color:#4A90E2;">Built for your brain ✨</span></p>
-<p style="margin:0;font-size:10px;color:#374151;text-align:center;">Add <span style="color:#4A90E2;">neuroflow.reminders@gmail.com</span> to your contacts to ensure all alerts reach your inbox.</p>
+<p style="margin:0 0 6px;font-size:11px;color:#4b5563;text-align:center;">${footerText}</p>
+<p style="margin:0;font-size:10px;color:#374151;text-align:center;">Add <span style="color:${headerColor};">neuroflow.reminders@gmail.com</span> to your contacts to ensure all alerts reach your inbox.</p>
 </td></tr>
 </table></td></tr></table></body></html>`;
 }
@@ -137,12 +218,14 @@ module.exports = async function handler(req, res) {
 
   if (!GMAIL_USER || !GMAIL_PASS) return res.status(500).json({ error: 'Missing GMAIL_USER or GMAIL_APP_PASSWORD' });
 
-  const { title, dueDate, dueTime, category, userName, email, reminderOffset, timezone, taskId } = req.body ?? {};
+  const { title, dueDate, dueTime, category, userName, email, reminderOffset, timezone, taskId, thumbnail } = req.body ?? {};
   if (!title || !dueDate || !dueTime || !email) {
     return res.status(400).json({ error: 'Missing required fields: title, dueDate, dueTime, email' });
   }
 
   console.log('[schedule-reminder] Request:', { title, dueDate, dueTime, email, reminderOffset, timezone, taskId });
+  const emailSettings = await getEmailSettings();
+  const subjectVars = { title };
 
   const userTz = timezone || 'America/New_York';
   const naiveDt = new Date(`${dueDate}T${dueTime}:00`);
@@ -163,8 +246,8 @@ module.exports = async function handler(req, res) {
     try {
       await sendViaGmail({
         to: email,
-        subject: `🎯 Now: ${title}`,
-        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'at_time' }),
+        subject: applyTemplate(emailSettings.subjectTask, subjectVars),
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'at_time', thumbnail, settings: emailSettings }),
       });
       results.push({ type: 'at_time', scheduledAt: 'immediate', via: 'gmail' });
       if (taskId) await markTaskSent(taskId);
@@ -181,7 +264,7 @@ module.exports = async function handler(req, res) {
       await sendViaGmail({
         to: email,
         subject: `⏰ Starting in ${minsAway} min: ${title}`,
-        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'reminder' }),
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'reminder', thumbnail, settings: emailSettings }),
       });
       results.push({ type: 'reminder', scheduledAt: 'immediate', via: 'gmail' });
       if (taskId) await markTaskSent(taskId);
@@ -212,8 +295,8 @@ module.exports = async function handler(req, res) {
         body: JSON.stringify({
           from: `NeuroFlow ADHD <reminders@keepzbrandai.com>`,
           to: [email],
-          subject: type === 'at_time' ? `🎯 Now: ${title}` : `⏰ Reminder: ${title}`,
-          html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type }),
+          subject: applyTemplate(type === 'at_time' ? emailSettings.subjectTask : emailSettings.subjectReminder, subjectVars),
+          html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type, thumbnail, settings: emailSettings }),
           scheduled_at: sendAt.toISOString(),
         }),
       });
