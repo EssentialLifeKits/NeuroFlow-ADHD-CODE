@@ -219,6 +219,34 @@ function ColorSwatch({ color, label }: { color: string; label: string }) {
 const SAMPLE_THUMBNAIL =
   'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=320&q=80';
 
+const EMAIL_TEXT_DEFAULTS = {
+  brandName: 'NeuroFlow',
+  productName: 'Focus Planner',
+  badgeEmoji: '⏰',
+  badgeText: 'DEADLINE',
+  greetingTemplate: 'Hi {{name}}',
+  greetingEmoji: '👋',
+  atTimeHeadlineEmoji: '🎯',
+  atTimeHeadlineTemplate: "It's time: {{title}}",
+  reminderHeadlineEmoji: '⏰',
+  reminderHeadlineTemplate: 'Reminder: {{title}}',
+  atTimeSubline: 'Your scheduled task is happening now.',
+  reminderSubline: 'Your scheduled task is coming up soon.',
+  cardEmoji: '⏰',
+  sampleTitle: 'Test Suva Seeds Video 10:30pm',
+  dateLabel: 'DATE',
+  dateEmoji: '📅',
+  sampleDate: 'Thursday, May 7, 2026',
+  timeLabel: 'TIME',
+  timeEmoji: '🕐',
+  sampleTime: '10:30 PM',
+  atTimeBody: "Open NeuroFlow and stay in your flow state. You've got this! 🌸",
+  reminderBody: 'Head to your NeuroFlow planner to review your task.',
+  contactLine: 'Add neuroflow.reminders@gmail.com to your contacts to ensure all alerts reach your inbox.',
+};
+
+type EmailPreviewText = typeof EMAIL_TEXT_DEFAULTS;
+
 function normalizeHex(value: string, fallback: string) {
   const trimmed = value.trim();
   if (/^#[0-9A-Fa-f]{6}$/.test(trimmed)) return trimmed.toUpperCase();
@@ -226,26 +254,285 @@ function normalizeHex(value: string, fallback: string) {
   return fallback;
 }
 
-function WebColorInput({ value, onChange }: { value: string; onChange: (next: string) => void }) {
-  if (Platform.OS !== 'web') {
-    return <ColorSwatch color={value} label="Selected" />;
+function hslToHex(h: number, s = 92, l = 54) {
+  const sat = s / 100;
+  const light = l / 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = sat * Math.min(light, 1 - light);
+  const f = (n: number) => light - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toHex = (x: number) => Math.round(255 * x).toString(16).padStart(2, '0');
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`.toUpperCase();
+}
+
+const BOARD_COLORS = [
+  '#FF3B30', '#FF9500', '#FFFF00', '#00E51D', '#20E4F5', '#064DFF', '#D43CFF', '#B73AB8', '#A67C52', '#FFFFFF', '#9B9B9B', '#111111',
+  '#F5F5F5', '#E9E9E9', '#D4D4D4', '#BDBDBD', '#A5A5A5', '#8A8A8A', '#6F6F6F', '#545454', '#3D3D3D', '#282828', '#151515',
+  '#083B46', '#093B74', '#261052', '#4A105C', '#6D163A', '#84230D', '#7C2C00', '#6E4200', '#665000', '#6F7300', '#466B18',
+  '#0B6078', '#0E55A4', '#3E2085', '#64228C', '#8C2456', '#B43A14', '#B84E05', '#A86500', '#A47C00', '#A5A900', '#5F842E',
+  '#158AA5', '#1472D4', '#5730B9', '#8B2DB2', '#B93575', '#E24A1A', '#E56405', '#D68700', '#D0AD00', '#D3DB00', '#77A944',
+  '#1FB6D5', '#208BFF', '#7444ED', '#BA42EF', '#ED4D97', '#FF6137', '#FF7F15', '#FFA31E', '#FFC928', '#EDFF39', '#8AD157',
+  '#66D6E6', '#7FB8FF', '#9A73F5', '#D674F4', '#F480B5', '#FF9278', '#FFAD69', '#FFC878', '#FFE27A', '#F2FF86', '#A8DD82',
+  '#B8EDF5', '#C2DAFF', '#D4BEFF', '#EFC1FA', '#FFD0E4', '#FFD2C9', '#FFE0C5', '#FFEBCD', '#FFF4CB', '#FBFFD0', '#D6EFC3',
+];
+
+function NativeButton({ label, onPress, style }: { label: string; onPress: () => void; style?: any }) {
+  if (Platform.OS === 'web') {
+    return React.createElement('button', {
+      type: 'button',
+      onClick: onPress,
+      style: {
+        border: 0,
+        borderRadius: 9,
+        padding: '9px 18px',
+        background: '#3A3A40',
+        color: '#fff',
+        fontWeight: 800,
+        fontSize: 15,
+        cursor: 'pointer',
+        ...(style || {}),
+      },
+    }, label);
+  }
+  return (
+    <Pressable onPress={onPress} style={[{ borderRadius: 9, paddingHorizontal: 18, paddingVertical: 9, backgroundColor: '#3A3A40' }, style]}>
+      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ColorDetailPopup({
+  color,
+  onChange,
+  onClose,
+}: {
+  color: string;
+  onChange: (next: string) => void;
+  onClose: () => void;
+}) {
+  const [hue, setHue] = useState(210);
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 760;
+  const wheelSize = isNarrow ? Math.min(width - 108, 250) : 310;
+
+  const pickWithDropper = async () => {
+    const picker = typeof window !== 'undefined' ? (window as any).EyeDropper : null;
+    if (!picker) return;
+    try {
+      const result = await new picker().open();
+      if (result?.sRGBHex) onChange(result.sRGBHex.toUpperCase());
+    } catch {}
+  };
+
+  const wheel = Platform.OS === 'web'
+    ? React.createElement('div', {
+        onClick: () => onChange(hslToHex(hue)),
+        style: {
+          width: wheelSize,
+          height: wheelSize,
+          maxWidth: '100%',
+          borderRadius: '50%',
+          margin: '18px auto 22px',
+          position: 'relative',
+          cursor: 'crosshair',
+          background:
+            'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.55) 28%, rgba(255,255,255,0) 58%), conic-gradient(#ff0040, #ff7a00, #fbff00, #00d936, #00d2ff, #263cff, #d000ff, #ff0040)',
+        },
+      },
+      React.createElement('div', { style: { position: 'absolute', left: '32%', top: '25%', width: 22, height: 22, border: '2px solid #000', borderRadius: '50%', transform: 'translate(-50%,-50%)' } }),
+      React.createElement('div', { style: { position: 'absolute', left: '32%', top: '25%', width: 30, height: 2, background: '#000', transform: 'translate(-50%,-50%)' } }),
+      React.createElement('div', { style: { position: 'absolute', left: '32%', top: '25%', width: 2, height: 30, background: '#000', transform: 'translate(-50%,-50%)' } }))
+    : <View style={{ width: 260, height: 260, borderRadius: 130, backgroundColor: color, alignSelf: 'center', marginVertical: 18 }} />;
+
+  const pickerContent = (
+      <ScrollView
+        style={{ maxHeight: isNarrow ? 'calc(100vh - 150px)' : undefined } as any}
+        contentContainerStyle={{ padding: 18, paddingBottom: isNarrow ? 22 : 18 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ flex: 1, textAlign: 'center', color: '#9B9BA3', fontSize: 18, fontWeight: '700' }}>Colors</Text>
+          <NativeButton label="×" onPress={onClose} style={{ padding: '4px 10px', borderRadius: 14, background: '#303036' }} />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: isNarrow ? 10 : 16, marginTop: 12 }}>
+          <View style={{ width: 76, height: 52, borderRadius: 12, backgroundColor: '#2A2B30', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: color }} />
+          </View>
+          <View style={{ gap: 3 }}>
+            <View style={{ width: 42, height: 6, backgroundColor: '#ff6b7f', borderRadius: 4 }} />
+            <View style={{ width: 42, height: 6, backgroundColor: '#4ade80', borderRadius: 4 }} />
+            <View style={{ width: 42, height: 6, backgroundColor: '#818cf8', borderRadius: 4 }} />
+          </View>
+          <Text style={{ fontSize: 30 }}>🔳</Text>
+          <Text style={{ fontSize: 30 }}>🌄</Text>
+          <Text style={{ fontSize: 30 }}>🖍️</Text>
+        </View>
+        {wheel}
+        {Platform.OS === 'web' ? React.createElement('input', {
+          type: 'range',
+          min: 0,
+          max: 360,
+          value: hue,
+          onChange: (e: any) => {
+            const nextHue = Number(e.target.value);
+            setHue(nextHue);
+            onChange(hslToHex(nextHue));
+          },
+          style: {
+            width: '100%',
+            accentColor: color,
+            cursor: 'pointer',
+          },
+        }) : null}
+        {isNarrow ? (
+          <View style={{ gap: 12, marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <NativeButton label="🖌" onPress={pickWithDropper} style={{ background: 'transparent', color: '#d7d7dc', fontSize: 22, padding: '6px 8px' }} />
+              <View style={{ width: 58, height: 58, borderRadius: 10, backgroundColor: color, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }} />
+              <View style={{ borderWidth: 1, borderColor: '#3a3a42', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+                <Text style={{ color: '#f0f0f5', fontWeight: '800' }}>100%</Text>
+              </View>
+            </View>
+            <View>
+              <Text style={{ color: '#f0f0f5', fontWeight: '800', marginBottom: 8 }}>Opacity</Text>
+              {Platform.OS === 'web' ? React.createElement('input', {
+                type: 'range',
+                min: 0,
+                max: 100,
+                value: 100,
+                readOnly: true,
+                style: { width: '100%', accentColor: '#f0f0f5' },
+              }) : null}
+            </View>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 16 }}>
+            <NativeButton label="🖌" onPress={pickWithDropper} style={{ background: 'transparent', color: '#d7d7dc', fontSize: 22, padding: '6px 8px' }} />
+            <View style={{ width: 58, height: 58, borderRadius: 10, backgroundColor: color, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#f0f0f5', fontWeight: '800', marginBottom: 8 }}>Opacity</Text>
+              {Platform.OS === 'web' ? React.createElement('input', {
+                type: 'range',
+                min: 0,
+                max: 100,
+                value: 100,
+                readOnly: true,
+                style: { width: '100%', accentColor: '#f0f0f5' },
+              }) : null}
+            </View>
+            <View style={{ borderWidth: 1, borderColor: '#3a3a42', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
+              <Text style={{ color: '#f0f0f5', fontWeight: '800' }}>100%</Text>
+            </View>
+          </View>
+        )}
+      </ScrollView>
+  );
+
+  if (isNarrow) {
+    return (
+      <Modal transparent visible animationType="fade" onRequestClose={onClose}>
+        <View style={{
+          flex: 1,
+          justifyContent: 'center',
+          paddingHorizontal: 18,
+          paddingVertical: 72,
+          backgroundColor: 'rgba(0,0,0,0.58)',
+          zIndex: 999,
+        }}>
+          <View style={{
+            width: '100%',
+            maxWidth: 380,
+            alignSelf: 'center',
+            backgroundColor: '#202124',
+            borderRadius: 24,
+            borderWidth: 1,
+            borderColor: '#4A4A4F',
+            overflow: 'hidden',
+            boxShadow: Platform.OS === 'web' ? '0 24px 70px rgba(0,0,0,0.5)' : undefined,
+          } as any}>
+            {pickerContent}
+          </View>
+        </View>
+      </Modal>
+    );
   }
 
-  return React.createElement('input', {
-    type: 'color',
-    value: normalizeHex(value, NF_BLUE),
-    onChange: (e: any) => onChange(e.target.value.toUpperCase()),
-    style: {
-      width: 86,
-      height: 46,
+  return (
+    <View style={{
+      position: 'absolute',
+      left: 0,
+      top: 98,
+      width: 380,
+      maxWidth: '100%',
+      backgroundColor: '#202124',
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: '#4A4A4F',
       padding: 0,
-      border: '1px solid rgba(255,255,255,0.22)',
-      borderRadius: 10,
-      background: '#0e0e1a',
-      cursor: 'pointer',
-    },
-    title: 'Open color wheel',
-  });
+      zIndex: 999,
+      boxShadow: Platform.OS === 'web' ? '0 24px 70px rgba(0,0,0,0.5)' : undefined,
+    } as any}>
+      {pickerContent}
+    </View>
+  );
+}
+
+function ColorBoardPicker({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 760;
+  const normalized = normalizeHex(value, NF_BLUE);
+
+  return (
+    <View style={{ position: 'relative', zIndex: boardOpen || detailOpen ? 60 : 1, width: isNarrow && boardOpen ? '100%' : undefined }}>
+      <Pressable
+        onPress={() => { setBoardOpen(v => !v); setDetailOpen(false); }}
+        style={{ width: 92, height: 46, borderRadius: 8, backgroundColor: normalized, borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)' }}
+      />
+      {boardOpen && (
+        <View style={{
+          position: isNarrow ? 'relative' : 'absolute',
+          left: isNarrow ? undefined : 0,
+          top: isNarrow ? undefined : 54,
+          width: isNarrow ? '100%' : 318,
+          backgroundColor: '#15151d',
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: '#4A4A55',
+          padding: 18,
+          zIndex: 70,
+          marginTop: isNarrow ? 10 : 0,
+          boxShadow: Platform.OS === 'web' ? '0 18px 52px rgba(0,0,0,0.42)' : undefined,
+        } as any}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
+            {BOARD_COLORS.map(c => (
+              <Pressable
+                key={c}
+                onPress={() => onChange(c)}
+                style={{
+                  width: 22,
+                  height: 22,
+                  backgroundColor: c,
+                  borderWidth: normalized === c ? 2 : 1,
+                  borderColor: normalized === c ? '#fff' : '#111',
+                }}
+              />
+            ))}
+          </View>
+          <View style={{ alignItems: 'center', marginTop: 16 }}>
+            <NativeButton label="Show Colors..." onPress={() => setDetailOpen(true)} />
+          </View>
+          {detailOpen && (
+            <ColorDetailPopup
+              color={normalized}
+              onChange={onChange}
+              onClose={() => setDetailOpen(false)}
+            />
+          )}
+        </View>
+      )}
+    </View>
+  );
 }
 
 function ColorWheelField({
@@ -257,11 +544,13 @@ function ColorWheelField({
   color: string;
   onChange: (next: string) => void;
 }) {
+  const { width } = useWindowDimensions();
+  const isNarrow = width < 760;
   return (
     <View style={{ flex: 1, minWidth: 220, gap: 8 }}>
       <Text style={s.fieldLabel}>{label}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <WebColorInput value={color} onChange={onChange} />
+      <View style={{ flexDirection: isNarrow ? 'column' : 'row', alignItems: isNarrow ? 'stretch' : 'center', gap: 12 }}>
+        <ColorBoardPicker value={color} onChange={onChange} />
         <View style={{ flex: 1, minWidth: 120 }}>
           <Text style={{ fontSize: 10, fontWeight: '800', color: colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>Hex</Text>
           <TextInput
@@ -282,42 +571,46 @@ function EmailMiniPreview({
   headerColor,
   accentColor,
   footerText,
+  text,
   compact = false,
 }: {
   headerColor: string;
   accentColor: string;
   footerText: string;
+  text: EmailPreviewText;
   compact?: boolean;
 }) {
   const pad = compact ? 16 : 24;
+  const headline = text.atTimeHeadlineTemplate.replace('{{title}}', text.sampleTitle);
+  const greeting = text.greetingTemplate.replace('{{name}}', 'Erik');
   return (
     <View style={{ backgroundColor: '#15152a', borderRadius: 18, borderWidth: 1, borderColor: '#2a2a3e', overflow: 'hidden' }}>
       <View style={{ backgroundColor: '#1a1a2e', padding: compact ? 14 : 20, borderBottomWidth: 1, borderBottomColor: '#2a2a3e', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
           <Image source={require('../../assets/neuroflow-logo.png')} style={{ width: compact ? 20 : 28, height: compact ? 20 : 28, borderRadius: 5 }} />
-          <Text style={{ fontSize: compact ? 14 : 18, fontWeight: '800', color: headerColor }} numberOfLines={1}>NeuroFlow <Text style={{ fontSize: compact ? 8 : 11, color: '#8b8b9e', fontWeight: '500' }}>Focus Planner</Text></Text>
+          <Text style={{ fontSize: compact ? 14 : 18, fontWeight: '800', color: headerColor }} numberOfLines={1}>{text.brandName} <Text style={{ fontSize: compact ? 8 : 11, color: '#8b8b9e', fontWeight: '500' }}>{text.productName}</Text></Text>
         </View>
         <View style={{ backgroundColor: accentColor + '22', borderWidth: 1, borderColor: accentColor + '66', paddingHorizontal: compact ? 8 : 10, paddingVertical: 4, borderRadius: 20 }}>
-          <Text style={{ color: accentColor, fontSize: compact ? 8 : 10, fontWeight: '800' }}>⏰ DEADLINE</Text>
+          <Text style={{ color: accentColor, fontSize: compact ? 8 : 10, fontWeight: '800' }}>{text.badgeEmoji} {text.badgeText}</Text>
         </View>
       </View>
 
       <View style={{ padding: pad }}>
-        <Text style={{ fontSize: compact ? 11 : 13, color: '#9ca3af', marginBottom: 6 }}>Hi Erik 👋</Text>
-        <Text style={{ fontSize: compact ? 14 : 18, fontWeight: '800', color: '#f0f0f5', marginBottom: 5 }}>🎯 It's time: Test Suva Seeds Video 10:30pm</Text>
-        <Text style={{ fontSize: compact ? 11 : 13, color: '#9ca3af', marginBottom: compact ? 14 : 20 }}>Your scheduled task is happening now.</Text>
+        <Text style={{ fontSize: compact ? 11 : 13, color: '#9ca3af', marginBottom: 6 }}>{greeting} {text.greetingEmoji}</Text>
+        <Text style={{ fontSize: compact ? 14 : 18, fontWeight: '800', color: '#f0f0f5', marginBottom: 5 }}>{text.atTimeHeadlineEmoji} {headline}</Text>
+        <Text style={{ fontSize: compact ? 11 : 13, color: '#9ca3af', marginBottom: compact ? 14 : 20 }}>{text.atTimeSubline}</Text>
 
         <View style={{ backgroundColor: '#1e1e35', borderWidth: 1, borderColor: accentColor + '55', borderLeftWidth: 4, borderLeftColor: accentColor, borderRadius: 12, padding: compact ? 12 : 16, marginBottom: compact ? 14 : 20, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: compact ? 12 : 15, fontWeight: '800', color: '#f0f0f5', marginBottom: 9 }} numberOfLines={2}>⏰ Test Suva Seeds Video 10:30pm</Text>
+            <Text style={{ fontSize: compact ? 12 : 15, fontWeight: '800', color: '#f0f0f5', marginBottom: 9 }} numberOfLines={2}>{text.cardEmoji} {text.sampleTitle}</Text>
             <View style={{ flexDirection: 'row', gap: compact ? 14 : 24, flexWrap: 'wrap' }}>
               <View>
-                <Text style={{ fontSize: compact ? 8 : 10, fontWeight: '800', color: '#7b8190', textTransform: 'uppercase' }}>Date</Text>
-                <Text style={{ fontSize: compact ? 10 : 13, fontWeight: '700', color: '#e5e7eb', marginTop: 3 }}>📅 Thursday, May 7, 2026</Text>
+                <Text style={{ fontSize: compact ? 8 : 10, fontWeight: '800', color: '#7b8190', textTransform: 'uppercase' }}>{text.dateLabel}</Text>
+                <Text style={{ fontSize: compact ? 10 : 13, fontWeight: '700', color: '#e5e7eb', marginTop: 3 }}>{text.dateEmoji} {text.sampleDate}</Text>
               </View>
               <View>
-                <Text style={{ fontSize: compact ? 8 : 10, fontWeight: '800', color: '#7b8190', textTransform: 'uppercase' }}>Time</Text>
-                <Text style={{ fontSize: compact ? 10 : 13, fontWeight: '700', color: '#e5e7eb', marginTop: 3 }}>🕐 10:30 PM</Text>
+                <Text style={{ fontSize: compact ? 8 : 10, fontWeight: '800', color: '#7b8190', textTransform: 'uppercase' }}>{text.timeLabel}</Text>
+                <Text style={{ fontSize: compact ? 10 : 13, fontWeight: '700', color: '#e5e7eb', marginTop: 3 }}>{text.timeEmoji} {text.sampleTime}</Text>
               </View>
             </View>
           </View>
@@ -326,12 +619,12 @@ function EmailMiniPreview({
           </View>
         </View>
 
-        <Text style={{ fontSize: compact ? 10 : 12, color: '#9ca3af', lineHeight: compact ? 16 : 20 }}>Open NeuroFlow and stay in your flow state. You've got this! 🌸</Text>
+        <Text style={{ fontSize: compact ? 10 : 12, color: '#9ca3af', lineHeight: compact ? 16 : 20 }}>{text.atTimeBody}</Text>
       </View>
 
       <View style={{ backgroundColor: '#0e0e1a', padding: compact ? 12 : 16, borderTopWidth: 1, borderTopColor: '#2a2a3e' }}>
         <Text style={{ fontSize: compact ? 8 : 10, color: '#5b6170', textAlign: 'center' }}>{footerText}</Text>
-        <Text style={{ fontSize: compact ? 7 : 9, color: '#394050', textAlign: 'center', marginTop: 6 }}>Add neuroflow.reminders@gmail.com to your contacts to ensure all alerts reach your inbox.</Text>
+        <Text style={{ fontSize: compact ? 7 : 9, color: '#394050', textAlign: 'center', marginTop: 6 }}>{text.contactLine}</Text>
       </View>
     </View>
   );
@@ -353,8 +646,36 @@ function EmailTemplateSection({
   const [headerColor,  setHeaderColor]  = useState(settings['email_header_color'] ?? '#4A90E2');
   const [accentColor,  setAccentColor]  = useState(settings['email_accent_color'] ?? '#4A90E2');
   const [footerText,   setFooterText]   = useState(settings['email_footer_text'] ?? 'Sent by NeuroFlow · ADHD Focus Planner · Built for your brain ✨');
+  const [emailText, setEmailText] = useState<EmailPreviewText>({
+    brandName: settings['email_brand_name'] ?? EMAIL_TEXT_DEFAULTS.brandName,
+    productName: settings['email_product_name'] ?? EMAIL_TEXT_DEFAULTS.productName,
+    badgeEmoji: settings['email_badge_emoji'] ?? EMAIL_TEXT_DEFAULTS.badgeEmoji,
+    badgeText: settings['email_badge_text'] ?? EMAIL_TEXT_DEFAULTS.badgeText,
+    greetingTemplate: settings['email_greeting_template'] ?? EMAIL_TEXT_DEFAULTS.greetingTemplate,
+    greetingEmoji: settings['email_greeting_emoji'] ?? EMAIL_TEXT_DEFAULTS.greetingEmoji,
+    atTimeHeadlineEmoji: settings['email_at_time_headline_emoji'] ?? EMAIL_TEXT_DEFAULTS.atTimeHeadlineEmoji,
+    atTimeHeadlineTemplate: settings['email_at_time_headline_template'] ?? EMAIL_TEXT_DEFAULTS.atTimeHeadlineTemplate,
+    reminderHeadlineEmoji: settings['email_reminder_headline_emoji'] ?? EMAIL_TEXT_DEFAULTS.reminderHeadlineEmoji,
+    reminderHeadlineTemplate: settings['email_reminder_headline_template'] ?? EMAIL_TEXT_DEFAULTS.reminderHeadlineTemplate,
+    atTimeSubline: settings['email_at_time_subline'] ?? EMAIL_TEXT_DEFAULTS.atTimeSubline,
+    reminderSubline: settings['email_reminder_subline'] ?? EMAIL_TEXT_DEFAULTS.reminderSubline,
+    cardEmoji: settings['email_card_emoji'] ?? EMAIL_TEXT_DEFAULTS.cardEmoji,
+    sampleTitle: settings['email_sample_title'] ?? EMAIL_TEXT_DEFAULTS.sampleTitle,
+    dateLabel: settings['email_date_label'] ?? EMAIL_TEXT_DEFAULTS.dateLabel,
+    dateEmoji: settings['email_date_emoji'] ?? EMAIL_TEXT_DEFAULTS.dateEmoji,
+    sampleDate: settings['email_sample_date'] ?? EMAIL_TEXT_DEFAULTS.sampleDate,
+    timeLabel: settings['email_time_label'] ?? EMAIL_TEXT_DEFAULTS.timeLabel,
+    timeEmoji: settings['email_time_emoji'] ?? EMAIL_TEXT_DEFAULTS.timeEmoji,
+    sampleTime: settings['email_sample_time'] ?? EMAIL_TEXT_DEFAULTS.sampleTime,
+    atTimeBody: settings['email_at_time_body'] ?? EMAIL_TEXT_DEFAULTS.atTimeBody,
+    reminderBody: settings['email_reminder_body'] ?? EMAIL_TEXT_DEFAULTS.reminderBody,
+    contactLine: settings['email_contact_line'] ?? EMAIL_TEXT_DEFAULTS.contactLine,
+  });
   const [previewOpen,  setPreviewOpen]  = useState(false);
   const [saving, setSaving]            = useState(false);
+  const updateEmailText = (key: keyof EmailPreviewText, value: string) => {
+    setEmailText(prev => ({ ...prev, [key]: value }));
+  };
 
   async function save() {
     setSaving(true);
@@ -366,6 +687,29 @@ function EmailTemplateSection({
         onSave('email_header_color', headerColor),
         onSave('email_accent_color', accentColor),
         onSave('email_footer_text', footerText),
+        onSave('email_brand_name', emailText.brandName),
+        onSave('email_product_name', emailText.productName),
+        onSave('email_badge_emoji', emailText.badgeEmoji),
+        onSave('email_badge_text', emailText.badgeText),
+        onSave('email_greeting_template', emailText.greetingTemplate),
+        onSave('email_greeting_emoji', emailText.greetingEmoji),
+        onSave('email_at_time_headline_emoji', emailText.atTimeHeadlineEmoji),
+        onSave('email_at_time_headline_template', emailText.atTimeHeadlineTemplate),
+        onSave('email_reminder_headline_emoji', emailText.reminderHeadlineEmoji),
+        onSave('email_reminder_headline_template', emailText.reminderHeadlineTemplate),
+        onSave('email_at_time_subline', emailText.atTimeSubline),
+        onSave('email_reminder_subline', emailText.reminderSubline),
+        onSave('email_card_emoji', emailText.cardEmoji),
+        onSave('email_sample_title', emailText.sampleTitle),
+        onSave('email_date_label', emailText.dateLabel),
+        onSave('email_date_emoji', emailText.dateEmoji),
+        onSave('email_sample_date', emailText.sampleDate),
+        onSave('email_time_label', emailText.timeLabel),
+        onSave('email_time_emoji', emailText.timeEmoji),
+        onSave('email_sample_time', emailText.sampleTime),
+        onSave('email_at_time_body', emailText.atTimeBody),
+        onSave('email_reminder_body', emailText.reminderBody),
+        onSave('email_contact_line', emailText.contactLine),
       ]);
       Alert.alert('Saved', 'Email template config updated.');
     } finally {
@@ -392,27 +736,141 @@ function EmailTemplateSection({
       <Field label="From Email Address" value={fromEmail} onChangeText={setFromEmail} placeholder="NeuroFlow <reminders@keepzbrandai.com>" />
       <Field label="At-Time Subject  (use {{title}})" value={subjectTask} onChangeText={setSubjectTask} />
       <Field label="Reminder Subject  (use {{title}})" value={subjectRem} onChangeText={setSubjectRem} />
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ flex: 1, minWidth: 220 }}>
+          <Field label="Brand Name" value={emailText.brandName} onChangeText={v => updateEmailText('brandName', v)} />
+        </View>
+        <View style={{ flex: 1, minWidth: 220 }}>
+          <Field label="Product / Header Text" value={emailText.productName} onChangeText={v => updateEmailText('productName', v)} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ width: 140 }}>
+          <Field label="Badge Emoji" value={emailText.badgeEmoji} onChangeText={v => updateEmailText('badgeEmoji', v)} />
+        </View>
+        <View style={{ flex: 1, minWidth: 220 }}>
+          <Field label="Badge Text" value={emailText.badgeText} onChangeText={v => updateEmailText('badgeText', v)} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ flex: 1, minWidth: 220 }}>
+          <Field label="Greeting Text (use {{name}})" value={emailText.greetingTemplate} onChangeText={v => updateEmailText('greetingTemplate', v)} />
+        </View>
+        <View style={{ width: 140 }}>
+          <Field label="Greeting Emoji" value={emailText.greetingEmoji} onChangeText={v => updateEmailText('greetingEmoji', v)} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ width: 140 }}>
+          <Field label="At-Time Emoji" value={emailText.atTimeHeadlineEmoji} onChangeText={v => updateEmailText('atTimeHeadlineEmoji', v)} />
+        </View>
+        <View style={{ flex: 1, minWidth: 260 }}>
+          <Field label="At-Time Headline (use {{title}})" value={emailText.atTimeHeadlineTemplate} onChangeText={v => updateEmailText('atTimeHeadlineTemplate', v)} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ width: 140 }}>
+          <Field label="Reminder Emoji" value={emailText.reminderHeadlineEmoji} onChangeText={v => updateEmailText('reminderHeadlineEmoji', v)} />
+        </View>
+        <View style={{ flex: 1, minWidth: 260 }}>
+          <Field label="Reminder Headline (use {{title}})" value={emailText.reminderHeadlineTemplate} onChangeText={v => updateEmailText('reminderHeadlineTemplate', v)} />
+        </View>
+      </View>
+      <Field label="At-Time Subline" value={emailText.atTimeSubline} onChangeText={v => updateEmailText('atTimeSubline', v)} />
+      <Field label="Reminder Subline" value={emailText.reminderSubline} onChangeText={v => updateEmailText('reminderSubline', v)} />
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ width: 140 }}>
+          <Field label="Card Emoji" value={emailText.cardEmoji} onChangeText={v => updateEmailText('cardEmoji', v)} />
+        </View>
+        <View style={{ flex: 1, minWidth: 260 }}>
+          <Field label="Preview Task Title" value={emailText.sampleTitle} onChangeText={v => updateEmailText('sampleTitle', v)} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ flex: 1, minWidth: 180 }}>
+          <Field label="Date Label" value={emailText.dateLabel} onChangeText={v => updateEmailText('dateLabel', v)} />
+        </View>
+        <View style={{ width: 140 }}>
+          <Field label="Date Emoji" value={emailText.dateEmoji} onChangeText={v => updateEmailText('dateEmoji', v)} />
+        </View>
+        <View style={{ flex: 1, minWidth: 220 }}>
+          <Field label="Preview Date" value={emailText.sampleDate} onChangeText={v => updateEmailText('sampleDate', v)} />
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+        <View style={{ flex: 1, minWidth: 180 }}>
+          <Field label="Time Label" value={emailText.timeLabel} onChangeText={v => updateEmailText('timeLabel', v)} />
+        </View>
+        <View style={{ width: 140 }}>
+          <Field label="Time Emoji" value={emailText.timeEmoji} onChangeText={v => updateEmailText('timeEmoji', v)} />
+        </View>
+        <View style={{ flex: 1, minWidth: 180 }}>
+          <Field label="Preview Time" value={emailText.sampleTime} onChangeText={v => updateEmailText('sampleTime', v)} />
+        </View>
+      </View>
+      <Field label="At-Time Body Text" value={emailText.atTimeBody} onChangeText={v => updateEmailText('atTimeBody', v)} multiline />
+      <Field label="Reminder Body Text" value={emailText.reminderBody} onChangeText={v => updateEmailText('reminderBody', v)} multiline />
       <Field label="Footer Text" value={footerText} onChangeText={setFooterText} multiline />
+      <Field label="Contact Line" value={emailText.contactLine} onChangeText={v => updateEmailText('contactLine', v)} multiline />
 
       <Btn label={saving ? 'Saving…' : '💾 Save Email Config'} onPress={save} disabled={saving} />
 
       {/* Floating live preview window */}
-      {previewOpen && (
+      {previewOpen && (isNarrow ? (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setPreviewOpen(false)}>
           <View style={{
-            position: isNarrow ? 'relative' : 'absolute',
-            right: isNarrow ? undefined : 0,
-            top: isNarrow ? undefined : 54,
-            width: isNarrow ? '100%' : '44%',
-            minWidth: isNarrow ? undefined : 420,
+            flex: 1,
+            justifyContent: 'center',
+            paddingHorizontal: 14,
+            paddingVertical: 58,
+            backgroundColor: 'rgba(0,0,0,0.62)',
+          }}>
+            <View style={{
+              width: '100%',
+              maxWidth: 420,
+              alignSelf: 'center',
+              maxHeight: '86%',
+              backgroundColor: '#11111f',
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: accentColor + '88',
+              overflow: 'hidden',
+            } as any}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.textPrimary }}>📧 Email Preview</Text>
+                  <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }}>Updates live while this window stays open</Text>
+                </View>
+                <Pressable onPress={() => setPreviewOpen(false)} style={{ paddingHorizontal: 12, paddingVertical: 7, backgroundColor: colors.bgCard, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12 }}>✕ Close</Text>
+                </Pressable>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: 12 }}>
+                <EmailMiniPreview headerColor={headerColor} accentColor={accentColor} footerText={footerText} text={emailText} compact />
+                <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 14, textAlign: 'center', lineHeight: 16 }}>
+                  At-time: {subjectTask.replace('{{title}}', emailText.sampleTitle)}{'\n'}
+                  Reminder: {subjectRem.replace('{{title}}', emailText.sampleTitle)}
+                </Text>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      ) : (
+          <View style={{
+            position: 'absolute',
+            right: 0,
+            top: 54,
+            width: '44%',
+            minWidth: 420,
             maxWidth: 760,
-            maxHeight: isNarrow ? undefined : 420,
+            maxHeight: 420,
             backgroundColor: '#11111f',
             borderRadius: 18,
             borderWidth: 1,
             borderColor: accentColor + '88',
             overflow: 'hidden',
             zIndex: 30,
-            boxShadow: Platform.OS === 'web' && !isNarrow ? '0 24px 70px rgba(0,0,0,0.45)' : undefined,
+            boxShadow: Platform.OS === 'web' ? '0 24px 70px rgba(0,0,0,0.45)' : undefined,
           } as any}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
               <View>
@@ -423,15 +881,15 @@ function EmailTemplateSection({
                 <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 12 }}>✕ Close</Text>
               </Pressable>
             </View>
-            <ScrollView style={{ maxHeight: isNarrow ? undefined : 356 }} contentContainerStyle={{ padding: isNarrow ? 12 : 18 }}>
-              <EmailMiniPreview headerColor={headerColor} accentColor={accentColor} footerText={footerText} compact={isNarrow ? true : true} />
+            <ScrollView style={{ maxHeight: 356 }} contentContainerStyle={{ padding: 18 }}>
+              <EmailMiniPreview headerColor={headerColor} accentColor={accentColor} footerText={footerText} text={emailText} compact />
               <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 14, textAlign: 'center', lineHeight: 16 }}>
-                At-time: {subjectTask.replace('{{title}}', 'Test Suva Seeds Video 10:30pm')}{'\n'}
-                Reminder: {subjectRem.replace('{{title}}', 'Test Suva Seeds Video 10:30pm')}
+                At-time: {subjectTask.replace('{{title}}', emailText.sampleTitle)}{'\n'}
+                Reminder: {subjectRem.replace('{{title}}', emailText.sampleTitle)}
               </Text>
             </ScrollView>
           </View>
-      )}
+      ))}
       </View>
     </AccordionCard>
   );
