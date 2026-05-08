@@ -683,7 +683,7 @@ export default function DashboardScreen() {
             {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
             {howToUrl ? (
               Platform.OS === 'web' ? (
-                <View style={styles.howToVideoWrap}>
+                <View style={[styles.howToVideoWrap, isMobile && styles.howToVideoWrapMobile]}>
                   {/\.(mp4|mov|webm)(\?|$)/i.test(howToUrl)
                     ? React.createElement('video', {
                         src: howToUrl, controls: true, autoPlay: false,
@@ -901,6 +901,7 @@ const styles = StyleSheet.create({
   howToCloseText: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
   howToDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
   howToVideoWrap: { width: '100%', aspectRatio: 16 / 9, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  howToVideoWrapMobile: { alignSelf: 'center', width: '100%', maxWidth: 296 },
   howToOpenBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: radius.lg },
   howToOpenBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   howToEmpty: { paddingVertical: 24, alignItems: 'center', backgroundColor: colors.bgBase, borderRadius: radius.lg },

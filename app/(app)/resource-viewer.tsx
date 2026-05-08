@@ -444,8 +444,8 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
   const isPhone = width <= 480;
-  const playerWidth = Math.max(260, width - (isPhone ? 96 : 160));
-  const playerHeight = isPhone ? Math.min(playerWidth * 9 / 16, 220) : 320;
+  const playerMaxWidth = isPhone ? 296 : '100%';
+  const playerHeight = isPhone ? 167 : 320;
 
   // Hide the grayed-out native fullscreen button from video shadow DOM
   useEffect(() => {
@@ -515,7 +515,7 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
       </View>
 
       {/* Inline player — container goes fullscreen, exit button lives inside it */}
-      <View style={[styles.iframeContainer, styles.videoContainer, { height: playerHeight }]}>
+      <View style={[styles.iframeContainer, styles.videoContainer, isPhone && styles.videoContainerMobile, { height: playerHeight, maxWidth: playerMaxWidth as any }]}>
         {isDriveLink
           ? React.createElement('div', {
               ref: driveContainerRef,
@@ -797,6 +797,7 @@ const styles = StyleSheet.create({
   slideViewerWrap: { gap: 10, marginTop: 4 },
   iframeContainer: { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#1a1a2e', position: 'relative' },
   videoContainer: { backgroundColor: '#000' },
+  videoContainerMobile: { alignSelf: 'center' },
 
   slideToolbar:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 },
   slideToolbarLabel:   { fontSize: 11, color: colors.textTertiary, flex: 1 },
