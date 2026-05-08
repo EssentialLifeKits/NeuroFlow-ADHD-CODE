@@ -390,7 +390,7 @@ export default function LoginScreen() {
       >
         {/* Left: logo + brand name */}
         <View style={styles.navBrand}>
-          <Image source={require('../../assets/elk-logo.jpg')} style={styles.navLogo} />
+          <Image source={require('../../assets/neuroflow-logo.png')} style={styles.navLogo} />
           {/* G-Logic: weight 800, 1.1rem, gradient text */}
           <GradientText style={styles.navBrandText}>NeuroFlow ADHD</GradientText>
         </View>
@@ -564,7 +564,7 @@ export default function LoginScreen() {
 
             {/* Card brand row — G-Logic auth-logo: logo 28px + gradient brand name */}
             <View style={styles.cardBrand}>
-              <Image source={require('../../assets/elk-logo.jpg')} style={styles.cardLogo} />
+              <Image source={require('../../assets/neuroflow-logo.png')} style={styles.cardLogo} />
               <GradientText style={styles.cardBrandText}>NeuroFlow</GradientText>
             </View>
 

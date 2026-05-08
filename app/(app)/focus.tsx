@@ -846,8 +846,9 @@ export default function FocusScreen() {
   const removeDistraction = (id: number) => setDistractions((p) => p.filter((d) => d.id !== id));
 
   // ─── Stats ────────────────────────────────────────────────────────────────
-  const completedFocus = sessions.filter((s) => s.session_type === 'focus' && s.status === 'completed');
-  const totalMin = completedFocus.reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
+  const loggedSessions = sessions.filter((s) => s.actual_duration_min != null);
+  const totalMin = loggedSessions.reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
+  const totalMinDisplay = totalMin > 0 ? `${Math.max(1, Math.ceil(totalMin))}m` : '0m';
 
   return (
     <SafeAreaView style={s.safe}>
@@ -870,7 +871,7 @@ export default function FocusScreen() {
               <Text style={s.todayBadgeText}>Today • {DAY_NAMES[new Date().getDay()]}</Text>
             </View>
             <View style={[s.statsBox, !isDesktop && s.statsBoxMobile]}>
-              <Text style={[s.statsValue, { color: cfg.color }]}>{totalMin}m</Text>
+              <Text style={[s.statsValue, { color: cfg.color }]}>{totalMinDisplay}</Text>
               <Text style={s.statsLabel}>focused today</Text>
             </View>
           </View>

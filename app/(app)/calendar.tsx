@@ -416,7 +416,7 @@ export default function CalendarScreen() {
 
   const upcomingPriorities = useMemo(() =>
     tasks
-      .filter((t) => t.due_date && t.due_date >= today && (t.status === 'pending' || t.status === 'draft'))
+      .filter((t) => t.due_date && t.due_date >= today && t.recurrence_rule !== 'sent' && (t.status === 'pending' || t.status === 'draft'))
       .sort((a, b) => {
         const da = new Date(`${a.due_date}T${a.due_time || '00:00'}`).getTime();
         const db = new Date(`${b.due_date}T${b.due_time || '00:00'}`).getTime();

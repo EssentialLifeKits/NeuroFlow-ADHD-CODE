@@ -28,7 +28,7 @@ import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import {
   getOrCreateProfile,
   fetchTodaysSessions,
-  fetchWeekSessions,
+  fetchAllSessions,
   type Task,
   type FocusSession,
 } from '../../src/lib/db';
@@ -65,6 +65,38 @@ function resolveAvatarLetter(email: string | null | undefined): string {
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+function localDateString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return localDateString(a) === localDateString(b);
+}
+
+function displayLoggedMinutes(totalMinutes: number): string {
+  if (totalMinutes <= 0) return '—';
+  return `${Math.max(1, Math.ceil(totalMinutes))}m`;
+}
+
+function currentSevenDayCycleSessions(allSessions: FocusSession[], now = new Date()): FocusSession[] {
+  const logged = allSessions
+    .filter((s) => s.actual_duration_min != null && s.started_at)
+    .sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime());
+
+  if (logged.length === 0) return [];
+
+  let cycleStart = new Date(logged[0].started_at);
+  while (now.getTime() >= cycleStart.getTime() + 7 * 24 * 60 * 60 * 1000) {
+    cycleStart = new Date(cycleStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+  }
+  const cycleEnd = new Date(cycleStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  return logged.filter((s) => {
+    const started = new Date(s.started_at);
+    return started >= cycleStart && started < cycleEnd;
+  });
+}
 
 // ─── Pulsing Dot (Today indicator) ───────────────────────────────────────────
 function PulsingDot() {
@@ -302,11 +334,11 @@ export default function DashboardScreen() {
       if (!user) return;
       let cancelled = false;
       getOrCreateProfile(user.id, (user as any).displayName, (user as any).email)
-        .then((p) => Promise.all([fetchTodaysSessions(p.id), fetchWeekSessions(p.id)]))
-        .then(([todayData, weekData]) => {
+        .then((p) => Promise.all([fetchTodaysSessions(p.id), fetchAllSessions(p.id)]))
+        .then(([todayData, allSessionData]) => {
           if (!cancelled) {
             setSessions(todayData ?? []);
-            setWeekSessions(weekData ?? []);
+            setWeekSessions(currentSevenDayCycleSessions(allSessionData ?? []));
           }
         })
         .catch(() => { })
@@ -321,32 +353,35 @@ export default function DashboardScreen() {
     String(today.getMonth() + 1).padStart(2, '0'),
     String(today.getDate()).padStart(2, '0'),
   ].join('-');
-  const todayTasks = tasks.filter((t) => t.due_date === todayStr);
-  const pendingToday = todayTasks.filter((t) => t.status === 'pending').length;
+  const prioritiesDoneToday = tasks.filter((t) => {
+    if (t.status !== 'completed') return false;
+    if (t.completed_at) return isSameLocalDay(new Date(t.completed_at), today);
+    return t.due_date === todayStr;
+  }).length;
 
-  // All session minutes logged today (any type, any status with actual time recorded)
-  const doneMinToday = sessions
-    .filter((s) => s.actual_duration_min != null)
-    .reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
+  const pendingPriorities = tasks.filter((t) => (
+    (t.status === 'pending' || t.status === 'draft')
+    && t.recurrence_rule !== 'sent'
+  )).length;
 
-  // All session minutes this week (Mon–Sun), all types
+  // All logged session minutes in the active 7-day cycle.
   const focusMinWeek = weekSessions
     .filter((s) => s.actual_duration_min != null)
     .reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
 
   // Keep focusMinToday for the Quick Start card subtitle
   const focusMinToday = sessions
-    .filter((s) => s.session_type === 'focus' && s.actual_duration_min != null)
+    .filter((s) => s.actual_duration_min != null)
     .reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
 
   const statCards = [
-    { label: 'Done Today', value: loading ? '…' : doneMinToday ? `${doneMinToday}m` : '—', accent: colors.success },
-    { label: 'Remaining', value: loading ? '…' : String(pendingToday), accent: NF_BLUE },
-    { label: 'Focus Time\nThis Week', value: loading ? '…' : focusMinWeek ? `${focusMinWeek}m` : '—', accent: colors.info },
+    { label: 'Priorities Done Today', value: loading ? '…' : String(prioritiesDoneToday), accent: colors.success },
+    { label: 'Pending Priorities', value: loading ? '…' : String(pendingPriorities), accent: NF_BLUE },
+    { label: 'Focus Time\nThis Week', value: loading ? '…' : displayLoggedMinutes(focusMinWeek), accent: colors.info },
   ];
 
   const topPending = tasks
-    .filter((t) => t.due_date && t.due_date >= todayStr && (t.status === 'pending' || t.status === 'draft'))
+    .filter((t) => t.due_date && t.due_date >= todayStr && t.recurrence_rule !== 'sent' && (t.status === 'pending' || t.status === 'draft'))
     .sort((a, b) => {
       const da = new Date(`${a.due_date}T${a.due_time || '00:00'}`).getTime();
       const db = new Date(`${b.due_date}T${b.due_time || '00:00'}`).getTime();
@@ -567,7 +602,7 @@ export default function DashboardScreen() {
           <View style={styles.focusCopy}>
             <Text style={styles.focusTitle} numberOfLines={1}>Hyperfocus Lotus</Text>
             <Text style={styles.focusSub} numberOfLines={2}>
-              {focusMinToday ? `${focusMinToday}m focused today` : 'Start your first focus session'}
+              {focusMinToday ? `${displayLoggedMinutes(focusMinToday)} focused today` : 'Start your first focus session'}
             </Text>
           </View>
         </View>
