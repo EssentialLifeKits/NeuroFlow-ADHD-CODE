@@ -72,7 +72,19 @@ interface Resource {
 }
 
 // ─── Resource Card ────────────────────────────────────────────────────────────
-function ResourceCard({ resource, delay, cardWidth, onPress }: { resource: Resource; delay: number; cardWidth: any; onPress: () => void }) {
+function ResourceCard({
+  resource,
+  delay,
+  cardWidth,
+  isMobile,
+  onPress,
+}: {
+  resource: Resource;
+  delay: number;
+  cardWidth: any;
+  isMobile: boolean;
+  onPress: () => void;
+}) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(12)).current;
   const hoverAnim = useRef(new Animated.Value(0)).current;
@@ -103,7 +115,8 @@ function ResourceCard({ resource, delay, cardWidth, onPress }: { resource: Resou
         style={{ flex: 1, width: '100%' }}
       >
         <Animated.View style={[
-          styles.card, 
+          styles.card,
+          isMobile && styles.cardMobile,
           { 
             borderColor, 
             shadowColor: NF_BLUE, 
@@ -113,13 +126,13 @@ function ResourceCard({ resource, delay, cardWidth, onPress }: { resource: Resou
             elevation: 8 
           }
         ]}>
-          <View style={[styles.iconBox, { backgroundColor: resource.iconBg }]}>
+          <View style={[styles.iconBox, isMobile && styles.iconBoxMobile, { backgroundColor: resource.iconBg }]}>
             <Text style={styles.icon}>{resource.icon}</Text>
           </View>
           <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>{resource.title}</Text>
-            <Text style={styles.cardDesc}>{resource.description}</Text>
-            <Text style={[styles.cardLink, { color: resource.accent }]}>{resource.linkLabel}</Text>
+            <Text style={styles.cardTitle} numberOfLines={2}>{resource.title}</Text>
+            <Text style={styles.cardDesc} numberOfLines={3}>{resource.description}</Text>
+            <Text style={[styles.cardLink, { color: resource.accent }]} numberOfLines={1}>{resource.linkLabel}</Text>
           </View>
         </Animated.View>
       </Pressable>
@@ -199,6 +212,7 @@ export default function ResourcesScreen() {
 
   const isDesktop = width > 1024;
   const isTablet = width > 768 && width <= 1024;
+  const isMobile = !isDesktop && !isTablet;
 
   let columns = 1;
   if (isDesktop) columns = 3;
@@ -251,6 +265,7 @@ export default function ResourcesScreen() {
                 resource={resource}
                 delay={i * 80}
                 cardWidth={cardWidth}
+                isMobile={isMobile}
                 onPress={() => router.push({ pathname: '/(app)/resource-viewer', params: { cardId: resource.id } } as any)}
               />
             ))}
@@ -325,12 +340,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl, padding: spacing.xl,
     flexDirection: 'column', gap: spacing.md, alignItems: 'flex-start',
   },
+  cardMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    gap: spacing.md,
+    minHeight: 132,
+  },
   iconBox: { width: 52, height: 52, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  iconBoxMobile: { width: 64, height: 64, flexShrink: 0 },
   icon: { fontSize: 28 },
-  cardContent: { flex: 1, gap: 8, marginTop: 4, width: '100%' },
-  cardTitle: { fontSize: 17, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.3 },
-  cardDesc: { fontSize: 14, color: colors.textSecondary, lineHeight: 22 },
-  cardLink: { fontSize: 14, fontWeight: '700', marginTop: 6 },
+  cardContent: { flex: 1, gap: 6, marginTop: 0, minWidth: 0 },
+  cardTitle: { fontSize: 17, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0, textAlign: 'left' },
+  cardDesc: { fontSize: 14, color: colors.textSecondary, lineHeight: 20, textAlign: 'left' },
+  cardLink: { fontSize: 14, fontWeight: '700', marginTop: 2, textAlign: 'left' },
   backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(74,144,226,0.12)', justifyContent: 'center', alignItems: 'center' },
   backBtnText: { fontSize: 22, color: NF_BLUE, lineHeight: 28, fontWeight: '600' },
 });

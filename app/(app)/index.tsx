@@ -673,7 +673,7 @@ export default function DashboardScreen() {
       {/* ── How To Video Modal — no download button ── */}
       <Modal visible={howToVisible} transparent animationType="fade" onRequestClose={() => setHowToVisible(false)}>
         <Pressable style={styles.howToOverlay} onPress={() => setHowToVisible(false)}>
-          <Pressable style={styles.howToSheet} onPress={e => e.stopPropagation()}>
+          <Pressable style={[styles.howToSheet, isMobile && styles.howToSheetMobile]} onPress={e => e.stopPropagation()}>
             <View style={styles.howToHeader}>
               <Text style={styles.howToTitle}>{howToTitle}</Text>
               <Pressable onPress={() => setHowToVisible(false)} style={styles.howToClose}>
@@ -689,11 +689,11 @@ export default function DashboardScreen() {
                         src: howToUrl, controls: true, autoPlay: false,
                         controlsList: 'nofullscreen nodownload',
                         disablePictureInPicture: true,
-                        style: { width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#000', outline: 'none' },
+                        style: { width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#000', outline: 'none', objectFit: 'contain' },
                       })
                     : React.createElement('iframe', {
                         src: getGoogleDriveEmbedUrl(howToUrl),
-                        style: { width: '100%', height: '100%', border: 'none', borderRadius: 10 },
+                        style: { width: '100%', height: '100%', border: 'none', borderRadius: 10, backgroundColor: '#000' },
                         title: 'How To Video', allow: 'autoplay; fullscreen',
                       })
                   }
@@ -889,12 +889,18 @@ const styles = StyleSheet.create({
     padding: spacing.lg, width: '100%', maxWidth: 720,
     borderWidth: 1, borderColor: NF_BLUE + '44', gap: spacing.md,
   },
+  howToSheetMobile: {
+    padding: spacing.md,
+    maxWidth: 360,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
   howToHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   howToTitle: { fontSize: 18, fontWeight: '800', color: NF_BLUE, flex: 1 },
   howToClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center' },
   howToCloseText: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
   howToDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
-  howToVideoWrap: { width: '100%', aspectRatio: 16 / 9, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' },
+  howToVideoWrap: { width: '100%', aspectRatio: 16 / 9, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
   howToOpenBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: radius.lg },
   howToOpenBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   howToEmpty: { paddingVertical: 24, alignItems: 'center', backgroundColor: colors.bgBase, borderRadius: radius.lg },

@@ -439,9 +439,13 @@ function ImageSlideViewer({ urls, accentColor }: { urls: string[]; accentColor: 
 function VideoPlayer({ url, accentColor }: { url: string; accentColor: string }) {
   const videoRef = useRef<any>(null);
   const driveContainerRef = useRef<any>(null);
+  const { width } = useWindowDimensions();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
+  const isPhone = width <= 480;
+  const playerWidth = Math.max(260, width - (isPhone ? 96 : 160));
+  const playerHeight = isPhone ? Math.min(playerWidth * 9 / 16, 220) : 320;
 
   // Hide the grayed-out native fullscreen button from video shadow DOM
   useEffect(() => {
@@ -511,11 +515,11 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
       </View>
 
       {/* Inline player — container goes fullscreen, exit button lives inside it */}
-      <View style={[styles.iframeContainer, { height: 320 }]}>
+      <View style={[styles.iframeContainer, styles.videoContainer, { height: playerHeight }]}>
         {isDriveLink
           ? React.createElement('div', {
               ref: driveContainerRef,
-              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000' },
+              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 12 },
             },
               React.createElement('iframe', {
                 src: embedUrl, frameBorder: 0,
@@ -534,13 +538,13 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
             )
           : React.createElement('div', {
               ref: driveContainerRef,
-              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12 },
+              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
             },
               React.createElement('video', {
                 ref: videoRef,
                 src: url, controls: true,
                 controlsList: 'nodownload',
-                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block' },
+                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain' },
                 preload: 'metadata',
               }),
               // Exit button — only visible in fullscreen
@@ -565,6 +569,8 @@ function VideoPlayer({ url, accentColor }: { url: string; accentColor: string })
 function CardDetail({ card }: { card: ResourceCard }) {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
+  const { width } = useWindowDimensions();
+  const isPhone = width <= 480;
 
   useEffect(() => {
     fadeAnim.setValue(0);
@@ -583,17 +589,17 @@ function CardDetail({ card }: { card: ResourceCard }) {
   return (
     <Animated.View style={[{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }, { gap: 14 }]}>
       {/* Hero icon + title */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-        <View style={[styles.heroIconWrap, { backgroundColor: card.icon_bg }]}>
+      <View style={[styles.heroRow, isPhone && styles.heroRowMobile]}>
+        <View style={[styles.heroIconWrap, isPhone && styles.heroIconWrapMobile, { backgroundColor: card.icon_bg }]}>
           {card.icon_image_url
-            ? <Image source={{ uri: card.icon_image_url }} style={{ width: 48, height: 48, borderRadius: 12 }} />
+            ? <Image source={{ uri: card.icon_image_url }} style={isPhone ? styles.heroIconImageMobile : styles.heroIconImage} />
             : <Text style={styles.heroIcon}>{card.icon}</Text>
           }
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={styles.heroCopy}>
           <View style={[styles.accentBar, { backgroundColor: card.accent_color, alignSelf: 'flex-start', marginBottom: 4 }]} />
-          <Text style={styles.cardTitle}>{card.title}</Text>
-          <Text style={styles.cardDesc}>{card.description}</Text>
+          <Text style={[styles.cardTitle, isPhone && styles.cardTitleMobile]} numberOfLines={2}>{card.title}</Text>
+          <Text style={[styles.cardDesc, isPhone && styles.cardDescMobile]} numberOfLines={5}>{card.description}</Text>
         </View>
       </View>
 
@@ -717,7 +723,7 @@ export default function ResourceViewerScreen() {
             {/* key={contentKey} guarantees React tears down the entire subtree
                 (including any iframe/video DOM nodes) on every card switch */}
             {activeCard && (
-              <View key={contentKey} style={[styles.detailCard, { borderColor: activeCard.accent_color + '44' }]}>
+              <View key={contentKey} style={[styles.detailCard, !isDesktop && styles.detailCardMobile, { borderColor: activeCard.accent_color + '44' }]}>
                 <CardDetail card={activeCard} />
               </View>
             )}
@@ -758,14 +764,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl, padding: spacing.xl,
     borderWidth: 1.5, gap: spacing.md,
   },
+  detailCardMobile: { padding: spacing.md, borderRadius: radius.lg },
 
-  heroIconWrap: { width: 88, height: 88, borderRadius: 20, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 4 },
+  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  heroRowMobile: { alignItems: 'flex-start', gap: 12 },
+  heroCopy: { flex: 1, minWidth: 0 },
+  heroIconWrap: { width: 88, height: 88, borderRadius: 20, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginBottom: 4, flexShrink: 0 },
+  heroIconWrapMobile: { width: 72, height: 72, borderRadius: 18, alignSelf: 'flex-start' },
+  heroIconImage: { width: 48, height: 48, borderRadius: 12 },
+  heroIconImageMobile: { width: 52, height: 52, borderRadius: 12 },
   heroIcon:     { fontSize: 48 },
 
-  accentBar: { height: 3, borderRadius: 2, width: 48, alignSelf: 'center' },
+  accentBar: { height: 3, borderRadius: 2, width: 48 },
 
-  cardTitle: { fontSize: 24, fontWeight: '800', color: colors.textPrimary, textAlign: 'center', letterSpacing: -0.5, marginTop: 4 },
-  cardDesc:  { fontSize: 15, color: colors.textSecondary, lineHeight: 24, textAlign: 'center' },
+  cardTitle: { fontSize: 24, fontWeight: '800', color: colors.textPrimary, textAlign: 'left', letterSpacing: 0, marginTop: 4 },
+  cardTitleMobile: { fontSize: 22, lineHeight: 27 },
+  cardDesc:  { fontSize: 15, color: colors.textSecondary, lineHeight: 24, textAlign: 'left' },
+  cardDescMobile: { fontSize: 14, lineHeight: 20 },
 
   downloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18, paddingHorizontal: 24, borderRadius: radius.xl, marginTop: 8 },
   downloadIcon:  { fontSize: 28 },
@@ -781,6 +796,7 @@ const styles = StyleSheet.create({
 
   slideViewerWrap: { gap: 10, marginTop: 4 },
   iframeContainer: { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#1a1a2e', position: 'relative' },
+  videoContainer: { backgroundColor: '#000' },
 
   slideToolbar:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 },
   slideToolbarLabel:   { fontSize: 11, color: colors.textTertiary, flex: 1 },

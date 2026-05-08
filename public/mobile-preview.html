@@ -99,7 +99,10 @@
   </main>
   <script>
     const frame = document.getElementById('mobile-app-frame');
-    frame.src = `/?mobilePreview=${Date.now()}`;
+    const appOrigin = window.location.protocol === 'file:'
+      ? 'http://localhost:8081'
+      : window.location.origin;
+    frame.src = `${appOrigin}/?mobilePreview=${Date.now()}`;
   </script>
 </body>
 </html>
