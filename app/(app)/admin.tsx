@@ -2152,8 +2152,8 @@ function UserMonitorSection() {
     })();
   }, []);
 
-  const adminUser  = users.find(u => u.email?.toLowerCase() === ADMIN_EMAIL);
-  const otherUsers = users.filter(u => u.email?.toLowerCase() !== ADMIN_EMAIL);
+  const adminUser  = users.find(u => u.email?.toLowerCase().trim() === ADMIN_EMAIL);
+  const otherUsers = users.filter(u => u.email?.toLowerCase().trim() !== ADMIN_EMAIL);
   const activeCount = otherUsers.filter(u => u.onboarded === true).length;
 
   function fmtDate(d: string) {
@@ -2255,8 +2255,8 @@ export default function AdminScreen() {
   const [settings, setSettings]           = useState<Record<string, string>>({});
   const [loadingSettings, setLoadingSettings] = useState(true);
 
-  const userEmail = user?.email ?? '';
-  const isAdmin   = userEmail === ADMIN_EMAIL || userEmail === 'dev@neuroflow.app';
+  const userEmail = (user?.email ?? '').toLowerCase().trim();
+  const isAdmin   = userEmail === ADMIN_EMAIL;
 
   useEffect(() => {
     if (!isAdmin) return;

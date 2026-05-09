@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   Linking,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -41,6 +40,7 @@ import {
 import ScheduleModal from '../../src/components/ScheduleModal';
 import { TaskThumbnail } from '../../src/components/TaskThumbnail';
 import { getSetting } from '../../src/lib/adminDb';
+import NeuroFlowVideoPlayer from '../../src/components/NeuroFlowVideoPlayer';
 
 const NF_BLUE = '#4A90E2';
 const DESKTOP_BREAKPOINT = 1024;
@@ -188,223 +188,6 @@ function StatCard({ label, value, accent, delay }: { label: string; value: strin
     </Animated.View>
   );
 }
-
-// ─── Google Drive URL normalizer ─────────────────────────────────────────────
-function getGoogleDriveEmbedUrl(url: string): string {
-  if (!url.includes('drive.google.com')) return url;
-  if (url.includes('/preview')) return url;
-  const match = url.match(/\/file\/d\/([^/?#]+)/);
-  if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
-  return url;
-}
-
-function getDrivePreviewFrameStyle(isMobile: boolean) {
-  if (!isMobile) {
-    return { width: '100%', height: '100%', border: 'none', borderRadius: 10, backgroundColor: '#000' };
-  }
-
-  return {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    width: '138%',
-    height: '138%',
-    transform: 'translate(-50%, -50%) scale(0.725)',
-    transformOrigin: 'center center',
-    border: 'none',
-    borderRadius: 10,
-    backgroundColor: '#000',
-  };
-}
-
-function UniformVideoPlayer({ url, title, accentColor = '#FBBF24' }: { url: string; title: string; accentColor?: string }) {
-  const videoRef = useRef<any>(null);
-  const containerRef = useRef<any>(null);
-  const { width } = useWindowDimensions();
-  const isPhone = width <= 480;
-  const isDriveLink = url.includes('drive.google.com');
-  const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
-  const isDirectVideo = /\.(mp4|mov|webm)(\?|$)/i.test(url);
-  const playerHeight = isPhone ? 188 : 320;
-  const playerMaxWidth = isPhone ? 315 : '100%';
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-dashboard-fs-btn')) {
-      const s = document.createElement('style');
-      s.id = 'nf-hide-dashboard-fs-btn';
-      s.textContent = 'video::-webkit-media-controls-fullscreen-button { display: none !important; }';
-      document.head.appendChild(s);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onChange);
-    document.addEventListener('webkitfullscreenchange', onChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', onChange);
-      document.removeEventListener('webkitfullscreenchange', onChange);
-    };
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        if (videoRef.current) videoRef.current.pause();
-      };
-    }, [])
-  );
-
-  const openFullscreen = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
-  };
-
-  const exitFullscreen = () => {
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
-  };
-
-  if (Platform.OS !== 'web') {
-    return (
-      <Pressable onPress={() => Linking.openURL(url)} style={[styles.howToOpenBtn, { backgroundColor: NF_BLUE }]}>
-        <Text style={styles.howToOpenBtnText}>▶ Watch Video</Text>
-      </Pressable>
-    );
-  }
-
-  return (
-    <View style={styles.uniformVideoWrap}>
-      <View style={styles.uniformVideoToolbar}>
-        <Text style={styles.uniformVideoLabel}>▶ Video Player</Text>
-        <Pressable onPress={openFullscreen} style={[styles.uniformFullscreenBtn, { borderColor: accentColor }]}>
-          <Text style={[styles.uniformFullscreenText, { color: accentColor }]}>⛶ Full Screen</Text>
-        </Pressable>
-      </View>
-      <View style={[styles.uniformVideoFrame, { height: playerHeight, maxWidth: playerMaxWidth as any }]}>
-        {React.createElement('div', {
-          ref: containerRef,
-          style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-        },
-          isDriveLink || !isDirectVideo
-            ? React.createElement('iframe', {
-                key: 'frame',
-                src: embedUrl,
-                frameBorder: 0,
-                allow: 'autoplay; fullscreen',
-                title,
-                style: getDrivePreviewFrameStyle(isPhone),
-              })
-            : React.createElement('video', {
-                key: 'video',
-                ref: videoRef,
-                src: url,
-                controls: true,
-                controlsList: 'nodownload',
-                preload: 'metadata',
-                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', objectFit: 'contain' },
-              }),
-          React.createElement('button', {
-            key: 'exit',
-            onClick: exitFullscreen,
-            style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
-          }, '✕ Exit Full Screen')
-        )}
-      </View>
-    </View>
-  );
-}
-
-// ─── How To Video Card — inline player on Dashboard, no download ─────────────
-function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url: string }) {
-  const [fullscreen, setFullscreen] = useState(false);
-  const [collapsed, setCollapsed]   = useState(false);
-  const { width } = useWindowDimensions();
-  const videoH = Math.min(width * 0.52, 300);
-  const isDirectVideo = /\.(mp4|mov|webm)(\?|$)/i.test(url);
-  const isDriveLink = url.includes('drive.google.com');
-  const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
-
-  return (
-    <View style={htStyles.card}>
-      <View style={htStyles.header}>
-        <Text style={htStyles.title}>{title}</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {Platform.OS === 'web' && !collapsed && (
-            <Pressable onPress={() => setFullscreen(true)} style={htStyles.fsBtn}>
-              <Text style={htStyles.fsBtnText}>⛶ Full Screen</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={() => setCollapsed(c => !c)} style={htStyles.closeBtn}>
-            <Text style={htStyles.closeBtnText}>{collapsed ? '▼ Show' : '✕ Close'}</Text>
-          </Pressable>
-        </View>
-      </View>
-      {!collapsed && desc ? <Text style={htStyles.desc}>{desc}</Text> : null}
-
-      {!collapsed && (Platform.OS === 'web' ? (
-        <View style={[htStyles.videoWrap, { height: videoH }]}>
-          {isDirectVideo
-            ? React.createElement('video', {
-                src: url, controls: true, autoPlay: false,
-                controlsList: 'nofullscreen nodownload',
-                disablePictureInPicture: true,
-                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none' },
-              })
-            : React.createElement('iframe', {
-                src: embedUrl,
-                style: { width: '100%', height: '100%', border: 'none', borderRadius: 12 },
-                title: 'How To Video', allow: 'autoplay; fullscreen',
-              })
-          }
-        </View>
-      ) : (
-        <Pressable onPress={() => Linking.openURL(url)} style={htStyles.mobilePlayBtn}>
-          <Text style={htStyles.mobilePlayText}>▶ Watch How To Video</Text>
-        </Pressable>
-      ))}
-
-      {/* Fullscreen modal — NO download button */}
-      {fullscreen && Platform.OS === 'web' && React.createElement('div', {
-        style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999, backgroundColor: 'rgba(0,0,0,0.97)', display: 'flex', flexDirection: 'column' },
-      }, [
-        React.createElement('div', { key: 'bar', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid rgba(74,144,226,0.2)', backgroundColor: '#0b1426', flexShrink: 0 } }, [
-          React.createElement('span', { key: 't', style: { fontSize: 15, fontWeight: 700, color: '#fff' } }, title),
-          React.createElement('button', { key: 'x', onClick: () => setFullscreen(false), style: { padding: '6px 16px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 13, fontWeight: 700 } }, '✕ Close'),
-        ]),
-        React.createElement('div', { key: 'vwrap', style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 20 } },
-          isDirectVideo
-            ? React.createElement('video', { key: 'v', src: url, controls: true, autoPlay: true, controlsList: 'nofullscreen nodownload', disablePictureInPicture: true, style: { maxWidth: '100%', maxHeight: '100%', borderRadius: 8, outline: 'none' } })
-            : React.createElement('iframe', { key: 'f', src: embedUrl, style: { width: '100%', height: '100%', border: 'none' }, title: 'How To Video FS', allow: 'autoplay; fullscreen' })
-        ),
-      ])}
-    </View>
-  );
-}
-
-const htStyles = StyleSheet.create({
-  card: {
-    backgroundColor: '#0b1426',
-    borderRadius: 16, padding: 20,
-    borderWidth: 1.5, borderColor: NF_BLUE + '44',
-    gap: 12,
-  },
-  header:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title:       { fontSize: 17, fontWeight: '800', color: NF_BLUE, flex: 1 },
-  desc:        { fontSize: 13, color: '#8899bb', lineHeight: 20 },
-  videoWrap:   { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#000' },
-  fsBtn:       { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: NF_BLUE + '66' },
-  fsBtnText:   { fontSize: 12, fontWeight: '700', color: NF_BLUE },
-  mobilePlayBtn:  { alignItems: 'center', paddingVertical: 14, borderRadius: 12, backgroundColor: NF_BLUE },
-  mobilePlayText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-  closeBtn:     { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(248,113,113,0.4)', backgroundColor: 'rgba(248,113,113,0.08)' },
-  closeBtnText: { fontSize: 12, fontWeight: '700', color: '#F87171' },
-});
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
@@ -837,7 +620,7 @@ export default function DashboardScreen() {
             </View>
             {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
             {howToUrl ? (
-              <UniformVideoPlayer url={howToUrl} title={howToTitle} />
+              <NeuroFlowVideoPlayer url={howToUrl} title={howToTitle} accentColor="#FBBF24" />
             ) : (
               <View style={styles.howToEmpty}>
                 <Text style={styles.howToEmptyText}>🎬 Video coming soon</Text>
@@ -1035,16 +818,6 @@ const styles = StyleSheet.create({
   howToClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center' },
   howToCloseText: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
   howToDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
-  howToVideoWrap: { width: '100%', aspectRatio: 16 / 9, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
-  howToVideoWrapMobile: { alignSelf: 'center', width: '100%', maxWidth: 296 },
-  uniformVideoWrap: { gap: 10, marginTop: 2 },
-  uniformVideoToolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  uniformVideoLabel: { fontSize: 11, color: colors.textTertiary, flex: 1 },
-  uniformFullscreenBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: radius.full, borderWidth: 1.5 },
-  uniformFullscreenText: { fontSize: 12, fontWeight: '700' },
-  uniformVideoFrame: { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#000', position: 'relative', alignSelf: 'center' },
-  howToOpenBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: radius.lg },
-  howToOpenBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   howToEmpty: { paddingVertical: 24, alignItems: 'center', backgroundColor: colors.bgBase, borderRadius: radius.lg },
   howToEmptyText: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
 

@@ -9,7 +9,7 @@
  *   PDF/doc/other     → PDFSlideViewer  (PDF.js page-by-page) or SlideViewerFallback
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -24,9 +24,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { colors, radius, spacing } from '../../src/constants/theme';
 import { fetchResourceCards, type ResourceCard } from '../../src/lib/adminDb';
+import NeuroFlowVideoPlayer from '../../src/components/NeuroFlowVideoPlayer';
 
 const NF_BLUE = '#4A90E2';
 
@@ -57,25 +58,6 @@ function getGoogleDriveEmbedUrl(url: string): string {
   const match = url.match(/\/file\/d\/([^/?#]+)/);
   if (match) return `https://drive.google.com/file/d/${match[1]}/preview`;
   return url;
-}
-
-function getDrivePreviewFrameStyle(isPhone: boolean) {
-  if (!isPhone) {
-    return { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' };
-  }
-
-  return {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    width: '138%',
-    height: '138%',
-    transform: 'translate(-50%, -50%) scale(0.725)',
-    transformOrigin: 'center center',
-    borderRadius: 12,
-    backgroundColor: '#000',
-    border: 'none',
-  };
 }
 
 /** True for direct video files OR Google Drive links (which stream via iframe) */
@@ -453,137 +435,6 @@ function ImageSlideViewer({ urls, accentColor }: { urls: string[]; accentColor: 
   );
 }
 
-// ─── MP4/MOV/Google Drive video player ────────────────────────────────────────
-// ⛶ calls requestFullscreen() on the actual element — TRUE OS fullscreen.
-function VideoPlayer({ url, accentColor }: { url: string; accentColor: string }) {
-  const videoRef = useRef<any>(null);
-  const driveContainerRef = useRef<any>(null);
-  const { width } = useWindowDimensions();
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const isDriveLink = url.includes('drive.google.com');
-  const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
-  const isPhone = width <= 480;
-  const playerMaxWidth = isPhone ? 296 : '100%';
-  const playerHeight = isPhone ? 167 : 320;
-
-  // Hide the grayed-out native fullscreen button from video shadow DOM
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-fs-btn')) {
-      const s = document.createElement('style');
-      s.id = 'nf-hide-fs-btn';
-      s.textContent = 'video::-webkit-media-controls-fullscreen-button { display: none !important; }';
-      document.head.appendChild(s);
-    }
-  }, []);
-
-  // Track fullscreen state to show/hide the exit button overlay
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onChange);
-    document.addEventListener('webkitfullscreenchange', onChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', onChange);
-      document.removeEventListener('webkitfullscreenchange', onChange);
-    };
-  }, []);
-
-  // Pause inline video when navigating away
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        if (videoRef.current) videoRef.current.pause();
-      };
-    }, [])
-  );
-
-  // TRUE OS fullscreen — use container div so exit button is inside fullscreen context
-  const openFullscreen = () => {
-    const el = driveContainerRef.current;
-    if (!el) return;
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
-  };
-
-  const exitFullscreen = () => {
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
-  };
-
-  if (Platform.OS !== 'web') {
-    return (
-      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
-        <Text style={styles.downloadIcon}>▶️</Text>
-        <View>
-          <Text style={styles.downloadLabel}>Play Video</Text>
-          <Text style={styles.downloadSub}>Opens in your device player</Text>
-        </View>
-      </Pressable>
-    );
-  }
-
-  return (
-    <View style={styles.slideViewerWrap}>
-      {/* Toolbar */}
-      <View style={styles.slideToolbar}>
-        <Text style={styles.slideToolbarLabel}>▶ Video Player</Text>
-        <Pressable onPress={openFullscreen} style={[styles.slideToolbarBtn, { borderColor: accentColor }]}>
-          <Text style={[styles.slideToolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
-        </Pressable>
-      </View>
-
-      {/* Inline player — container goes fullscreen, exit button lives inside it */}
-      <View style={[styles.iframeContainer, styles.videoContainer, isPhone && styles.videoContainerMobile, { height: playerHeight, maxWidth: playerMaxWidth as any }]}>
-        {isDriveLink
-          ? React.createElement('div', {
-              ref: driveContainerRef,
-              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 12 },
-            },
-              React.createElement('iframe', {
-                src: embedUrl, frameBorder: 0,
-                allow: 'autoplay; fullscreen',
-                style: getDrivePreviewFrameStyle(isPhone),
-              }),
-              React.createElement('div', {
-                style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
-                onClick: (e: any) => e.stopPropagation(),
-              }),
-              // Exit button — only visible in fullscreen (hidden inline via CSS)
-              React.createElement('button', {
-                onClick: exitFullscreen,
-                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
-              }, '✕ Exit Full Screen')
-            )
-          : React.createElement('div', {
-              ref: driveContainerRef,
-              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-            },
-              React.createElement('video', {
-                ref: videoRef,
-                src: url, controls: true,
-                controlsList: 'nodownload',
-                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain' },
-                preload: 'metadata',
-              }),
-              // Exit button — only visible in fullscreen
-              React.createElement('button', {
-                onClick: exitFullscreen,
-                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
-              }, '✕ Exit Full Screen')
-            )
-        }
-      </View>
-
-      {/* Download / Open button */}
-      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
-        <Text style={{ fontSize: 16 }}>📥</Text>
-        <Text style={styles.downloadBtnFullText}>{isDriveLink ? 'Open in Google Drive' : 'Download Video'}</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 // ─── Main card detail panel ───────────────────────────────────────────────────
 function CardDetail({ card }: { card: ResourceCard }) {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -625,7 +476,7 @@ function CardDetail({ card }: { card: ResourceCard }) {
       {/* Auto-detect viewer */}
       {card.slide_deck_url ? (
         isVideoUrl(card.slide_deck_url) ? (
-          <VideoPlayer url={card.slide_deck_url} accentColor={card.accent_color} />
+          <NeuroFlowVideoPlayer url={card.slide_deck_url} accentColor={card.accent_color} title={card.title} />
         ) : card.slide_deck_url.includes(',') ? (
           <ImageSlideViewer
             urls={card.slide_deck_url.split(',').map(u => u.trim()).filter(Boolean)}
