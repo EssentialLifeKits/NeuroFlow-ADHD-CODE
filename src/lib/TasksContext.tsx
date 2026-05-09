@@ -13,15 +13,10 @@ interface TasksContextValue {
   removeTask: (taskId: string) => Promise<void>;
 }
 
-// Hide tasks that have been sent and are 5+ minutes past their due time
+// Hide sent tasks immediately so they leave calendar/upcoming views as soon as
+// the reminder email confirms delivery.
 function filterSentTasks(tasks: Task[]): Task[] {
-  const now = Date.now();
-  return tasks.filter((t) => {
-    if (t.recurrence_rule !== 'sent') return true;
-    if (!t.due_date || !t.due_time) return false;
-    const dueMs = new Date(`${t.due_date}T${t.due_time}:00`).getTime();
-    return now < dueMs + 5 * 60 * 1000;
-  });
+  return tasks.filter((t) => t.recurrence_rule !== 'sent');
 }
 
 const TasksContext = createContext<TasksContextValue | null>(null);
@@ -108,7 +103,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   }, [profileId, loadFromServer]);
 
   // Every 60 seconds, re-filter tasks so sent items disappear from the UI
-  // automatically once 5 minutes have passed since their due time.
+  // automatically after the email service marks them sent.
   useEffect(() => {
     const interval = setInterval(() => {
       setTasks(prev => filterSentTasks(prev));

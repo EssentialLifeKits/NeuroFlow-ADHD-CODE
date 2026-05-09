@@ -72,6 +72,7 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
     const { user, signOut } = useAuth();
 
     const userEmail = user?.email as string | undefined;
+    const isAdminUser = userEmail?.toLowerCase().trim() === 'essentiallifekits@gmail.com';
     const rawDisplayName = user?.user_metadata?.full_name
       ?? user?.user_metadata?.name
       ?? undefined;
@@ -198,10 +199,12 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
                     </View>
                 </View>
 
-                <Pressable onPress={() => navigateTo('/(app)/admin')} style={styles.adminBtn}>
-                    <Text style={styles.adminIcon}>🛡️</Text>
-                    <Text style={styles.adminText}>Admin Portal</Text>
-                </Pressable>
+                {isAdminUser && (
+                    <Pressable onPress={() => navigateTo('/(app)/admin')} style={styles.adminBtn}>
+                        <Text style={styles.adminIcon}>🛡️</Text>
+                        <Text style={styles.adminText}>Admin Portal</Text>
+                    </Pressable>
+                )}
 
                 <Pressable onPress={handleSignOut} style={styles.signOutBtn}>
                     <Text style={styles.signOutIcon}>🚪</Text>

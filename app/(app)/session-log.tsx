@@ -23,7 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Trash2, ArrowLeft } from 'lucide-react-native';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
-import { fetchAllSessions, deleteFocusSession, updateSessionNote, type FocusSession, type SessionType } from '../../src/lib/db';
+import { fetchAllSessions, deleteFocusSession, getOrCreateProfile, updateSessionNote, type FocusSession, type SessionType } from '../../src/lib/db';
 import { useAuth } from '../../src/lib/auth';
 
 const NF_BLUE = '#4A90E2';
@@ -197,7 +197,12 @@ export default function SessionLogScreen() {
   const load = useCallback(async () => {
     if (!user?.id) { setLoading(false); return; }
     try {
-      const data = await fetchAllSessions(user.id);
+      const profile = await getOrCreateProfile(
+        user.id,
+        (user as any).user_metadata?.full_name ?? (user as any).user_metadata?.name ?? null,
+        (user as any).email,
+      );
+      const data = await fetchAllSessions(profile.id);
       setSessions(data);
     } catch {
       // fail silently — show empty state

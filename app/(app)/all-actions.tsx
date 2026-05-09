@@ -34,6 +34,7 @@ import {
   ADHD_CATEGORIES,
   getCategoryConf,
   formatTime12,
+  isUpcomingPriority,
 } from '../../src/lib/tasksUtils';
 import ScheduleModal from '../../src/components/ScheduleModal';
 import { TaskThumbnail } from '../../src/components/TaskThumbnail';
@@ -82,11 +83,13 @@ export default function AllActionsScreen() {
   }, []);
 
   // Chronological sort
-  const sorted = useMemo(() => [...tasks].sort((a, b) => {
+  const upcomingTasks = useMemo(() => tasks.filter((t) => isUpcomingPriority(t)), [tasks]);
+
+  const sorted = useMemo(() => [...upcomingTasks].sort((a, b) => {
     const da = new Date(`${a.due_date ?? '9999-12-31'}T${a.due_time ?? '00:00'}`).getTime();
     const db = new Date(`${b.due_date ?? '9999-12-31'}T${b.due_time ?? '00:00'}`).getTime();
     return da - db;
-  }), [tasks]);
+  }), [upcomingTasks]);
 
   // Filter by selected month
   const displayed = useMemo(() => {
@@ -169,20 +172,20 @@ export default function AllActionsScreen() {
       {/* ── Stats strip: 3 badges only ── */}
       <View style={st.statsStrip}>
         <View style={st.statItem}>
-          <Text style={st.statNum}>{tasks.length}</Text>
+          <Text style={st.statNum}>{upcomingTasks.length}</Text>
           <Text style={st.statLabel}>Total</Text>
         </View>
         <View style={st.statDivider} />
         <View style={st.statItem}>
           <Text style={[st.statNum, { color: '#F59E0B' }]}>
-            {tasks.filter(t => t.status === 'draft').length}
+            {upcomingTasks.filter(t => t.status === 'draft').length}
           </Text>
           <Text style={st.statLabel}>Draft</Text>
         </View>
         <View style={st.statDivider} />
         <View style={st.statItem}>
           <Text style={[st.statNum, { color: '#34D399' }]}>
-            {tasks.filter(t => t.status === 'pending' || t.status === 'completed').length}
+            {upcomingTasks.filter(t => t.status === 'pending').length}
           </Text>
           <Text style={st.statLabel}>Active</Text>
         </View>
@@ -192,7 +195,7 @@ export default function AllActionsScreen() {
         showsVerticalScrollIndicator
         contentContainerStyle={[st.scroll, isDesktop && st.scrollDesktop]}
       >
-        {tasks.length === 0 ? (
+        {upcomingTasks.length === 0 ? (
           <View style={st.empty}>
             <Text style={st.emptyIcon}>📋</Text>
             <Text style={st.emptyText}>No scheduled actions yet.</Text>

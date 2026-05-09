@@ -849,6 +849,23 @@ export default function FocusScreen() {
   const loggedSessions = sessions.filter((s) => s.actual_duration_min != null);
   const totalMin = loggedSessions.reduce((sum, s) => sum + (s.actual_duration_min ?? 0), 0);
   const totalMinDisplay = totalMin > 0 ? `${Math.max(1, Math.ceil(totalMin))}m` : '0m';
+  const insightMap = new Map<string, Insight>();
+  loggedSessions.forEach((sess) => {
+    insightMap.set(sess.id, {
+      id: sess.id,
+      sessionType: sess.session_type,
+      plannedMin: sess.planned_duration_min,
+      actualMin: sess.actual_duration_min ?? 0,
+      mood: sess.mood_after,
+      completedAt: sess.ended_at ?? sess.started_at,
+    });
+  });
+  insights.forEach((ins) => {
+    if (!insightMap.has(ins.id)) insightMap.set(ins.id, ins);
+  });
+  const syncedInsights = Array.from(insightMap.values()).sort((a, b) =>
+    new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+  );
 
   return (
     <SafeAreaView style={s.safe}>
@@ -1007,11 +1024,11 @@ export default function FocusScreen() {
         </View>
 
         {/* ── Productivity Insights ── */}
-        {insights.length > 0 && (
+        {syncedInsights.length > 0 && (
           <View style={s.insightsCard}>
             <Text style={s.insightsTitle}>📊 Productivity Insights</Text>
             <Text style={s.insightsSub}>Your logged session progress</Text>
-            {insights.map((ins, idx) => {
+            {syncedInsights.map((ins, idx) => {
               const sess = SESSIONS.find((ss) => ss.type === ins.sessionType);
               const moodEm = ins.mood ? MOODS[ins.mood - 1]?.emoji : '';
               return (
@@ -1034,8 +1051,8 @@ export default function FocusScreen() {
             {/* Summary */}
             <View style={s.insightSummary}>
               <Text style={s.insightSummaryText}>
-                🔥 {insights.filter((i) => i.sessionType === 'focus').length} focus sessions ·{' '}
-                {formatDuration(insights.filter((i) => i.sessionType === 'focus').reduce((a, b) => a + b.actualMin, 0))} total
+                🔥 {syncedInsights.filter((i) => i.sessionType === 'focus').length} focus sessions ·{' '}
+                {formatDuration(syncedInsights.filter((i) => i.sessionType === 'focus').reduce((a, b) => a + b.actualMin, 0))} total
               </Text>
             </View>
           </View>

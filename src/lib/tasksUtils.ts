@@ -31,6 +31,21 @@ export function formatTime12(t: string): string {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 }
 
+export function getTaskDueTimeMs(task: Task): number | null {
+  if (!task.due_date) return null;
+  const time = task.due_time || '23:59';
+  const dueMs = new Date(`${task.due_date}T${time}:00`).getTime();
+  return Number.isFinite(dueMs) ? dueMs : null;
+}
+
+export function isUpcomingPriority(task: Task, now = new Date()): boolean {
+  if (task.recurrence_rule === 'sent') return false;
+  if (task.status !== 'pending' && task.status !== 'draft') return false;
+  const dueMs = getTaskDueTimeMs(task);
+  if (dueMs == null) return false;
+  return dueMs > now.getTime();
+}
+
 export function displayTo24(ts: string): string {
   if (!ts) return '00:00';
   const match = ts.match(/(\d+):(\d+)\s*(AM|PM)/i);

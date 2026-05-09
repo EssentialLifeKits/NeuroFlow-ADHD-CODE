@@ -36,6 +36,7 @@ import { useTasks } from '../../src/lib/TasksContext';
 import {
   getCategoryConf,
   formatTime12,
+  isUpcomingPriority,
 } from '../../src/lib/tasksUtils';
 import ScheduleModal from '../../src/components/ScheduleModal';
 import { TaskThumbnail } from '../../src/components/TaskThumbnail';
@@ -216,6 +217,109 @@ function getDrivePreviewFrameStyle(isMobile: boolean) {
   };
 }
 
+function UniformVideoPlayer({ url, title, accentColor = '#FBBF24' }: { url: string; title: string; accentColor?: string }) {
+  const videoRef = useRef<any>(null);
+  const containerRef = useRef<any>(null);
+  const { width } = useWindowDimensions();
+  const isPhone = width <= 480;
+  const isDriveLink = url.includes('drive.google.com');
+  const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
+  const isDirectVideo = /\.(mp4|mov|webm)(\?|$)/i.test(url);
+  const playerHeight = isPhone ? 188 : 320;
+  const playerMaxWidth = isPhone ? 315 : '100%';
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-dashboard-fs-btn')) {
+      const s = document.createElement('style');
+      s.id = 'nf-hide-dashboard-fs-btn';
+      s.textContent = 'video::-webkit-media-controls-fullscreen-button { display: none !important; }';
+      document.head.appendChild(s);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (videoRef.current) videoRef.current.pause();
+      };
+    }, [])
+  );
+
+  const openFullscreen = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+  };
+
+  const exitFullscreen = () => {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
+  };
+
+  if (Platform.OS !== 'web') {
+    return (
+      <Pressable onPress={() => Linking.openURL(url)} style={[styles.howToOpenBtn, { backgroundColor: NF_BLUE }]}>
+        <Text style={styles.howToOpenBtnText}>▶ Watch Video</Text>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.uniformVideoWrap}>
+      <View style={styles.uniformVideoToolbar}>
+        <Text style={styles.uniformVideoLabel}>▶ Video Player</Text>
+        <Pressable onPress={openFullscreen} style={[styles.uniformFullscreenBtn, { borderColor: accentColor }]}>
+          <Text style={[styles.uniformFullscreenText, { color: accentColor }]}>⛶ Full Screen</Text>
+        </Pressable>
+      </View>
+      <View style={[styles.uniformVideoFrame, { height: playerHeight, maxWidth: playerMaxWidth as any }]}>
+        {React.createElement('div', {
+          ref: containerRef,
+          style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+        },
+          isDriveLink || !isDirectVideo
+            ? React.createElement('iframe', {
+                key: 'frame',
+                src: embedUrl,
+                frameBorder: 0,
+                allow: 'autoplay; fullscreen',
+                title,
+                style: getDrivePreviewFrameStyle(isPhone),
+              })
+            : React.createElement('video', {
+                key: 'video',
+                ref: videoRef,
+                src: url,
+                controls: true,
+                controlsList: 'nodownload',
+                preload: 'metadata',
+                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', objectFit: 'contain' },
+              }),
+          React.createElement('button', {
+            key: 'exit',
+            onClick: exitFullscreen,
+            style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
+          }, '✕ Exit Full Screen')
+        )}
+      </View>
+    </View>
+  );
+}
+
 // ─── How To Video Card — inline player on Dashboard, no download ─────────────
 function HowToVideoCard({ title, desc, url }: { title: string; desc: string; url: string }) {
   const [fullscreen, setFullscreen] = useState(false);
@@ -359,10 +463,15 @@ export default function DashboardScreen() {
     return t.due_date === todayStr;
   }).length;
 
-  const pendingPriorities = tasks.filter((t) => (
-    (t.status === 'pending' || t.status === 'draft')
-    && t.recurrence_rule !== 'sent'
-  )).length;
+  const topPending = tasks
+    .filter((t) => isUpcomingPriority(t, today))
+    .sort((a, b) => {
+      const da = new Date(`${a.due_date}T${a.due_time || '00:00'}`).getTime();
+      const db = new Date(`${b.due_date}T${b.due_time || '00:00'}`).getTime();
+      return da - db;
+    });
+
+  const pendingPriorities = topPending.length;
 
   // All logged session minutes in the active 7-day cycle.
   const focusMinWeek = weekSessions
@@ -379,14 +488,6 @@ export default function DashboardScreen() {
     { label: 'Pending Priorities', value: loading ? '…' : String(pendingPriorities), accent: NF_BLUE },
     { label: 'Focus Time\nThis Week', value: loading ? '…' : displayLoggedMinutes(focusMinWeek), accent: colors.info },
   ];
-
-  const topPending = tasks
-    .filter((t) => t.due_date && t.due_date >= todayStr && t.recurrence_rule !== 'sent' && (t.status === 'pending' || t.status === 'draft'))
-    .sort((a, b) => {
-      const da = new Date(`${a.due_date}T${a.due_time || '00:00'}`).getTime();
-      const db = new Date(`${b.due_date}T${b.due_time || '00:00'}`).getTime();
-      return da - db;
-    });
 
   // Animations
   const headerOpacity = useRef(new Animated.Value(0)).current;
@@ -736,27 +837,7 @@ export default function DashboardScreen() {
             </View>
             {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
             {howToUrl ? (
-              Platform.OS === 'web' ? (
-                <View style={[styles.howToVideoWrap, isMobile && styles.howToVideoWrapMobile]}>
-                  {/\.(mp4|mov|webm)(\?|$)/i.test(howToUrl)
-                    ? React.createElement('video', {
-                        src: howToUrl, controls: true, autoPlay: false,
-                        controlsList: 'nofullscreen nodownload',
-                        disablePictureInPicture: true,
-                        style: { width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#000', outline: 'none', objectFit: 'contain' },
-                      })
-                    : React.createElement('iframe', {
-                        src: getGoogleDriveEmbedUrl(howToUrl),
-                        style: getDrivePreviewFrameStyle(isMobile),
-                        title: 'How To Video', allow: 'autoplay; fullscreen',
-                      })
-                  }
-                </View>
-              ) : (
-                <Pressable onPress={() => Linking.openURL(howToUrl)} style={[styles.howToOpenBtn, { backgroundColor: NF_BLUE }]}>
-                  <Text style={styles.howToOpenBtnText}>▶ Watch Video</Text>
-                </Pressable>
-              )
+              <UniformVideoPlayer url={howToUrl} title={howToTitle} />
             ) : (
               <View style={styles.howToEmpty}>
                 <Text style={styles.howToEmptyText}>🎬 Video coming soon</Text>
@@ -956,6 +1037,12 @@ const styles = StyleSheet.create({
   howToDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
   howToVideoWrap: { width: '100%', aspectRatio: 16 / 9, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
   howToVideoWrapMobile: { alignSelf: 'center', width: '100%', maxWidth: 296 },
+  uniformVideoWrap: { gap: 10, marginTop: 2 },
+  uniformVideoToolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  uniformVideoLabel: { fontSize: 11, color: colors.textTertiary, flex: 1 },
+  uniformFullscreenBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 7, borderRadius: radius.full, borderWidth: 1.5 },
+  uniformFullscreenText: { fontSize: 12, fontWeight: '700' },
+  uniformVideoFrame: { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#000', position: 'relative', alignSelf: 'center' },
   howToOpenBtn: { alignItems: 'center', paddingVertical: 14, borderRadius: radius.lg },
   howToOpenBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   howToEmpty: { paddingVertical: 24, alignItems: 'center', backgroundColor: colors.bgBase, borderRadius: radius.lg },

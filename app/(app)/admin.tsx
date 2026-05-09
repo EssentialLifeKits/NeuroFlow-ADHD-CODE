@@ -482,54 +482,67 @@ function ColorBoardPicker({ value, onChange }: { value: string; onChange: (next:
   const { width } = useWindowDimensions();
   const isNarrow = width < 760;
   const normalized = normalizeHex(value, NF_BLUE);
+  const boardWidth = isNarrow ? Math.min(width - 32, 318) : 318;
 
   return (
-    <View style={{ position: 'relative', zIndex: boardOpen || detailOpen ? 60 : 1, width: isNarrow && boardOpen ? '100%' : undefined }}>
+    <View style={{ position: 'relative', zIndex: boardOpen || detailOpen ? 60 : 1 }}>
       <Pressable
         onPress={() => { setBoardOpen(v => !v); setDetailOpen(false); }}
         style={{ width: 92, height: 46, borderRadius: 8, backgroundColor: normalized, borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)' }}
       />
       {boardOpen && (
-        <View style={{
-          position: isNarrow ? 'relative' : 'absolute',
-          left: isNarrow ? undefined : 0,
-          top: isNarrow ? undefined : 54,
-          width: isNarrow ? '100%' : 318,
-          backgroundColor: '#15151d',
-          borderRadius: 22,
-          borderWidth: 1,
-          borderColor: '#4A4A55',
-          padding: 18,
-          zIndex: 70,
-          marginTop: isNarrow ? 10 : 0,
-          boxShadow: Platform.OS === 'web' ? '0 18px 52px rgba(0,0,0,0.42)' : undefined,
-        } as any}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
-            {BOARD_COLORS.map(c => (
-              <Pressable
-                key={c}
-                onPress={() => onChange(c)}
-                style={{
-                  width: 22,
-                  height: 22,
-                  backgroundColor: c,
-                  borderWidth: normalized === c ? 2 : 1,
-                  borderColor: normalized === c ? '#fff' : '#111',
-                }}
-              />
-            ))}
-          </View>
-          <View style={{ alignItems: 'center', marginTop: 16 }}>
-            <NativeButton label="Show Colors..." onPress={() => setDetailOpen(true)} />
-          </View>
-          {detailOpen && (
-            <ColorDetailPopup
-              color={normalized}
-              onChange={onChange}
-              onClose={() => setDetailOpen(false)}
-            />
-          )}
-        </View>
+        <Modal transparent visible animationType="fade" onRequestClose={() => { setBoardOpen(false); setDetailOpen(false); }}>
+          <Pressable
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: isNarrow ? 'center' : 'flex-start',
+              paddingTop: isNarrow ? 0 : 130,
+              paddingHorizontal: 16,
+              backgroundColor: 'rgba(0,0,0,0.34)',
+            }}
+            onPress={() => { setBoardOpen(false); setDetailOpen(false); }}
+          >
+            <Pressable
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                width: boardWidth,
+                backgroundColor: '#15151d',
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: '#4A4A55',
+                padding: 18,
+                boxShadow: Platform.OS === 'web' ? '0 18px 52px rgba(0,0,0,0.58)' : undefined,
+              } as any}
+            >
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
+                {BOARD_COLORS.map(c => (
+                  <Pressable
+                    key={c}
+                    onPress={() => onChange(c)}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      backgroundColor: c,
+                      borderWidth: normalized === c ? 2 : 1,
+                      borderColor: normalized === c ? '#fff' : '#111',
+                    }}
+                  />
+                ))}
+              </View>
+              <View style={{ alignItems: 'center', marginTop: 16 }}>
+                <NativeButton label="Show Colors..." onPress={() => setDetailOpen(true)} />
+              </View>
+              {detailOpen && (
+                <ColorDetailPopup
+                  color={normalized}
+                  onChange={onChange}
+                  onClose={() => setDetailOpen(false)}
+                />
+              )}
+            </Pressable>
+          </Pressable>
+        </Modal>
       )}
     </View>
   );
