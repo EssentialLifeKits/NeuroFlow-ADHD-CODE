@@ -267,9 +267,9 @@ function buildThumbnailHtml(thumbnail, accentColor) {
   const src = thumbnail.startsWith('https://') || thumbnail.startsWith('cid:') ? thumbnail : '';
   if (!src) return '';
 
-  return `<td width="148" valign="middle" style="padding-left:18px;">
-    <div style="width:140px;height:104px;border:3px solid ${accentColor};border-radius:12px;overflow:hidden;background:#0e0e1a;">
-      <img src="${src}" alt="Task thumbnail" width="140" height="104" style="display:block;width:140px;height:104px;object-fit:cover;border:0;"/>
+  return `<td width="238" valign="middle" align="right" style="padding-left:24px;">
+    <div style="width:220px;height:156px;border:4px solid ${accentColor};border-radius:14px;overflow:hidden;background:#0e0e1a;text-align:center;line-height:156px;">
+      <img src="${src}" alt="Task thumbnail" width="220" height="156" style="display:block;width:220px;height:156px;object-fit:contain;border:0;border-radius:10px;background:#0e0e1a;"/>
     </div>
   </td>`;
 }
