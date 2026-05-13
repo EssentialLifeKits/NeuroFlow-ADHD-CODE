@@ -312,7 +312,7 @@ function ColorDetailPopup({
   const [hue, setHue] = useState(210);
   const { width } = useWindowDimensions();
   const isNarrow = width < 760;
-  const wheelSize = isNarrow ? Math.min(width - 108, 250) : 310;
+  const wheelSize = isNarrow ? Math.min(width - 76, 448) : 448;
 
   const pickWithDropper = async () => {
     const picker = typeof window !== 'undefined' ? (window as any).EyeDropper : null;
@@ -329,7 +329,11 @@ function ColorDetailPopup({
         style: {
           width: wheelSize,
           height: wheelSize,
+          minWidth: wheelSize,
+          minHeight: wheelSize,
+          aspectRatio: '1 / 1',
           maxWidth: '100%',
+          flexShrink: 0,
           borderRadius: '50%',
           margin: '18px auto 22px',
           position: 'relative',
@@ -440,7 +444,7 @@ function ColorDetailPopup({
         }}>
           <View style={{
             width: '100%',
-            maxWidth: 380,
+            maxWidth: 506,
             alignSelf: 'center',
             backgroundColor: '#202124',
             borderRadius: 24,
@@ -461,7 +465,7 @@ function ColorDetailPopup({
       position: 'absolute',
       left: 0,
       top: 98,
-      width: 380,
+      width: 506,
       maxWidth: '100%',
       backgroundColor: '#202124',
       borderRadius: 24,

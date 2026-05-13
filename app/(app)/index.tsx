@@ -44,6 +44,7 @@ import NeuroFlowVideoPlayer from '../../src/components/NeuroFlowVideoPlayer';
 
 const NF_BLUE = '#4A90E2';
 const DESKTOP_BREAKPOINT = 1024;
+const DEFAULT_HOWTO_VIDEO_URL = '/neuroflow-promo-9x16.mp4';
 
 // ─── Email → Display Name mapping ────────────────────────────────────────────
 function resolveDisplayName(email: string | null | undefined, rawDisplayName: string | null | undefined): string {
@@ -281,7 +282,7 @@ export default function DashboardScreen() {
   const ctaTranslateY = useRef(new Animated.Value(12)).current;
 
   // How To video — inline card + button opens modal
-  const [howToUrl,     setHowToUrl]     = useState('');
+  const [howToUrl,     setHowToUrl]     = useState(DEFAULT_HOWTO_VIDEO_URL);
   const [howToTitle,   setHowToTitle]   = useState('How To Use NeuroFlow');
   const [howToDesc,    setHowToDesc]    = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
   const [howToVisible, setHowToVisible] = useState(false);

@@ -6,6 +6,7 @@
  *   - Focus sessions (Hyperfocus Lotus)
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
@@ -60,6 +61,51 @@ export interface FocusSession {
   started_at: string;
   ended_at: string | null;
   created_at: string;
+}
+
+const FOCUS_SESSIONS_CACHE_KEY = '@neuroflow_focus_sessions';
+
+async function readCachedFocusSessions(profileId?: string): Promise<FocusSession[]> {
+  try {
+    const cached = await AsyncStorage.getItem(FOCUS_SESSIONS_CACHE_KEY);
+    const parsed: FocusSession[] = cached ? JSON.parse(cached) : [];
+    return profileId ? parsed.filter((s) => s.user_id === profileId) : parsed;
+  } catch {
+    return [];
+  }
+}
+
+async function writeCachedFocusSessions(sessions: FocusSession[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(FOCUS_SESSIONS_CACHE_KEY, JSON.stringify(sessions));
+  } catch {}
+}
+
+function mergeFocusSessions(primary: FocusSession[], fallback: FocusSession[]): FocusSession[] {
+  const map = new Map<string, FocusSession>();
+  fallback.forEach((s) => map.set(s.id, s));
+  primary.forEach((s) => map.set(s.id, s));
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
+  );
+}
+
+export async function upsertCachedFocusSession(session: FocusSession): Promise<void> {
+  const cached = await readCachedFocusSessions();
+  await writeCachedFocusSessions(mergeFocusSessions([session], cached));
+}
+
+async function updateCachedFocusSession(sessionId: string, patch: Partial<FocusSession>): Promise<void> {
+  const cached = await readCachedFocusSessions();
+  if (!cached.some((s) => s.id === sessionId)) return;
+  await writeCachedFocusSessions(
+    cached.map((s) => (s.id === sessionId ? { ...s, ...patch } : s)),
+  );
+}
+
+async function removeCachedFocusSession(sessionId: string): Promise<void> {
+  const cached = await readCachedFocusSessions();
+  await writeCachedFocusSessions(cached.filter((s) => s.id !== sessionId));
 }
 
 // ─── User Profiles ────────────────────────────────────────────────────────────
@@ -156,6 +202,7 @@ export async function createFocusSession(
     .single();
 
   if (error) throw new Error(error.message);
+  await upsertCachedFocusSession(data as FocusSession);
   return data as FocusSession;
 }
 
@@ -177,6 +224,13 @@ export async function completeFocusSession(
     .eq('id', sessionId);
 
   if (error) throw new Error(error.message);
+  await updateCachedFocusSession(sessionId, {
+    status: 'completed',
+    actual_duration_min: actualDurationMin,
+    mood_after: moodAfter ?? null,
+    notes: notes ?? null,
+    ended_at: new Date().toISOString(),
+  });
 }
 
 export async function abandonFocusSession(
@@ -197,17 +251,31 @@ export async function abandonFocusSession(
     .eq('id', sessionId);
 
   if (error) throw new Error(error.message);
+  await updateCachedFocusSession(sessionId, {
+    status: 'abandoned',
+    actual_duration_min: actualDurationMin,
+    mood_after: moodAfter ?? null,
+    notes: notes ?? null,
+    ended_at: new Date().toISOString(),
+  });
 }
 
 export async function fetchAllSessions(profileId: string): Promise<FocusSession[]> {
-  const { data, error } = await supabase
-    .from('focus_sessions')
-    .select('*')
-    .eq('user_id', profileId)
-    .order('started_at', { ascending: false });
+  const cached = await readCachedFocusSessions(profileId);
+  try {
+    const { data, error } = await supabase
+      .from('focus_sessions')
+      .select('*')
+      .eq('user_id', profileId)
+      .order('started_at', { ascending: false });
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as FocusSession[];
+    if (error) throw new Error(error.message);
+    const merged = mergeFocusSessions((data ?? []) as FocusSession[], cached);
+    if (merged.length > 0) await writeCachedFocusSessions(mergeFocusSessions(merged, await readCachedFocusSessions()));
+    return merged;
+  } catch {
+    return cached;
+  }
 }
 
 export async function updateSessionNote(sessionId: string, notes: string | null): Promise<void> {
@@ -217,6 +285,7 @@ export async function updateSessionNote(sessionId: string, notes: string | null)
     .eq('id', sessionId);
 
   if (error) throw new Error(error.message);
+  await updateCachedFocusSession(sessionId, { notes: notes ?? null });
 }
 
 export async function deleteFocusSession(sessionId: string): Promise<void> {
@@ -226,6 +295,7 @@ export async function deleteFocusSession(sessionId: string): Promise<void> {
     .eq('id', sessionId);
 
   if (error) throw new Error(error.message);
+  await removeCachedFocusSession(sessionId);
 }
 
 // Returns "YYYY-MM-DD" in local time
@@ -235,14 +305,8 @@ function localDateString(d: Date): string {
 
 export async function fetchTodaysSessions(profileId: string): Promise<FocusSession[]> {
   const todayStr = localDateString(new Date());
-  const { data, error } = await supabase
-    .from('focus_sessions')
-    .select('*')
-    .eq('user_id', profileId)
-    .order('started_at', { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as FocusSession[]).filter(
+  const allSessions = await fetchAllSessions(profileId);
+  return allSessions.filter(
     (s) => localDateString(new Date(s.started_at)) === todayStr,
   );
 }
@@ -256,14 +320,8 @@ export async function fetchWeekSessions(profileId: string): Promise<FocusSession
   monday.setHours(0, 0, 0, 0);
   const mondayStr = localDateString(monday);
 
-  const { data, error } = await supabase
-    .from('focus_sessions')
-    .select('*')
-    .eq('user_id', profileId)
-    .order('started_at', { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as FocusSession[]).filter(
+  const allSessions = await fetchAllSessions(profileId);
+  return allSessions.filter(
     (s) => localDateString(new Date(s.started_at)) >= mondayStr,
   );
 }

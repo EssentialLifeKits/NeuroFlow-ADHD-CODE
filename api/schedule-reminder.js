@@ -25,13 +25,14 @@ function getGmailTransporter() {
   });
 }
 
-async function sendViaGmail({ to, subject, html }) {
+async function sendViaGmail({ to, subject, html, attachments = [] }) {
   const transporter = getGmailTransporter();
   await transporter.sendMail({
     from: `NeuroFlow Reminders <${GMAIL_USER}>`,
     to,
     subject,
     html,
+    attachments,
   });
 }
 
@@ -189,11 +190,81 @@ async function getEmailSettings() {
   }
 }
 
+function parseInlineThumbnail(thumbnail) {
+  if (!thumbnail || typeof thumbnail !== 'string') return null;
+  const match = thumbnail.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) return null;
+  const contentType = match[1];
+  const extension = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+  return {
+    cid: 'task-thumbnail',
+    contentType,
+    filename: `task-thumbnail.${extension}`,
+    content: match[2],
+  };
+}
+
+async function uploadInlineThumbnail(thumbnail) {
+  const inline = parseInlineThumbnail(thumbnail);
+  if (!inline || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) return null;
+
+  const path = `email-thumbnails/${Date.now()}-${Math.random().toString(36).slice(2)}-${inline.filename}`;
+  const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/resource-assets/${path}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'apikey': SUPABASE_SERVICE_KEY,
+      'Content-Type': inline.contentType,
+      'x-upsert': 'true',
+    },
+    body: Buffer.from(inline.content, 'base64'),
+  });
+
+  if (!uploadRes.ok) {
+    console.warn('[schedule-reminder] Thumbnail upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
+    return null;
+  }
+
+  return `${SUPABASE_URL}/storage/v1/object/public/resource-assets/${path}`;
+}
+
+function buildThumbnailAttachments(thumbnail) {
+  const inline = parseInlineThumbnail(thumbnail);
+  if (!inline) return { gmail: [], resend: [] };
+  return {
+    gmail: [{
+      filename: inline.filename,
+      content: Buffer.from(inline.content, 'base64'),
+      contentType: inline.contentType,
+      cid: inline.cid,
+    }],
+    resend: [{
+      filename: inline.filename,
+      content: inline.content,
+      content_type: inline.contentType,
+      content_id: inline.cid,
+    }],
+  };
+}
+
+async function prepareThumbnailForEmail(thumbnail) {
+  const inline = parseInlineThumbnail(thumbnail);
+  if (!inline) return { thumbnail, gmail: [], resend: [] };
+
+  try {
+    const publicUrl = await uploadInlineThumbnail(thumbnail);
+    if (publicUrl) return { thumbnail: publicUrl, gmail: [], resend: [] };
+  } catch (e) {
+    console.warn('[schedule-reminder] Thumbnail public upload fallback failed:', e?.message ?? e);
+  }
+
+  const attachments = buildThumbnailAttachments(thumbnail);
+  return { thumbnail: `cid:${inline.cid}`, ...attachments };
+}
+
 function buildThumbnailHtml(thumbnail, accentColor) {
   if (!thumbnail || typeof thumbnail !== 'string') return '';
-  const src = thumbnail.startsWith('data:image/') || thumbnail.startsWith('https://')
-    ? thumbnail
-    : '';
+  const src = thumbnail.startsWith('https://') || thumbnail.startsWith('cid:') ? thumbnail : '';
   if (!src) return '';
 
   return `<td width="148" valign="middle" style="padding-left:18px;">
@@ -338,10 +409,12 @@ module.exports = async function handler(req, res) {
   // ── Past due or within 1 minute → Gmail "It's time" ──────────────────────
   if (isPastDue) {
     try {
+      const preparedThumbnail = await prepareThumbnailForEmail(thumbnail);
       await sendViaGmail({
         to: email,
         subject: applyTemplate(emailSettings.subjectTask, subjectVars),
-        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'at_time', thumbnail, settings: emailSettings }),
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'at_time', thumbnail: preparedThumbnail.thumbnail, settings: emailSettings }),
+        attachments: preparedThumbnail.gmail,
       });
       results.push({ type: 'at_time', scheduledAt: 'immediate', via: 'gmail' });
       if (taskId) await markTaskSent(taskId);
@@ -355,10 +428,12 @@ module.exports = async function handler(req, res) {
   if (isTooSoonForResend) {
     const minsAway = Math.ceil((eventDt.getTime() - now.getTime()) / 60_000);
     try {
+      const preparedThumbnail = await prepareThumbnailForEmail(thumbnail);
       await sendViaGmail({
         to: email,
         subject: `⏰ Starting in ${minsAway} min: ${title}`,
-        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'reminder', thumbnail, settings: emailSettings }),
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'reminder', thumbnail: preparedThumbnail.thumbnail, settings: emailSettings }),
+        attachments: preparedThumbnail.gmail,
       });
       results.push({ type: 'reminder', scheduledAt: 'immediate', via: 'gmail' });
       if (taskId) await markTaskSent(taskId);
@@ -382,6 +457,7 @@ module.exports = async function handler(req, res) {
     if (offsetMs > 0) toSchedule.push({ sendAt: new Date(eventDt.getTime() - offsetMs), type: 'reminder' });
     toSchedule.push({ sendAt: eventDt, type: 'at_time' });
 
+    const preparedThumbnail = await prepareThumbnailForEmail(thumbnail);
     for (const { sendAt, type } of toSchedule) {
       const emailRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -390,8 +466,9 @@ module.exports = async function handler(req, res) {
           from: `NeuroFlow ADHD <reminders@keepzbrandai.com>`,
           to: [email],
           subject: applyTemplate(type === 'at_time' ? emailSettings.subjectTask : emailSettings.subjectReminder, subjectVars),
-          html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type, thumbnail, settings: emailSettings }),
+          html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type, thumbnail: preparedThumbnail.thumbnail, settings: emailSettings }),
           scheduled_at: sendAt.toISOString(),
+          ...(preparedThumbnail.resend.length ? { attachments: preparedThumbnail.resend } : {}),
         }),
       });
       if (emailRes.ok) {

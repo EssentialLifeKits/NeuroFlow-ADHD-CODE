@@ -9,8 +9,10 @@ import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const SUPABASE_URL  = process.env.EXPO_PUBLIC_SUPABASE_URL  ?? '';
-const SUPABASE_ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+// Keep the preview shell from hard-crashing if local env vars are absent.
+// Real data calls still fail gracefully through their existing catch paths.
+const SUPABASE_URL  = process.env.EXPO_PUBLIC_SUPABASE_URL  || 'https://placeholder.supabase.co';
+const SUPABASE_ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
 // Platform-aware storage adapter for Supabase auth sessions
 const storage = Platform.OS === 'web'

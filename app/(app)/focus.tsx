@@ -22,6 +22,7 @@ import React, {
 import {
   Animated,
   ActivityIndicator,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -46,6 +47,7 @@ import {
   deleteFocusSession,
   updateSessionNote,
   fetchTodaysSessions,
+  upsertCachedFocusSession,
   type FocusSession,
   type SessionType,
   type UserProfile,
@@ -736,6 +738,7 @@ export default function FocusScreen() {
         started_at: new Date().toISOString(), ended_at: null, created_at: new Date().toISOString(),
       };
       setActiveSession(local);
+      await upsertCachedFocusSession(local);
       startTimeRef.current = new Date();
       setTimerState('running');
     } finally {
@@ -772,25 +775,29 @@ export default function FocusScreen() {
     if (pending) {
       const { session, elapsed, mood, isAbandon } = pending;
       const isLocal = session.id.startsWith('local-');
+      const loggedMinutes = Math.max(1, Math.ceil(elapsed));
       const updated = {
         ...session,
         status: (isAbandon ? 'abandoned' as const : 'completed' as const),
-        actual_duration_min: elapsed,
+        actual_duration_min: loggedMinutes,
         mood_after: mood,
         notes: notes ?? null,
         ended_at: new Date().toISOString(),
       };
       // Always update local state immediately so it shows in Today's Sessions
       setSessions((p) => [updated, ...p]);
-      setInsights((p) => [{ id: session.id, sessionType: session.session_type, plannedMin: session.planned_duration_min, actualMin: elapsed, mood, completedAt: new Date().toISOString() }, ...p]);
+      await upsertCachedFocusSession(updated);
+      setInsights((p) => [{ id: session.id, sessionType: session.session_type, plannedMin: session.planned_duration_min, actualMin: loggedMinutes, mood, completedAt: new Date().toISOString() }, ...p]);
       // Persist to DB only for real sessions (not local fallback IDs)
       if (!isLocal) {
         try {
           if (isAbandon) {
-            await abandonFocusSession(session.id, elapsed, mood, notes);
+            await abandonFocusSession(session.id, loggedMinutes, mood, notes);
           } else {
-            await completeFocusSession(session.id, elapsed, mood, notes);
+            await completeFocusSession(session.id, loggedMinutes, mood, notes);
           }
+          const refreshed = await fetchTodaysSessions(session.user_id);
+          setSessions(refreshed);
         } catch { }
       }
     }
@@ -1151,6 +1158,9 @@ export default function FocusScreen() {
             <View style={s.pdfHeader}>
               <Text style={s.pdfHeaderTitle}>📘 Deep Work Blueprint</Text>
               <View style={s.pdfHeaderBtns}>
+                <TouchableOpacity onPress={() => Linking.openURL(getGoogleDriveDownloadUrl(blueprintUrl))} style={s.pdfDownloadBtn} activeOpacity={0.7}>
+                  <Text style={s.pdfDownloadBtnText}>Download</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setPdfFullscreen(!pdfFullscreen)} style={s.pdfHeaderBtn} activeOpacity={0.7}>
                   <Text style={s.pdfHeaderBtnText}>{pdfFullscreen ? '⊡' : '⛶'}</Text>
                 </TouchableOpacity>
@@ -1448,6 +1458,8 @@ const s = StyleSheet.create({
   pdfHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.bgSecondary },
   pdfHeaderTitle: { fontSize: 14, fontWeight: '700', color: NF_BLUE },
   pdfHeaderBtns: { flexDirection: 'row', gap: 8 },
+  pdfDownloadBtn: { paddingHorizontal: 12, height: 32, borderRadius: radius.sm, backgroundColor: NF_BLUE + '18', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: NF_BLUE + '55' },
+  pdfDownloadBtnText: { fontSize: 12, fontWeight: '800', color: NF_BLUE },
   pdfHeaderBtn: { width: 32, height: 32, borderRadius: radius.sm, backgroundColor: colors.bgElevated, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
   pdfHeaderBtnText: { fontSize: 16, color: colors.textPrimary },
 
