@@ -621,7 +621,7 @@ export default function DashboardScreen() {
             </View>
             {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
             {howToUrl ? (
-              <NeuroFlowVideoPlayer url={howToUrl} title={howToTitle} accentColor="#FBBF24" />
+              <NeuroFlowVideoPlayer url={howToUrl} title={howToTitle} accentColor="#FBBF24" showOpenButton={false} />
             ) : (
               <View style={styles.howToEmpty}>
                 <Text style={styles.howToEmptyText}>🎬 Video coming soon</Text>

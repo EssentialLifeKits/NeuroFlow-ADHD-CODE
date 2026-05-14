@@ -1240,6 +1240,7 @@ export default function FocusScreen() {
             ]),
           ]),
           React.createElement('div', { key: 'btns', style: { display: 'flex', gap: 4, flexShrink: 0, marginLeft: 8 } }, [
+            React.createElement('button', { key: 'download', onClick: (e: any) => { e.stopPropagation(); Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}15`, color: NF_BLUE, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '⇩'),
             React.createElement('button', { key: 'expand', onClick: (e: any) => { e.stopPropagation(); setAudioFullscreen(true); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}15`, color: NF_BLUE, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '⛶'),
             React.createElement('button', { key: 'close', onClick: (e: any) => { e.stopPropagation(); setAudioOpen(false); setAudioPos(null); }, style: { width: 26, height: 26, borderRadius: 6, border: `1px solid ${colors.border}`, backgroundColor: colors.bgElevated, color: colors.textSecondary, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '✕'),
           ]),
@@ -1289,6 +1290,7 @@ export default function FocusScreen() {
             React.createElement('span', { key: 'sub', style: { fontSize: 11, color: '#6b7280', marginLeft: 4 } }, 'Focus Series'),
           ]),
           React.createElement('div', { key: 'actions', style: { display: 'flex', gap: 8 } }, [
+            React.createElement('button', { key: 'download', onClick: () => Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)), style: { padding: '6px 14px', borderRadius: 8, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}15`, color: NF_BLUE, cursor: 'pointer', fontSize: 12, fontWeight: 700 } }, '⇩ Download'),
             React.createElement('button', { key: 'pip', onClick: () => setAudioFullscreen(false), style: { padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.border}`, backgroundColor: 'rgba(255,255,255,0.06)', color: '#9ca3af', cursor: 'pointer', fontSize: 12, fontWeight: 600 } }, '⊡ Mini'),
             React.createElement('button', { key: 'close', onClick: () => { setAudioOpen(false); setAudioFullscreen(false); setAudioPos(null); }, style: { padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.3)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 12, fontWeight: 600 } }, '✕ Close'),
           ]),

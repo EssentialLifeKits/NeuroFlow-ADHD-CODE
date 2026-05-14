@@ -26,6 +26,16 @@ function getGoogleDriveEmbedUrl(url: string): string {
   return url;
 }
 
+function getGoogleDriveFileId(url: string): string | null {
+  return url.match(/\/file\/d\/([^/?#]+)/)?.[1] ?? url.match(/[?&]id=([^&#]+)/)?.[1] ?? null;
+}
+
+function getVideoDownloadUrl(url: string): string {
+  if (!url.includes('drive.google.com')) return url;
+  const id = getGoogleDriveFileId(url);
+  return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
+}
+
 function getDrivePreviewFrameStyle(isPhone: boolean) {
   if (!isPhone) {
     return { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' };
@@ -61,6 +71,7 @@ export default function NeuroFlowVideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
+  const downloadUrl = getVideoDownloadUrl(url);
   const isPhone = width <= 480;
   const playerMaxWidth = isPhone ? 296 : '100%';
   const playerHeight = isPhone ? 167 : 320;
@@ -108,7 +119,7 @@ export default function NeuroFlowVideoPlayer({
 
   if (Platform.OS !== 'web') {
     return (
-      <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
+      <Pressable onPress={() => Linking.openURL(downloadUrl)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
         <Text style={styles.downloadIcon}>▶️</Text>
         <View>
           <Text style={styles.downloadLabel}>Play Video</Text>
@@ -170,9 +181,9 @@ export default function NeuroFlowVideoPlayer({
       </View>
 
       {showOpenButton && (
-        <Pressable onPress={() => Linking.openURL(url)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
+        <Pressable onPress={() => Linking.openURL(downloadUrl)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
           <Text style={{ fontSize: 16 }}>📥</Text>
-          <Text style={styles.downloadBtnFullText}>{isDriveLink ? 'Open in Google Drive' : 'Download Video'}</Text>
+          <Text style={styles.downloadBtnFullText}>Download Video</Text>
         </Pressable>
       )}
     </View>
