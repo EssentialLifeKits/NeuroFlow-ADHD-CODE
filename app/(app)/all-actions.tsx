@@ -34,7 +34,6 @@ import {
   ADHD_CATEGORIES,
   getCategoryConf,
   formatTime12,
-  isUpcomingPriority,
 } from '../../src/lib/tasksUtils';
 import ScheduleModal from '../../src/components/ScheduleModal';
 import { TaskThumbnail } from '../../src/components/TaskThumbnail';
@@ -48,6 +47,7 @@ const MONTH_NAMES = [
 ];
 
 function getStatusBadge(task: Task): { label: string; color: string } {
+  if (task.recurrence_rule === 'sent') return { label: 'Sent', color: NF_BLUE };
   if (task.status === 'completed') return { label: 'Completed', color: '#34D399' };
   if (task.status === 'draft')     return { label: 'Draft',         color: '#F59E0B' };
   return                                  { label: 'Active',  color: '#34D399' };
@@ -61,7 +61,7 @@ export default function AllActionsScreen() {
   const { from } = useLocalSearchParams();
   const { user } = useAuth();
 
-  const { tasks, removeTask } = useTasks();
+  const { allScheduledActions, removeTask } = useTasks();
   const [jumpMonth, setJumpMonth] = useState<number | null>(null);
   const [showJumpPicker, setShowJumpPicker] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -82,14 +82,13 @@ export default function AllActionsScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   }, []);
 
-  // Chronological sort
-  const upcomingTasks = useMemo(() => tasks.filter((t) => isUpcomingPriority(t)), [tasks]);
+  const scheduledActions = useMemo(() => allScheduledActions, [allScheduledActions]);
 
-  const sorted = useMemo(() => [...upcomingTasks].sort((a, b) => {
+  const sorted = useMemo(() => [...scheduledActions].sort((a, b) => {
     const da = new Date(`${a.due_date ?? '9999-12-31'}T${a.due_time ?? '00:00'}`).getTime();
     const db = new Date(`${b.due_date ?? '9999-12-31'}T${b.due_time ?? '00:00'}`).getTime();
-    return da - db;
-  }), [upcomingTasks]);
+    return db - da;
+  }), [scheduledActions]);
 
   // Filter by selected month
   const displayed = useMemo(() => {
@@ -172,20 +171,20 @@ export default function AllActionsScreen() {
       {/* ── Stats strip: 3 badges only ── */}
       <View style={st.statsStrip}>
         <View style={st.statItem}>
-          <Text style={st.statNum}>{upcomingTasks.length}</Text>
+          <Text style={st.statNum}>{scheduledActions.length}</Text>
           <Text style={st.statLabel}>Total</Text>
         </View>
         <View style={st.statDivider} />
         <View style={st.statItem}>
           <Text style={[st.statNum, { color: '#F59E0B' }]}>
-            {upcomingTasks.filter(t => t.status === 'draft').length}
+            {scheduledActions.filter(t => t.status === 'draft').length}
           </Text>
           <Text style={st.statLabel}>Draft</Text>
         </View>
         <View style={st.statDivider} />
         <View style={st.statItem}>
           <Text style={[st.statNum, { color: '#34D399' }]}>
-            {upcomingTasks.filter(t => t.status === 'pending').length}
+            {scheduledActions.filter(t => t.status === 'pending').length}
           </Text>
           <Text style={st.statLabel}>Active</Text>
         </View>
@@ -195,7 +194,7 @@ export default function AllActionsScreen() {
         showsVerticalScrollIndicator
         contentContainerStyle={[st.scroll, isDesktop && st.scrollDesktop]}
       >
-        {upcomingTasks.length === 0 ? (
+        {scheduledActions.length === 0 ? (
           <View style={st.empty}>
             <Text style={st.emptyIcon}>📋</Text>
             <Text style={st.emptyText}>No scheduled actions yet.</Text>

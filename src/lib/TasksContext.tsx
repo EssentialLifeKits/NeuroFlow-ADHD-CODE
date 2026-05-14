@@ -5,6 +5,7 @@ import { getOrCreateProfile, fetchTasks as dbFetchTasks, createTask as dbCreateT
 
 interface TasksContextValue {
   tasks: Task[];
+  allScheduledActions: Task[];
   loading: boolean;
   refreshTasks: () => Promise<void>;
   addTask: (task: any) => Promise<string | null>;
@@ -19,18 +20,41 @@ function filterSentTasks(tasks: Task[]): Task[] {
   return tasks.filter((t) => t.recurrence_rule !== 'sent');
 }
 
+function getTaskEventTimeMs(task: Task): number | null {
+  if (!task.due_date) return null;
+  const time = task.due_time || '23:59';
+  const ms = new Date(`${task.due_date}T${time}:00`).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function filterAllScheduledActions(tasks: Task[], now = new Date()): Task[] {
+  const retentionMs = 48 * 60 * 60 * 1000;
+  return tasks.filter((t) => {
+    if (t.status !== 'pending' && t.status !== 'draft' && t.recurrence_rule !== 'sent') return false;
+    const dueMs = getTaskEventTimeMs(t);
+    if (dueMs == null) return false;
+    if (t.recurrence_rule !== 'sent') return true;
+    return now.getTime() <= dueMs + retentionMs;
+  });
+}
+
 const TasksContext = createContext<TasksContextValue | null>(null);
 
 export function TasksProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [allScheduledActions, setAllScheduledActions] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [profileId, setProfileId] = useState<string | null>(null);
 
   const loadFromCache = async () => {
     try {
       const cached = await AsyncStorage.getItem('@neuroflow_tasks');
-      if (cached) setTasks(filterSentTasks(JSON.parse(cached)));
+      if (cached) {
+        const cachedTasks = JSON.parse(cached);
+        setTasks(filterSentTasks(cachedTasks));
+        setAllScheduledActions(filterAllScheduledActions(cachedTasks));
+      }
     } catch {}
   };
 
@@ -58,21 +82,26 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         dbFetchTasks(profileId, 'weekly'),
         dbFetchTasks(profileId, 'monthly'),
       ]);
-      const combined = filterSentTasks([...d, ...w, ...m]);
+      const rawCombined = [...d, ...w, ...m];
+      const combined = filterSentTasks(rawCombined);
+      const scheduledActions = filterAllScheduledActions(rawCombined);
 
-      if (combined.length > 0) {
+      if (rawCombined.length > 0) {
         // Server returned tasks — use authoritative DB data
         setTasks(combined);
-        saveToCache(combined);
+        setAllScheduledActions(scheduledActions);
+        saveToCache(rawCombined);
       } else if (cachedTasks.length > 0) {
         // Server returned nothing but cache has tasks — keep cache visible.
         // This guards against a transient auth hiccup returning an empty result
         // and silently wiping the user's task list. The cache stays intact and
         // the next successful server fetch will overwrite it correctly.
-        setTasks(cachedTasks);
+        setTasks(filterSentTasks(cachedTasks));
+        setAllScheduledActions(filterAllScheduledActions(cachedTasks));
       } else {
         // Both server and cache are empty — genuinely no tasks
         setTasks([]);
+        setAllScheduledActions([]);
       }
     } catch {
       // If server fails, keep showing cached tasks
@@ -83,6 +112,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       // Sign-out: clear state but keep the cache so data is visible immediately on next login
       setTasks([]);
+      setAllScheduledActions([]);
       setProfileId(null);
       setLoading(false);
       return;
@@ -107,6 +137,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const interval = setInterval(() => {
       setTasks(prev => filterSentTasks(prev));
+      setAllScheduledActions(prev => filterAllScheduledActions(prev));
     }, 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -138,14 +169,19 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
 
     const newTasks = [...tasks, optimisticTask];
     setTasks(newTasks);
-    saveToCache(newTasks);
+    setAllScheduledActions(prev => filterAllScheduledActions([...prev, optimisticTask]));
+    saveToCache([...allScheduledActions, optimisticTask]);
 
     if (profileId) {
       try {
         const saved = await dbCreateTask({ ...taskInput, user_id: profileId });
         setTasks((prev) => {
           const updated = prev.map((t) => (t.id === tempId ? saved : t));
-          saveToCache(updated);
+          setAllScheduledActions((actions) => {
+            const next = filterAllScheduledActions(actions.map((t) => (t.id === tempId ? saved : t)));
+            saveToCache(next);
+            return next;
+          });
           return updated;
         });
         return saved.id;
@@ -175,7 +211,11 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     });
 
     setTasks(updatedTasks);
-    saveToCache(updatedTasks);
+    setAllScheduledActions(prev => {
+      const updated = filterAllScheduledActions(prev.map(t => t.id === taskId ? { ...t, ...updatedTasks.find(u => u.id === taskId) } : t));
+      saveToCache(updated);
+      return updated;
+    });
 
     if (profileId && !taskId.startsWith('local-')) {
        // Since the native calendar code deleted then recreated, we will mimic that or do an update
@@ -184,7 +224,11 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
          const saved = await dbCreateTask({ ...taskInput, user_id: profileId });
          setTasks(prev => {
             const updated = prev.map(t => t.id === taskId ? saved : t);
-            saveToCache(updated);
+            setAllScheduledActions((actions) => {
+              const next = filterAllScheduledActions(actions.map(t => t.id === taskId ? saved : t));
+              saveToCache(next);
+              return next;
+            });
             return updated;
          });
        } catch (e) {}
@@ -196,7 +240,11 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const updateTaskState = async (taskId: string, newStatus: any) => {
     const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null } : t);
     setTasks(updatedTasks);
-    saveToCache(updatedTasks);
+    setAllScheduledActions(prev => {
+      const updated = filterAllScheduledActions(prev.map(t => t.id === taskId ? { ...t, status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null } : t));
+      saveToCache(updated);
+      return updated;
+    });
 
     if (profileId && !taskId.startsWith('local-')) {
       try { await dbToggleTask(taskId, newStatus === 'completed' ? 'pending' : 'completed'); } catch {}
@@ -206,7 +254,11 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const removeTask = async (taskId: string) => {
     const updatedTasks = tasks.filter(t => t.id !== taskId);
     setTasks(updatedTasks);
-    saveToCache(updatedTasks);
+    setAllScheduledActions(prev => {
+      const updated = prev.filter(t => t.id !== taskId);
+      saveToCache(updated);
+      return updated;
+    });
 
     if (profileId && !taskId.startsWith('local-')) {
       try { await dbDeleteTask(taskId); } catch {}
@@ -214,7 +266,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <TasksContext.Provider value={{ tasks, loading, refreshTasks, addTask, editTask, updateTaskState, removeTask }}>
+    <TasksContext.Provider value={{ tasks, allScheduledActions, loading, refreshTasks, addTask, editTask, updateTaskState, removeTask }}>
       {children}
     </TasksContext.Provider>
   );
