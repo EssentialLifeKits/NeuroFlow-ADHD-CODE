@@ -27,7 +27,13 @@ export function TaskThumbnail({ stickerId, fallbackEmoji, color }: { stickerId?:
           </View>
         );
       } else if (p.type === 'document') {
-        // Documents: always show 📄 icon — no preview possible in a 40×40 thumb
+        if (p.uri) {
+          return (
+            <View style={[styles.container, { borderColor: color }]}>
+              <Image source={{ uri: p.uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+            </View>
+          );
+        }
         return (
           <View style={[styles.container, { borderColor: color, backgroundColor: color + '22', justifyContent: 'center', alignItems: 'center' }]}>
             <Text style={{ fontSize: 20 }}>📄</Text>

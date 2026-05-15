@@ -115,6 +115,18 @@ function cleanFileName(raw: string): string {
   return cleaned || raw; // Fallback to the original if everything was stripped
 }
 
+function normalizeReminderOffset(rule?: string | null, savedAlertOffset?: unknown): string {
+  if (rule && rule !== 'none' && rule !== 'sent') {
+    const minuteMatch = rule.match(/^(\d+)min_before$/);
+    if (minuteMatch) return minuteMatch[1];
+    if (rule === '1h_before') return '60';
+    if (rule === '1d_before') return '1440';
+  }
+
+  if (savedAlertOffset && savedAlertOffset !== 'none') return String(savedAlertOffset);
+  return 'none';
+}
+
 async function captureCurrentVideoFrame(videoElRef: React.RefObject<any>): Promise<string | null> {
   if (Platform.OS !== 'web' || !videoElRef.current) return null;
   const vid = videoElRef.current as HTMLVideoElement;
@@ -251,12 +263,13 @@ export default function ScheduleModal({
         setTags(initialData.description ?? '');
         const cat = (initialData.chore_category?.toLowerCase() ?? 'task') as ADHDCategory;
         setCategory(ADHD_CATEGORIES[cat] ? cat : 'task');
-        // reminder_offset is stored in recurrence_rule (no new column needed)
-        const ro = initialData.recurrence_rule;
-        // Support legacy values and new minute-based format
-        const legacyMap: Record<string, string> = { '1h_before': '60', '1d_before': '1440', 'at_time': '0' };
-        const resolved = ro ? (legacyMap[ro] ?? (ro === 'none' || ro === 'sent' ? 'none' : ro)) : 'none';
-        setReminderOffset(resolved);
+        let parsedSticker: any = null;
+        if (initialData.sticker_id && initialData.sticker_id.startsWith('{')) {
+          try {
+            parsedSticker = JSON.parse(initialData.sticker_id);
+          } catch {}
+        }
+        setReminderOffset(normalizeReminderOffset(initialData.recurrence_rule, parsedSticker?.alertOffset));
         setDetailsFocused(false);
         setSelectedChipTime(null);
         setAttachedFile(null);
@@ -269,13 +282,10 @@ export default function ScheduleModal({
           setPickedTime(d);
         } else setPickedTime(initTime());
 
-        if (initialData.sticker_id && initialData.sticker_id.startsWith('{')) {
-          try {
-            const p = JSON.parse(initialData.sticker_id);
-            setAttachedFile({ uri: p.uri || p.thumbnail || '', type: p.type, name: p.name || 'media', width: p.width, height: p.height });
-            setThumbnailTime(p.thumbTime ?? null);
-            setCapturedThumbnail(p.thumbnail ?? null);
-          } catch {}
+        if (parsedSticker && ['image', 'video', 'document'].includes(parsedSticker.type)) {
+          setAttachedFile({ uri: parsedSticker.uri || parsedSticker.thumbnail || '', type: parsedSticker.type, name: parsedSticker.name || 'media', width: parsedSticker.width, height: parsedSticker.height });
+          setThumbnailTime(parsedSticker.thumbTime ?? null);
+          setCapturedThumbnail(parsedSticker.thumbnail ?? (parsedSticker.type === 'document' ? parsedSticker.uri ?? 'document' : null));
         }
       } else {
         setTaskDetails(''); setTags(''); setCategory('task'); setReminderOffset('none'); setCustomMinutes(''); setShowCustomInput(false);
@@ -297,6 +307,48 @@ export default function ScheduleModal({
 
   const selectedAttachmentType = () => attachedFile?.type ?? null;
   const selectedAttachmentName = () => attachedFile?.name ?? null;
+  const selectedAlertOffset = () => {
+    if (reminderOffset === 'none' || reminderOffset === '0') return null;
+    const minutes = parseInt(reminderOffset, 10);
+    return Number.isFinite(minutes) && minutes > 0 ? String(minutes) : null;
+  };
+
+  const buildStickerId = () => {
+    if (!attachedFile) {
+      const alertOffset = selectedAlertOffset();
+      return alertOffset ? JSON.stringify({ type: 'alert-meta', alertOffset }) : null;
+    }
+    const base = {
+      type: attachedFile.type,
+      name: attachedFile.name,
+      alertOffset: selectedAlertOffset(),
+      thumbTime: thumbnailTime,
+    };
+
+    if (attachedFile.type === 'video') {
+      return JSON.stringify({
+        ...base,
+        thumbnail: capturedThumbnail,
+      });
+    }
+
+    if (attachedFile.type === 'document') {
+      const MAX_DOC_CHARS = 400 * 1024; // ~300 KB base64 -> safe for DB
+      const canPersistDocument = attachedFile.uri && attachedFile.uri.length <= MAX_DOC_CHARS;
+      return JSON.stringify({
+        ...base,
+        thumbnail: canPersistDocument ? attachedFile.uri : 'document',
+        ...(canPersistDocument ? { uri: attachedFile.uri } : {}),
+      });
+    }
+
+    return JSON.stringify({
+      ...base,
+      uri: attachedFile.uri,
+      width: attachedFile.width,
+      height: attachedFile.height,
+    });
+  };
 
   const handleSchedule = async () => {
     if (!taskDetails.trim()) return;
@@ -307,39 +359,7 @@ export default function ScheduleModal({
     ].join('-');
     const timeStr = `${String(pickedTime.getHours()).padStart(2, '0')}:${String(pickedTime.getMinutes()).padStart(2, '0')}`;
     
-    // Build compact sticker_id:
-    // - video: store only the canvas-captured thumbnail JPEG (not the blob URL, which expires)
-    // - document: store base64 only if ≤ 400 KB to avoid DB column truncation
-    // - image: store base64 URI as before
-    let sticker_id: string | null = null;
-    if (attachedFile) {
-      if (attachedFile.type === 'video') {
-        sticker_id = JSON.stringify({
-          type: 'video',
-          thumbnail: capturedThumbnail,   // canvas-captured JPEG frame (persists)
-          thumbTime: thumbnailTime,
-          name: attachedFile.name,
-        });
-      } else if (attachedFile.type === 'document') {
-        const MAX_DOC_CHARS = 400 * 1024; // ~300 KB base64 → safe for DB
-        sticker_id = JSON.stringify({
-          type: 'document',
-          name: attachedFile.name,
-          thumbTime: thumbnailTime,
-          ...(attachedFile.uri && attachedFile.uri.length <= MAX_DOC_CHARS
-            ? { uri: attachedFile.uri }
-            : {}),
-        });
-      } else {
-        sticker_id = JSON.stringify({
-          uri: attachedFile.uri,
-          type: attachedFile.type,
-          width: attachedFile.width,
-          height: attachedFile.height,
-          thumbTime: thumbnailTime,
-        });
-      }
-    }
+    const sticker_id = buildStickerId();
 
     const taskInput = {
       title: taskDetails.trim(),
@@ -360,7 +380,7 @@ export default function ScheduleModal({
 
     // Schedule email reminder via Resend — always fires for every task with an email
     if (user?.email) {
-      const apiOffset = 'at_time';
+      const apiOffset = selectedAlertOffset() ? `${selectedAlertOffset()}min_before` : 'at_time';
       console.log('[ScheduleModal] Scheduling email reminder:', { email: user.email, dueDate: dateStr, dueTime: timeStr, apiOffset, taskId: savedTaskId });
       try {
         const resp = await fetch('/api/schedule-reminder', {
@@ -414,13 +434,7 @@ export default function ScheduleModal({
     ].join('-');
     const timeStr = `${String(pickedTime.getHours()).padStart(2, '0')}:${String(pickedTime.getMinutes()).padStart(2, '0')}`;
     
-    const sticker_id = attachedFile ? JSON.stringify({
-      uri: attachedFile.uri,
-      type: attachedFile.type,
-      width: attachedFile.width,
-      height: attachedFile.height,
-      thumbTime: thumbnailTime
-    }) : null;
+    const sticker_id = buildStickerId();
 
     const taskInput = {
       title: taskDetails.trim() || 'Untitled draft',
@@ -761,7 +775,13 @@ export default function ScheduleModal({
 
                       {capturedThumbnail ? (
                         <View pointerEvents="none" style={ms.capturedThumbPreview}>
-                          <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                          {attachedFile.type === 'document' ? (
+                            <View style={ms.capturedDocThumb}>
+                              <Text style={ms.capturedDocIcon}>📄</Text>
+                            </View>
+                          ) : (
+                            <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                          )}
                           <View style={ms.capturedThumbCheck}>
                             <Text style={ms.capturedThumbCheckText}>✓</Text>
                           </View>
@@ -1111,7 +1131,13 @@ export default function ScheduleModal({
                       Platform.OS === 'web' && ms.capturedThumbPreviewLightboxWeb,
                     ]}
                   >
-                    <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                    {lightbox.file.type === 'document' ? (
+                      <View style={ms.capturedDocThumb}>
+                        <Text style={ms.capturedDocIcon}>📄</Text>
+                      </View>
+                    ) : (
+                      <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                    )}
                     <View style={ms.capturedThumbCheck}>
                       <Text style={ms.capturedThumbCheckText}>✓</Text>
                     </View>
@@ -1296,6 +1322,8 @@ const ms = StyleSheet.create({
     zIndex: 9999,
   },
   capturedThumbImage: { width: '100%', height: '100%' },
+  capturedDocThumb: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e1e35' },
+  capturedDocIcon: { fontSize: 28 },
   capturedThumbCheck: {
     position: 'absolute',
     right: 3,

@@ -415,6 +415,7 @@ module.exports = async function handler(req, res) {
 
   const now = new Date();
   const FIVE_MIN_MS = 5 * 60 * 1000;
+  const hasSelectedReminder = Boolean(reminderOffset && reminderOffset !== 'at_time' && reminderOffset !== 'none');
   // Tasks past their due time or within 1 minute: send immediately via Gmail
   const isPastDue = eventDt <= new Date(now.getTime() + 60_000);
   // Tasks 1–5 minutes away: too soon for Resend's minimum, send via Gmail immediately
@@ -444,13 +445,16 @@ module.exports = async function handler(req, res) {
     const minsAway = Math.ceil((eventDt.getTime() - now.getTime()) / 60_000);
     try {
       const preparedThumbnail = await prepareThumbnailForEmail(thumbnail);
+      const emailType = hasSelectedReminder ? 'reminder' : 'at_time';
       await sendViaGmail({
         to: email,
-        subject: `⏰ Starting in ${minsAway} min: ${title}`,
-        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'reminder', thumbnail: preparedThumbnail.thumbnail, settings: emailSettings, attachmentType, attachmentName }),
+        subject: hasSelectedReminder
+          ? applyTemplate(emailSettings.subjectReminder, subjectVars)
+          : applyTemplate(emailSettings.subjectTask, subjectVars),
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: emailType, thumbnail: preparedThumbnail.thumbnail, settings: emailSettings, attachmentType, attachmentName }),
         attachments: preparedThumbnail.gmail,
       });
-      results.push({ type: 'reminder', scheduledAt: 'immediate', via: 'gmail' });
+      results.push({ type: emailType, scheduledAt: 'immediate', minsAway, via: 'gmail' });
       if (taskId) await markTaskSent(taskId);
     } catch (e) {
       console.error('[schedule-reminder] Gmail soon-send error:', e);
@@ -469,7 +473,10 @@ module.exports = async function handler(req, res) {
     }
 
     const toSchedule = [];
-    if (offsetMs > 0) toSchedule.push({ sendAt: new Date(eventDt.getTime() - offsetMs), type: 'reminder' });
+    const alertSendAt = offsetMs > 0 ? new Date(eventDt.getTime() - offsetMs) : null;
+    if (alertSendAt && alertSendAt.getTime() > now.getTime() && alertSendAt.getTime() < eventDt.getTime()) {
+      toSchedule.push({ sendAt: alertSendAt, type: 'reminder' });
+    }
     toSchedule.push({ sendAt: eventDt, type: 'at_time' });
 
     const preparedThumbnail = await prepareThumbnailForEmail(thumbnail);

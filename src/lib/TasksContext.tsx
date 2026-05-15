@@ -211,6 +211,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
           due_time: taskInput.due_time,
           chore_category: taskInput.chore_category || t.chore_category,
           sticker_id: taskInput.sticker_id !== undefined ? taskInput.sticker_id : t.sticker_id,
+          recurrence_rule: taskInput.recurrence_rule !== undefined ? taskInput.recurrence_rule : t.recurrence_rule,
           updated_at: new Date().toISOString()
         };
       }

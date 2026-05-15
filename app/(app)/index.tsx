@@ -35,6 +35,7 @@ import { useTasks } from '../../src/lib/TasksContext';
 import {
   getCategoryConf,
   formatTime12,
+  getTaskAlertLabel,
   isUpcomingPriority,
 } from '../../src/lib/tasksUtils';
 import ScheduleModal from '../../src/components/ScheduleModal';
@@ -398,6 +399,7 @@ export default function DashboardScreen() {
           >
             {topPending.map((task) => {
               const conf = getCategoryConf(task);
+              const alertLabel = getTaskAlertLabel(task);
               return (
                 <Pressable key={task.id} style={[styles.taskRow, isMobile && styles.taskRowMobile]} onPress={() => handleEdit(task)}>
                   <TaskThumbnail stickerId={task.sticker_id} fallbackEmoji={conf.emoji} color={conf.color} />
@@ -417,6 +419,11 @@ export default function DashboardScreen() {
                     <View style={[styles.taskBadge, { backgroundColor: conf.color + '22' }]}>
                       <Text style={[styles.taskBadgeText, { color: conf.color }]}>{conf.label}</Text>
                     </View>
+                    {alertLabel ? (
+                      <View style={styles.alertBadge}>
+                        <Text style={styles.alertBadgeText}>🔔 {alertLabel}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   <TouchableOpacity
                     onPress={() => handleDeleteTask(task.id)}
@@ -734,6 +741,8 @@ const styles = StyleSheet.create({
   taskMeta: { fontSize: typography.fontSizeXs, color: colors.textSecondary, marginTop: 2 },
   taskBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.full },
   taskBadgeText: { fontSize: 9, fontWeight: '700' },
+  alertBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.full, backgroundColor: '#F59E0B22', borderWidth: 1, borderColor: '#F59E0B88', shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 8, elevation: 5 },
+  alertBadgeText: { fontSize: 9, fontWeight: '800', color: '#F59E0B' },
   badgesCol: { alignItems: 'flex-end', gap: 3 },
   badgesColMobile: { maxWidth: 86 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },

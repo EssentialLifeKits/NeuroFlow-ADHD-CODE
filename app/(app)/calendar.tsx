@@ -49,6 +49,7 @@ import {
   getCategoryColor,
   formatTime12,
   BEST_TIMES,
+  getTaskAlertLabel,
   isCalendarVisibleTask,
   isUpcomingPriority,
 } from '../../src/lib/tasksUtils';
@@ -512,6 +513,7 @@ export default function CalendarScreen() {
         >
           {upcomingPriorities.map((task) => {
             const conf = getCategoryConf(task);
+            const alertLabel = getTaskAlertLabel(task);
             return (
               <TouchableOpacity
                 key={task.id}
@@ -535,6 +537,11 @@ export default function CalendarScreen() {
                   <View style={[s.upBadge, { backgroundColor: conf.color + '22' }]}>
                     <Text style={[s.upBadgeText, { color: conf.color }]}>{conf.label}</Text>
                   </View>
+                  {alertLabel ? (
+                    <View style={s.alertBadge}>
+                      <Text style={s.alertBadgeText}>🔔 {alertLabel}</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <TouchableOpacity
                   onPress={() => handleDeleteTask(task.id)}
@@ -781,6 +788,8 @@ const s = StyleSheet.create({
   upMeta: { fontSize: 10, color: colors.textTertiary, marginTop: 2 },
   upBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full },
   upBadgeText: { fontSize: 9, fontWeight: '700' },
+  alertBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.full, backgroundColor: '#F59E0B22', borderWidth: 1, borderColor: '#F59E0B88', shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 8, elevation: 5 },
+  alertBadgeText: { fontSize: 9, fontWeight: '800', color: '#F59E0B' },
   upDeleteBtn: { padding: 4, marginLeft: 4 },
   upDeleteText: { fontSize: 14 },
   emptyWidget: { fontSize: 12, color: colors.textTertiary, textAlign: 'center', paddingVertical: 16, fontStyle: 'italic' },

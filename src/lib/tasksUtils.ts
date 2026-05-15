@@ -31,6 +31,35 @@ export function formatTime12(t: string): string {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 }
 
+export function getTaskAlertOffset(task: Pick<Task, 'recurrence_rule' | 'sticker_id'>): string | null {
+  const rule = task.recurrence_rule;
+  if (rule && rule !== 'none' && rule !== 'sent') {
+    const minuteMatch = rule.match(/^(\d+)min_before$/);
+    if (minuteMatch) return minuteMatch[1];
+    if (rule === '1h_before') return '60';
+    if (rule === '1d_before') return '1440';
+  }
+
+  if (task.sticker_id?.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(task.sticker_id);
+      if (parsed?.alertOffset && parsed.alertOffset !== 'none') return String(parsed.alertOffset);
+    } catch {}
+  }
+
+  return null;
+}
+
+export function getTaskAlertLabel(task: Pick<Task, 'recurrence_rule' | 'sticker_id'>): string | null {
+  const offset = getTaskAlertOffset(task);
+  if (!offset) return null;
+  const mins = parseInt(offset, 10);
+  if (!Number.isFinite(mins) || mins <= 0) return null;
+  if (mins % 1440 === 0) return `${mins / 1440} day alert`;
+  if (mins % 60 === 0) return `${mins / 60} hour alert`;
+  return `${mins}-minute alert`;
+}
+
 export function getTaskDueTimeMs(task: Task): number | null {
   if (!task.due_date) return null;
   const time = task.due_time || '23:59';
