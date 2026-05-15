@@ -1272,6 +1272,26 @@ export default function FocusScreen() {
                 title: 'Deep Work Audio Blueprint',
               }),
         ]),
+        React.createElement('button', {
+          key: 'audio-download-drive',
+          onClick: (e: any) => { e.stopPropagation(); Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)); },
+          style: {
+            width: 'calc(100% - 24px)',
+            margin: '10px 12px 12px',
+            padding: '11px 14px',
+            borderRadius: 12,
+            border: `1px solid ${NF_BLUE}66`,
+            backgroundColor: `${NF_BLUE}22`,
+            color: NF_BLUE,
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          },
+        }, '📥 Download in Google Drive'),
       ])}
 
       {/* ── Audio Fullscreen Overlay ── */}
@@ -1290,7 +1310,7 @@ export default function FocusScreen() {
             React.createElement('span', { key: 'sub', style: { fontSize: 11, color: '#6b7280', marginLeft: 4 } }, 'Focus Series'),
           ]),
           React.createElement('div', { key: 'actions', style: { display: 'flex', gap: 8 } }, [
-            React.createElement('button', { key: 'download', onClick: () => Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)), style: { padding: '6px 14px', borderRadius: 8, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}15`, color: NF_BLUE, cursor: 'pointer', fontSize: 12, fontWeight: 700 } }, '⇩ Download'),
+            React.createElement('button', { key: 'download', onClick: () => Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)), style: { padding: '6px 14px', borderRadius: 8, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}15`, color: NF_BLUE, cursor: 'pointer', fontSize: 12, fontWeight: 700 } }, 'Download in Google Drive'),
             React.createElement('button', { key: 'pip', onClick: () => setAudioFullscreen(false), style: { padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.border}`, backgroundColor: 'rgba(255,255,255,0.06)', color: '#9ca3af', cursor: 'pointer', fontSize: 12, fontWeight: 600 } }, '⊡ Mini'),
             React.createElement('button', { key: 'close', onClick: () => { setAudioOpen(false); setAudioFullscreen(false); setAudioPos(null); }, style: { padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.3)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 12, fontWeight: 600 } }, '✕ Close'),
           ]),
@@ -1347,6 +1367,25 @@ export default function FocusScreen() {
                 title: 'Deep Work Audio Blueprint',
               }),
         ),
+        React.createElement('button', {
+          key: 'audio-download-drive-fs',
+          onClick: () => Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)),
+          style: {
+            width: '100%',
+            maxWidth: 560,
+            marginTop: 14,
+            padding: '13px 18px',
+            borderRadius: 14,
+            border: `1px solid ${NF_BLUE}66`,
+            backgroundColor: `${NF_BLUE}22`,
+            color: NF_BLUE,
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 800,
+            position: 'relative',
+            zIndex: 1,
+          },
+        }, '📥 Download in Google Drive'),
 
         // Prominent EXIT button — fixed bottom-center, always visible
         React.createElement('button', { key: 'exit-btn', onClick: () => setAudioFullscreen(false), style: { position: 'absolute', bottom: 52, left: '50%', transform: 'translateX(-50%)', padding: '12px 32px', borderRadius: 12, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}18`, color: NF_BLUE, cursor: 'pointer', fontSize: 14, fontWeight: 700, letterSpacing: 0.3, zIndex: 2, backdropFilter: 'blur(8px)', whiteSpace: 'nowrap' } }, '← Back to Player'),

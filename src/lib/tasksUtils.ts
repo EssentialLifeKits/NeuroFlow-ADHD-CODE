@@ -39,10 +39,12 @@ export function getTaskDueTimeMs(task: Task): number | null {
 }
 
 export function isUpcomingPriority(task: Task, now = new Date()): boolean {
-  if (task.recurrence_rule === 'sent') return false;
   if (task.status !== 'pending' && task.status !== 'draft') return false;
   const dueMs = getTaskDueTimeMs(task);
   if (dueMs == null) return false;
+  if (task.recurrence_rule === 'sent') {
+    return now.getTime() <= dueMs + 5 * 60 * 1000;
+  }
   return dueMs > now.getTime();
 }
 

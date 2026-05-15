@@ -33,11 +33,19 @@ const NF_BLUE = '#4A90E2';
 
 // ─── Card tab button ──────────────────────────────────────────────────────────
 function CardTab({ card, isActive, onPress }: { card: ResourceCard; isActive: boolean; onPress: () => void }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <Pressable
       onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
       style={[styles.tab, isActive && { backgroundColor: card.accent_color + '22', borderColor: card.accent_color }]}
     >
+      {hovered && (
+        <View pointerEvents="none" style={[styles.tabTooltip, { backgroundColor: card.accent_color, borderColor: card.accent_color }]}>
+          <Text style={styles.tabTooltipText} numberOfLines={1}>{card.title}</Text>
+        </View>
+      )}
       {card.icon_image_url
         ? <Image source={{ uri: card.icon_image_url }} style={{ width: 20, height: 20, borderRadius: 4 }} />
         : <Text style={{ fontSize: 16 }}>{card.icon}</Text>
@@ -620,14 +628,36 @@ const styles = StyleSheet.create({
 
   content: { gap: spacing.md },
 
-  tabsRow: { flexDirection: 'row', gap: 8, paddingVertical: 4 },
+  tabsRow: { flexDirection: 'row', gap: 8, paddingTop: 34, paddingBottom: 4 },
   tab: {
+    position: 'relative',
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border,
     backgroundColor: colors.bgCard,
   },
   tabLabel: { fontSize: 13, fontWeight: '700', maxWidth: 120 },
+  tabTooltip: {
+    position: 'absolute',
+    top: -30,
+    left: '50%',
+    transform: [{ translateX: -70 }],
+    minWidth: 140,
+    maxWidth: 220,
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: 13,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 8,
+    zIndex: 20,
+  },
+  tabTooltipText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
   detailCard: {
     backgroundColor: colors.bgCard,

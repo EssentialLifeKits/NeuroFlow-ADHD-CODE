@@ -122,7 +122,7 @@ export default function NeuroFlowVideoPlayer({
       <Pressable onPress={() => Linking.openURL(downloadUrl)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
         <Text style={styles.downloadIcon}>▶️</Text>
         <View>
-          <Text style={styles.downloadLabel}>Play Video</Text>
+          <Text style={styles.downloadLabel}>Download in Google Drive</Text>
           <Text style={styles.downloadSub}>Opens in your device player</Text>
         </View>
       </Pressable>
@@ -183,7 +183,7 @@ export default function NeuroFlowVideoPlayer({
       {showOpenButton && (
         <Pressable onPress={() => Linking.openURL(downloadUrl)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
           <Text style={{ fontSize: 16 }}>📥</Text>
-          <Text style={styles.downloadBtnFullText}>Download Video</Text>
+          <Text style={styles.downloadBtnFullText}>Download in Google Drive</Text>
         </Pressable>
       )}
     </View>

@@ -14,10 +14,17 @@ interface TasksContextValue {
   removeTask: (taskId: string) => Promise<void>;
 }
 
-// Hide sent tasks immediately so they leave calendar/upcoming views as soon as
-// the reminder email confirms delivery.
-function filterSentTasks(tasks: Task[]): Task[] {
-  return tasks.filter((t) => t.recurrence_rule !== 'sent');
+// Hide sent tasks only after their scheduled time has passed. Future Resend
+// emails mark the row as `sent` when scheduled, so immediate filtering makes
+// calendar events vanish seconds after creation.
+function filterSentTasks(tasks: Task[], now = new Date()): Task[] {
+  const sentGraceMs = 5 * 60 * 1000;
+  return tasks.filter((t) => {
+    if (t.recurrence_rule !== 'sent') return true;
+    const dueMs = getTaskEventTimeMs(t);
+    if (dueMs == null) return false;
+    return now.getTime() <= dueMs + sentGraceMs;
+  });
 }
 
 function getTaskEventTimeMs(task: Task): number | null {
