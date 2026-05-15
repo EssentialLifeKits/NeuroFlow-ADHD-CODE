@@ -474,10 +474,10 @@ module.exports = async function handler(req, res) {
       if (emailRes.ok) {
         const data = await emailRes.json();
         results.push({ type, scheduledAt: sendAt.toISOString(), id: data.id, via: 'resend' });
-        // Do not mark future Resend emails as sent here. Resend has only accepted
-        // the schedule at this point; the actual inbox delivery happens later.
-        // Marking early makes the app report "sent" even if delivery is delayed
-        // or fails downstream.
+        // This app's cleanup flow has no Resend delivery webhook. Once Resend
+        // accepts the at-time schedule, mark the task as sent so the UI can keep
+        // it visible until due time, then remove it after the grace period.
+        if (type === 'at_time' && taskId) await markTaskSent(taskId);
       } else {
         const err = await emailRes.text();
         console.error(`[schedule-reminder] Resend error: ${emailRes.status} ${err}`);

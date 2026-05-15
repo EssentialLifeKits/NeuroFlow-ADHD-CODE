@@ -356,12 +356,7 @@ export default function ScheduleModal({
           Alert.alert('⚠️ Email Reminder Failed', `Your entry was saved but the email reminder could not be scheduled.\n\n${detail}`);
         } else {
           console.log('[ScheduleModal] Email scheduled successfully:', result);
-          // For Gmail immediate sends (past due / within 5 min), the server marks
-          // the task as 'sent' right away — refresh to sync that status.
-          // For Resend future-scheduled sends, nothing changes in the DB at this
-          // point (markTaskSent fires only after delivery), so this is a no-op.
-          const hasImmediateSend = result.scheduled?.some((r: any) => !r.error && r.scheduledAt === 'immediate');
-          if (hasImmediateSend) refreshTasks();
+          await refreshTasks();
         }
       } catch (e) {
         console.warn('[ScheduleModal] schedule-reminder fetch failed:', e);
@@ -1037,7 +1032,7 @@ export default function ScheduleModal({
                 )}
                 {lightbox.file?.type === 'video' && (
                   <View style={ms.lightboxVideo}>
-                    {isScrubbing && (
+                    {(
                       <TouchableOpacity
                         onPress={() => {
                           if (Platform.OS === 'web' && videoRef.current) {
@@ -1062,7 +1057,7 @@ export default function ScheduleModal({
                         style={ms.thumbBtnTopLightbox}
                         activeOpacity={0.85}
                       >
-                        <Text style={ms.thumbBtnText}>📸 Capture This Scene</Text>
+                        <Text style={ms.thumbBtnText}>📸 Capture Thumbnail</Text>
                       </TouchableOpacity>
                     )}
                     <NativeWebVideo
@@ -1088,7 +1083,13 @@ export default function ScheduleModal({
                   </View>
                 )}
                 {capturedThumbnail && lightbox.file ? (
-                  <View pointerEvents="none" style={ms.capturedThumbPreviewLightbox}>
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      ms.capturedThumbPreviewLightbox,
+                      Platform.OS === 'web' && ms.capturedThumbPreviewLightboxWeb,
+                    ]}
+                  >
                     <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
                     <View style={ms.capturedThumbCheck}>
                       <Text style={ms.capturedThumbCheckText}>✓</Text>
@@ -1266,6 +1267,12 @@ const ms = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 12,
     elevation: 10,
+  },
+  capturedThumbPreviewLightboxWeb: {
+    position: 'fixed' as any,
+    top: 52,
+    right: 32,
+    zIndex: 9999,
   },
   capturedThumbImage: { width: '100%', height: '100%' },
   capturedThumbCheck: {
