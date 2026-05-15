@@ -604,7 +604,7 @@ export default function ScheduleModal({
                       {attachedFile.type === 'image' ? (
                         <TouchableOpacity onPress={() => setLightbox({ visible: true, file: attachedFile })} activeOpacity={0.85} style={{ flex: 1 }}>
                           <Image source={{ uri: attachedFile.uri }} style={[ms.fileImage, { height: '100%' }]} resizeMode="cover" />
-                          <TouchableOpacity onPress={() => { setThumbnailTime(0); fireCaptureToast(); }} style={ms.thumbBtnTop} activeOpacity={0.85}>
+                          <TouchableOpacity onPress={() => { setThumbnailTime(0); setCapturedThumbnail(attachedFile.uri); fireCaptureToast(); }} style={ms.thumbBtnTop} activeOpacity={0.85}>
                             <Text style={ms.thumbBtnText}>📸 Set as Thumbnail</Text>
                           </TouchableOpacity>
                         </TouchableOpacity>
@@ -705,7 +705,7 @@ export default function ScheduleModal({
                                   },
                                 })}
                                 <TouchableOpacity
-                                  onPress={() => { setThumbnailTime(0); fireCaptureToast(); }}
+                                  onPress={() => { setThumbnailTime(0); setCapturedThumbnail(attachedFile.uri); fireCaptureToast(); }}
                                   style={ms.thumbBtnTop}
                                   activeOpacity={0.85}
                                 >
@@ -1085,16 +1085,16 @@ export default function ScheduleModal({
                         }
                       )}
                     />
-                    {capturedThumbnail ? (
-                      <View pointerEvents="none" style={ms.capturedThumbPreviewLightbox}>
-                        <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
-                        <View style={ms.capturedThumbCheck}>
-                          <Text style={ms.capturedThumbCheckText}>✓</Text>
-                        </View>
-                      </View>
-                    ) : null}
                   </View>
                 )}
+                {capturedThumbnail && lightbox.file ? (
+                  <View pointerEvents="none" style={ms.capturedThumbPreviewLightbox}>
+                    <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                    <View style={ms.capturedThumbCheck}>
+                      <Text style={ms.capturedThumbCheckText}>✓</Text>
+                    </View>
+                  </View>
+                ) : null}
                 {lightbox.file?.type === 'document' && (
                   (lightbox.file.mimeType === 'application/pdf' || lightbox.file.name?.toLowerCase().endsWith('.pdf')) ? (
                     Platform.OS === 'web' ? (
@@ -1251,16 +1251,16 @@ const ms = StyleSheet.create({
   },
   capturedThumbPreviewLightbox: {
     position: 'absolute',
-    top: 18,
-    right: 18,
-    width: 70,
-    height: 86,
+    top: 32,
+    right: 24,
+    width: 78,
+    height: 98,
     borderRadius: 10,
     borderWidth: 3,
     borderColor: '#E02872',
     backgroundColor: '#0e0e1a',
     overflow: 'hidden',
-    zIndex: 45,
+    zIndex: 180,
     shadowColor: '#E02872',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,

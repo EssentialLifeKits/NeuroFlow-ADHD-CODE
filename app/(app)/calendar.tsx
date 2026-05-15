@@ -49,6 +49,7 @@ import {
   getCategoryColor,
   formatTime12,
   BEST_TIMES,
+  isCalendarVisibleTask,
   isUpcomingPriority,
 } from '../../src/lib/tasksUtils';
 import ScheduleModal from '../../src/components/ScheduleModal';
@@ -70,7 +71,7 @@ function formatDate(year: number, month: number, day: number): string {
 }
 
 function getTasksByDate(tasks: Task[], dateStr: string) {
-  return tasks.filter((t) => t.due_date === dateStr && isUpcomingPriority(t));
+  return tasks.filter((t) => t.due_date === dateStr && isCalendarVisibleTask(t));
 }
 
 // ─── Pulsing Blue Dot ─────────────────────────────────────────────────────────

@@ -48,6 +48,15 @@ export function isUpcomingPriority(task: Task, now = new Date()): boolean {
   return dueMs > now.getTime();
 }
 
+export function isCalendarVisibleTask(task: Task, now = new Date()): boolean {
+  const dueMs = getTaskDueTimeMs(task);
+  if (dueMs == null) return false;
+  if (task.recurrence_rule === 'sent') {
+    return now.getTime() <= dueMs + 5 * 60 * 1000;
+  }
+  return task.status === 'pending' || task.status === 'draft';
+}
+
 export function displayTo24(ts: string): string {
   if (!ts) return '00:00';
   const match = ts.match(/(\d+):(\d+)\s*(AM|PM)/i);
