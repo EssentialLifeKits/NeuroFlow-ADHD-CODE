@@ -158,6 +158,58 @@ async function captureCurrentVideoFrame(videoElRef: React.RefObject<any>): Promi
   return canvas.toDataURL('image/jpeg', 0.82);
 }
 
+function isPdfDocument(file?: Pick<AttachedFile, 'mimeType' | 'name'> | null): boolean {
+  if (!file) return false;
+  return file.mimeType === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf') === true;
+}
+
+function loadPDFJS(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      reject(new Error('PDF thumbnails are only available on web'));
+      return;
+    }
+    if ((window as any).__nfPdfjsLib) {
+      resolve((window as any).__nfPdfjsLib);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.onload = () => {
+      const lib = (window as any).pdfjsLib;
+      if (!lib) {
+        reject(new Error('PDF.js did not load'));
+        return;
+      }
+      lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      (window as any).__nfPdfjsLib = lib;
+      resolve(lib);
+    };
+    script.onerror = () => reject(new Error('Failed to load PDF.js'));
+    document.head.appendChild(script);
+  });
+}
+
+async function renderPdfThumbnail(uri: string): Promise<string | null> {
+  if (Platform.OS !== 'web' || !uri) return null;
+  try {
+    const pdfjs = await loadPDFJS();
+    const pdfDoc = await pdfjs.getDocument(uri).promise;
+    const page = await pdfDoc.getPage(1);
+    const viewport = page.getViewport({ scale: 0.38 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return canvas.toDataURL('image/jpeg', 0.68);
+  } catch (error) {
+    console.warn('[ScheduleModal] PDF thumbnail render failed:', error);
+    return null;
+  }
+}
+
 // ─── Uploaded File / Lightbox state ──────────────────────────────────────────
 export interface AttachedFile {
   uri: string; name: string; mimeType?: string; type: 'image' | 'document' | 'video';
@@ -313,6 +365,30 @@ export default function ScheduleModal({
     return Number.isFinite(minutes) && minutes > 0 ? String(minutes) : null;
   };
 
+  const captureDocumentThumbnail = async () => {
+    if (!attachedFile || attachedFile.type !== 'document') return;
+    setThumbnailTime(0);
+    if (isPdfDocument(attachedFile) && attachedFile.uri) {
+      const rendered = await renderPdfThumbnail(attachedFile.uri);
+      setCapturedThumbnail(rendered ?? 'document');
+    } else {
+      setCapturedThumbnail('document');
+    }
+    fireCaptureToast();
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (attachedFile?.type === 'document' && isPdfDocument(attachedFile) && attachedFile.uri && (!capturedThumbnail || capturedThumbnail === 'document' || capturedThumbnail.startsWith('data:application/pdf'))) {
+      renderPdfThumbnail(attachedFile.uri).then((rendered) => {
+        if (!cancelled && rendered) setCapturedThumbnail(rendered);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [attachedFile, capturedThumbnail]);
+
   const buildStickerId = () => {
     if (!attachedFile) {
       const alertOffset = selectedAlertOffset();
@@ -337,7 +413,7 @@ export default function ScheduleModal({
       const canPersistDocument = attachedFile.uri && attachedFile.uri.length <= MAX_DOC_CHARS;
       return JSON.stringify({
         ...base,
-        thumbnail: canPersistDocument ? attachedFile.uri : 'document',
+        thumbnail: capturedThumbnail || (canPersistDocument ? attachedFile.uri : 'document'),
         ...(canPersistDocument ? { uri: attachedFile.uri } : {}),
       });
     }
@@ -459,10 +535,11 @@ export default function ScheduleModal({
     );
   };
 
-  const pickImage = async () => {
+  const pickImage = async (mediaKind: 'all' | 'image' | 'video' = 'all') => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Permission needed', 'Allow photo library access in Settings.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.85 });
+    const mediaTypes = mediaKind === 'image' ? ['images'] : mediaKind === 'video' ? ['videos'] : ['images', 'videos'];
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes, quality: 0.85 });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       const isVideo = asset.type === 'video' || (asset.fileName ?? '').match(/\.(mp4|mov|avi|mkv)$/i);
@@ -472,14 +549,17 @@ export default function ScheduleModal({
         const blob = await resp.blob();
         const reader = new FileReader();
         reader.onload = (ev: any) => {
+          const uri = ev.target.result as string;
           setAttachedFile({
-            uri: ev.target.result as string,
+            uri,
             name: cleanFileName(asset.fileName ?? 'image'),
             mimeType: asset.mimeType,
             type: 'image',
             width: asset.width,
             height: asset.height,
           });
+          setCapturedThumbnail(uri);
+          setThumbnailTime(0);
           setUploadSuccess(true);
         };
         reader.readAsDataURL(blob);
@@ -531,12 +611,15 @@ export default function ScheduleModal({
           // Convert image to base64 so thumbnail persists after re-login
           const reader = new FileReader();
           reader.onload = (ev: any) => {
+            const uri = ev.target.result as string;
             setAttachedFile({
-              uri: ev.target.result as string,
+              uri,
               name: cleanFileName(nm),
               mimeType: mime,
               type: 'image',
             });
+            setCapturedThumbnail(uri);
+            setThumbnailTime(0);
             setUploadSuccess(true);
           };
           reader.readAsDataURL(file);
@@ -555,14 +638,21 @@ export default function ScheduleModal({
           // Convert document to base64 so the preview/thumbnail persists after re-login.
           // Blob URLs expire when the session ends.
           const reader = new FileReader();
-          reader.onload = (ev: any) => {
+          reader.onload = async (ev: any) => {
+            const uri = ev.target.result as string;
             setAttachedFile({
-              uri: ev.target.result as string,
+              uri,
               name: cleanFileName(nm),
               mimeType: mime,
               type: 'document',
             });
+            setCapturedThumbnail('document');
+            setThumbnailTime(0);
             setUploadSuccess(true);
+            if (mime === 'application/pdf' || nm.toLowerCase().endsWith('.pdf')) {
+              const rendered = await renderPdfThumbnail(uri);
+              if (rendered) setCapturedThumbnail(rendered);
+            }
           };
           reader.readAsDataURL(file);
         }
@@ -740,7 +830,7 @@ export default function ScheduleModal({
                                   },
                                 })}
                                 <TouchableOpacity
-                                  onPress={() => { setThumbnailTime(0); setCapturedThumbnail(attachedFile.uri); fireCaptureToast(); }}
+                                  onPress={captureDocumentThumbnail}
                                   style={ms.thumbBtnTop}
                                   activeOpacity={0.85}
                                 >
@@ -753,7 +843,7 @@ export default function ScheduleModal({
                                 <Text style={{ color: '#ccc', fontSize: 14, textAlign: 'center', paddingHorizontal: 24 }}>{attachedFile.name}</Text>
                                 <Text style={{ color: '#888', fontSize: 12, textAlign: 'center', marginTop: 8, paddingHorizontal: 24 }}>Document saved. Re-upload to preview.</Text>
                                 <TouchableOpacity
-                                  onPress={() => { setThumbnailTime(0); fireCaptureToast(); }}
+                                  onPress={captureDocumentThumbnail}
                                   style={[ms.thumbBtnTop, { position: 'relative', marginTop: 16 }]}
                                   activeOpacity={0.85}
                                 >
@@ -777,7 +867,11 @@ export default function ScheduleModal({
                         <View pointerEvents="none" style={ms.capturedThumbPreview}>
                           {attachedFile.type === 'document' ? (
                             <View style={ms.capturedDocThumb}>
-                              <Text style={ms.capturedDocIcon}>📄</Text>
+                              {capturedThumbnail.startsWith('data:image/') ? (
+                                <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                              ) : (
+                                <Text style={ms.capturedDocIcon}>📄</Text>
+                              )}
                             </View>
                           ) : (
                             <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
@@ -802,16 +896,19 @@ export default function ScheduleModal({
                       <View style={ms.uploadInner}>
                         <Text style={ms.uploadIcon}>📥</Text>
                         <Text style={ms.uploadTitle}>Drop media here or click to upload</Text>
-                        <Text style={ms.uploadHint}>Supports JPG, PNG, MP4 - Max 50MB</Text>
+                        <Text style={ms.uploadHint}>Supports images, videos, and PDF/documents</Text>
                         <View style={ms.uploadPill}>
                           <Text style={ms.uploadPillText}>9:16 Portrait (1080x1920)</Text>
                         </View>
                         <View style={ms.uploadBtnRow}>
-                          <TouchableOpacity onPress={pickImage} style={ms.uploadBtn} activeOpacity={0.85}>
-                            <Text style={ms.uploadBtnText}>📷 Photo / Video</Text>
+                          <TouchableOpacity onPress={() => pickImage('image')} style={ms.uploadBtn} activeOpacity={0.85}>
+                            <Text style={ms.uploadBtnText}>📷 Image</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => pickImage('video')} style={ms.uploadBtn} activeOpacity={0.85}>
+                            <Text style={ms.uploadBtnText}>🎬 Video</Text>
                           </TouchableOpacity>
                           <TouchableOpacity onPress={pickDocument} style={ms.uploadBtn} activeOpacity={0.85}>
-                            <Text style={ms.uploadBtnText}>📄 Document</Text>
+                            <Text style={ms.uploadBtnText}>📄 Document / PDF</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1133,7 +1230,11 @@ export default function ScheduleModal({
                   >
                     {lightbox.file.type === 'document' ? (
                       <View style={ms.capturedDocThumb}>
-                        <Text style={ms.capturedDocIcon}>📄</Text>
+                        {capturedThumbnail.startsWith('data:image/') ? (
+                          <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                        ) : (
+                          <Text style={ms.capturedDocIcon}>📄</Text>
+                        )}
                       </View>
                     ) : (
                       <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />

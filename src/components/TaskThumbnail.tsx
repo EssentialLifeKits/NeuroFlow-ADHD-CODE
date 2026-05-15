@@ -1,6 +1,22 @@
 import React from 'react';
 import { View, Image, Text, StyleSheet } from 'react-native';
 
+function DocumentPreview({ uri, color }: { uri?: string | null; color: string }) {
+  if (uri?.startsWith('data:image/')) {
+    return (
+      <View style={[styles.container, { borderColor: color }]}>
+        <Image source={{ uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { borderColor: color, backgroundColor: color + '22', justifyContent: 'center', alignItems: 'center' }]}>
+      <Text style={{ fontSize: 20 }}>📄</Text>
+    </View>
+  );
+}
+
 export function TaskThumbnail({ stickerId, fallbackEmoji, color }: { stickerId?: string | null, fallbackEmoji: string, color: string }) {
   if (stickerId && stickerId.startsWith('{')) {
     try {
@@ -27,18 +43,7 @@ export function TaskThumbnail({ stickerId, fallbackEmoji, color }: { stickerId?:
           </View>
         );
       } else if (p.type === 'document') {
-        if (p.uri) {
-          return (
-            <View style={[styles.container, { borderColor: color }]}>
-              <Image source={{ uri: p.uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-            </View>
-          );
-        }
-        return (
-          <View style={[styles.container, { borderColor: color, backgroundColor: color + '22', justifyContent: 'center', alignItems: 'center' }]}>
-            <Text style={{ fontSize: 20 }}>📄</Text>
-          </View>
-        );
+        return <DocumentPreview uri={p.thumbnail || p.uri} color={color} />;
       }
     } catch {}
   }
