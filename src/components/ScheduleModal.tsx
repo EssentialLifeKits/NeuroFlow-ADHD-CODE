@@ -737,6 +737,15 @@ export default function ScheduleModal({
                           )}
                         </View>
                       ) : null}
+
+                      {capturedThumbnail ? (
+                        <View pointerEvents="none" style={ms.capturedThumbPreview}>
+                          <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                          <View style={ms.capturedThumbCheck}>
+                            <Text style={ms.capturedThumbCheckText}>✓</Text>
+                          </View>
+                        </View>
+                      ) : null}
                       
                       <TouchableOpacity onPress={() => { setAttachedFile(null); setThumbnailTime(null); setCapturedThumbnail(null); }} style={ms.fileDeleteBtn}>
                         <Text style={ms.fileDeleteText}>🗑 Delete</Text>
@@ -1076,6 +1085,14 @@ export default function ScheduleModal({
                         }
                       )}
                     />
+                    {capturedThumbnail ? (
+                      <View pointerEvents="none" style={ms.capturedThumbPreviewLightbox}>
+                        <Image source={{ uri: capturedThumbnail }} style={ms.capturedThumbImage} resizeMode="cover" />
+                        <View style={ms.capturedThumbCheck}>
+                          <Text style={ms.capturedThumbCheckText}>✓</Text>
+                        </View>
+                      </View>
+                    ) : null}
                   </View>
                 )}
                 {lightbox.file?.type === 'document' && (
@@ -1212,8 +1229,57 @@ const ms = StyleSheet.create({
   uploadBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: NF_BLUE, borderRadius: radius.sm },
   uploadBtnText: { fontSize: 12, fontWeight: '600', color: '#fff' },
   
-  filePreview: { borderWidth: 2, borderColor: NF_BLUE, borderRadius: radius.md, overflow: 'hidden', backgroundColor: NF_BLUE + '0A' },
+  filePreview: { position: 'relative', borderWidth: 2, borderColor: NF_BLUE, borderRadius: radius.md, overflow: 'hidden', backgroundColor: NF_BLUE + '0A' },
   fileImage: { width: '100%', height: 180 },
+  capturedThumbPreview: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 58,
+    height: 74,
+    borderRadius: 9,
+    borderWidth: 3,
+    borderColor: '#E02872',
+    backgroundColor: '#0e0e1a',
+    overflow: 'hidden',
+    zIndex: 30,
+    shadowColor: '#E02872',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  capturedThumbPreviewLightbox: {
+    position: 'absolute',
+    top: 18,
+    right: 18,
+    width: 70,
+    height: 86,
+    borderRadius: 10,
+    borderWidth: 3,
+    borderColor: '#E02872',
+    backgroundColor: '#0e0e1a',
+    overflow: 'hidden',
+    zIndex: 45,
+    shadowColor: '#E02872',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  capturedThumbImage: { width: '100%', height: '100%' },
+  capturedThumbCheck: {
+    position: 'absolute',
+    right: 3,
+    bottom: 3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#34D399',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  capturedThumbCheckText: { color: '#07111f', fontSize: 12, fontWeight: '900' },
   docPreview: { padding: 20, alignItems: 'center', gap: 8 },
   docIcon: { fontSize: 40 },
   docName: { fontSize: 13, color: colors.textPrimary, fontWeight: '500', textAlign: 'center' },
@@ -1259,7 +1325,7 @@ const ms = StyleSheet.create({
   lightboxClose: { position: 'absolute', top: 52, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
   lightboxCloseText: { fontSize: 20, color: '#fff', fontWeight: '700' },
   lightboxImage: { width: '100%', height: '80%' },
-  lightboxVideo: { width: '100%', height: '70%' },
+  lightboxVideo: { position: 'relative', width: '100%', height: '70%' },
   lightboxWebviewWrap: { width: '100%', height: '85%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#fff' },
   lightboxDoc: { alignItems: 'center', gap: 16, padding: 40 },
   lightboxDocIcon: { fontSize: 64 },
