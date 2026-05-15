@@ -474,16 +474,21 @@ module.exports = async function handler(req, res) {
       if (emailRes.ok) {
         const data = await emailRes.json();
         results.push({ type, scheduledAt: sendAt.toISOString(), id: data.id, via: 'resend' });
-        // Mark the at_time email task as sent now so the auto-delete timer has the right state.
-        // filterSentTasks keeps tasks visible until 5 min AFTER due time, so marking early
-        // does NOT hide the task prematurely — it only affects cleanup after the due time passes.
-        if (type === 'at_time' && taskId) await markTaskSent(taskId);
+        // Do not mark future Resend emails as sent here. Resend has only accepted
+        // the schedule at this point; the actual inbox delivery happens later.
+        // Marking early makes the app report "sent" even if delivery is delayed
+        // or fails downstream.
       } else {
         const err = await emailRes.text();
         console.error(`[schedule-reminder] Resend error: ${emailRes.status} ${err}`);
         results.push({ type, error: err, status: emailRes.status, via: 'resend' });
       }
     }
+  }
+
+  if (!isPastDue && !isTooSoonForResend && !RESEND_API_KEY) {
+    console.error('[schedule-reminder] Missing RESEND_API_KEY for future scheduled email');
+    results.push({ type: 'at_time', error: 'Missing RESEND_API_KEY', via: 'resend' });
   }
 
   const allFailed = results.length > 0 && results.every(r => r.error);
