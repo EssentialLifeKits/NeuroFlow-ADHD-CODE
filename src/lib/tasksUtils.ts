@@ -51,10 +51,12 @@ export function isUpcomingPriority(task: Task, now = new Date()): boolean {
 export function isCalendarVisibleTask(task: Task, now = new Date()): boolean {
   const dueMs = getTaskDueTimeMs(task);
   if (dueMs == null) return false;
+  const visibleUntilMs = dueMs + 5 * 60 * 1000;
   if (task.recurrence_rule === 'sent') {
-    return now.getTime() <= dueMs + 5 * 60 * 1000;
+    return now.getTime() <= visibleUntilMs;
   }
-  return task.status === 'pending' || task.status === 'draft';
+  if (task.status !== 'pending' && task.status !== 'draft') return false;
+  return now.getTime() <= visibleUntilMs;
 }
 
 export function displayTo24(ts: string): string {

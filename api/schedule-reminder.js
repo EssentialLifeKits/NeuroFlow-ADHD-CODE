@@ -262,19 +262,34 @@ async function prepareThumbnailForEmail(thumbnail) {
   return { thumbnail: `cid:${inline.cid}`, ...attachments };
 }
 
-function buildThumbnailHtml(thumbnail, accentColor) {
-  if (!thumbnail || typeof thumbnail !== 'string') return '';
-  const src = thumbnail.startsWith('https://') || thumbnail.startsWith('cid:') ? thumbnail : '';
-  if (!src) return '';
+function buildThumbnailHtml(thumbnail, accentColor, attachmentType, attachmentName) {
+  const isDocument = attachmentType === 'document';
+  if ((!thumbnail || typeof thumbnail !== 'string') && !isDocument) return '';
+  const src = typeof thumbnail === 'string' && (thumbnail.startsWith('https://') || thumbnail.startsWith('cid:')) ? thumbnail : '';
+  if (!src && !isDocument) return '';
+  if (!src && isDocument) {
+    const safeName = escapeHtml(attachmentName || 'Attached document');
+    return `<td width="210" valign="middle" align="right" style="padding-left:24px;">
+      <div style="width:190px;height:238px;border:4px solid ${accentColor};border-radius:14px;overflow:hidden;background:#0e0e1a;text-align:center;">
+        <table width="190" height="238" cellpadding="0" cellspacing="0" style="width:190px;height:238px;background:#0e0e1a;">
+          <tr><td align="center" valign="middle" style="padding:18px;color:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+            <div style="font-size:42px;line-height:1;margin-bottom:12px;">📄</div>
+            <div style="font-size:15px;font-weight:800;color:#f0f0f5;line-height:1.25;">PDF Document</div>
+            <div style="font-size:11px;font-weight:600;color:#9ca3af;line-height:1.35;margin-top:8px;">${safeName}</div>
+          </td></tr>
+        </table>
+      </div>
+    </td>`;
+  }
 
-  return `<td width="258" valign="middle" align="right" style="padding-left:24px;">
-    <div style="width:240px;height:240px;border:4px solid ${accentColor};border-radius:14px;overflow:hidden;background:#0e0e1a;text-align:center;line-height:240px;">
-      <img src="${src}" alt="Task thumbnail" width="240" height="240" style="display:block;width:240px;height:240px;object-fit:contain;object-position:center center;border:0;border-radius:10px;background:#0e0e1a;"/>
+  return `<td width="210" valign="middle" align="right" style="padding-left:24px;">
+    <div style="width:190px;height:338px;border:4px solid ${accentColor};border-radius:14px;overflow:hidden;background:#0e0e1a;text-align:center;line-height:338px;">
+      <img src="${src}" alt="Task thumbnail" width="190" height="338" style="display:block;width:190px;height:338px;object-fit:contain;object-position:center center;border:0;border-radius:10px;background:#0e0e1a;"/>
     </div>
   </td>`;
 }
 
-function buildEmailHtml({ title, dueDate, dueTime, category, userName, type, thumbnail, settings }) {
+function buildEmailHtml({ title, dueDate, dueTime, category, userName, type, thumbnail, settings, attachmentType, attachmentName }) {
   const cat = CATEGORY_META[category?.toLowerCase()] ?? CATEGORY_META['task'];
   const isReminder = type === 'reminder';
   const safeTitle = escapeHtml(title);
@@ -314,7 +329,7 @@ function buildEmailHtml({ title, dueDate, dueTime, category, userName, type, thu
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 || 12;
   const formattedTime = `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-  const thumbnailHtml = buildThumbnailHtml(thumbnail, accentColor);
+  const thumbnailHtml = buildThumbnailHtml(thumbnail, accentColor, attachmentType, attachmentName);
   const cardTableWidth = thumbnailHtml ? '100%' : 'auto';
 
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>NeuroFlow Reminder</title></head>
@@ -383,7 +398,7 @@ module.exports = async function handler(req, res) {
 
   if (!GMAIL_USER || !GMAIL_PASS) return res.status(500).json({ error: 'Missing GMAIL_USER or GMAIL_APP_PASSWORD' });
 
-  const { title, dueDate, dueTime, category, userName, email, reminderOffset, timezone, taskId, thumbnail } = req.body ?? {};
+  const { title, dueDate, dueTime, category, userName, email, reminderOffset, timezone, taskId, thumbnail, attachmentType, attachmentName } = req.body ?? {};
   if (!title || !dueDate || !dueTime || !email) {
     return res.status(400).json({ error: 'Missing required fields: title, dueDate, dueTime, email' });
   }
@@ -413,7 +428,7 @@ module.exports = async function handler(req, res) {
       await sendViaGmail({
         to: email,
         subject: applyTemplate(emailSettings.subjectTask, subjectVars),
-        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'at_time', thumbnail: preparedThumbnail.thumbnail, settings: emailSettings }),
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'at_time', thumbnail: preparedThumbnail.thumbnail, settings: emailSettings, attachmentType, attachmentName }),
         attachments: preparedThumbnail.gmail,
       });
       results.push({ type: 'at_time', scheduledAt: 'immediate', via: 'gmail' });
@@ -432,7 +447,7 @@ module.exports = async function handler(req, res) {
       await sendViaGmail({
         to: email,
         subject: `⏰ Starting in ${minsAway} min: ${title}`,
-        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'reminder', thumbnail: preparedThumbnail.thumbnail, settings: emailSettings }),
+        html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type: 'reminder', thumbnail: preparedThumbnail.thumbnail, settings: emailSettings, attachmentType, attachmentName }),
         attachments: preparedThumbnail.gmail,
       });
       results.push({ type: 'reminder', scheduledAt: 'immediate', via: 'gmail' });
@@ -466,7 +481,7 @@ module.exports = async function handler(req, res) {
           from: `NeuroFlow ADHD <reminders@keepzbrandai.com>`,
           to: [email],
           subject: applyTemplate(type === 'at_time' ? emailSettings.subjectTask : emailSettings.subjectReminder, subjectVars),
-          html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type, thumbnail: preparedThumbnail.thumbnail, settings: emailSettings }),
+          html: buildEmailHtml({ title, dueDate, dueTime, category: category ?? 'task', userName: userName ?? '', type, thumbnail: preparedThumbnail.thumbnail, settings: emailSettings, attachmentType, attachmentName }),
           scheduled_at: sendAt.toISOString(),
           ...(preparedThumbnail.resend.length ? { attachments: preparedThumbnail.resend } : {}),
         }),

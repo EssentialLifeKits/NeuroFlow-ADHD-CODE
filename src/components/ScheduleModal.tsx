@@ -115,6 +115,37 @@ function cleanFileName(raw: string): string {
   return cleaned || raw; // Fallback to the original if everything was stripped
 }
 
+async function captureCurrentVideoFrame(videoElRef: React.RefObject<any>): Promise<string | null> {
+  if (Platform.OS !== 'web' || !videoElRef.current) return null;
+  const vid = videoElRef.current as HTMLVideoElement;
+
+  if (vid.readyState < 2 || !vid.videoWidth || !vid.videoHeight) {
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        vid.removeEventListener('loadeddata', finish);
+        vid.removeEventListener('seeked', finish);
+        resolve();
+      };
+      vid.addEventListener('loadeddata', finish, { once: true });
+      vid.addEventListener('seeked', finish, { once: true });
+      window.setTimeout(finish, 900);
+    });
+  }
+
+  if (!vid.videoWidth || !vid.videoHeight) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = vid.videoWidth;
+  canvas.height = vid.videoHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
 // ─── Uploaded File / Lightbox state ──────────────────────────────────────────
 export interface AttachedFile {
   uri: string; name: string; mimeType?: string; type: 'image' | 'document' | 'video';
@@ -264,6 +295,9 @@ export default function ScheduleModal({
     return null;
   };
 
+  const selectedAttachmentType = () => attachedFile?.type ?? null;
+  const selectedAttachmentName = () => attachedFile?.name ?? null;
+
   const handleSchedule = async () => {
     if (!taskDetails.trim()) return;
     const dateStr = [
@@ -326,11 +360,7 @@ export default function ScheduleModal({
 
     // Schedule email reminder via Resend — always fires for every task with an email
     if (user?.email) {
-      // Convert minute-based offset to the format schedule-reminder.js expects
-      let apiOffset = 'at_time';
-      if (reminderOffset !== 'none' && reminderOffset !== '0') {
-        apiOffset = `${reminderOffset}min_before`;
-      }
+      const apiOffset = 'at_time';
       console.log('[ScheduleModal] Scheduling email reminder:', { email: user.email, dueDate: dateStr, dueTime: timeStr, apiOffset, taskId: savedTaskId });
       try {
         const resp = await fetch('/api/schedule-reminder', {
@@ -347,6 +377,8 @@ export default function ScheduleModal({
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             taskId: savedTaskId,
             thumbnail: selectedEmailThumbnail(),
+            attachmentType: selectedAttachmentType(),
+            attachmentName: selectedAttachmentName(),
           }),
         });
         const result = await resp.json();
@@ -628,18 +660,12 @@ export default function ScheduleModal({
                               {/* Capture Scene Button — visible when scrubbing */}
                               {isScrubbing && (
                                 <TouchableOpacity
-                                  onPress={() => {
+                                  onPress={async () => {
                                     if (Platform.OS === 'web' && videoRef.current) {
-                                      // Canvas-capture the current video frame as a JPEG
                                       const vid = videoRef.current as HTMLVideoElement;
-                                      const canvas = document.createElement('canvas');
-                                      canvas.width = vid.videoWidth || 320;
-                                      canvas.height = vid.videoHeight || 180;
-                                      const ctx = canvas.getContext('2d');
-                                      if (ctx) {
-                                        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-                                        setCapturedThumbnail(canvas.toDataURL('image/jpeg', 0.7));
-                                      }
+                                      const frame = await captureCurrentVideoFrame(videoRef);
+                                      if (frame) setCapturedThumbnail(frame);
+                                      else Alert.alert('Thumbnail not ready', 'Play or scrub the video for a moment, then capture again.');
                                       const ct = (vid.currentTime || 0) * 1000;
                                       setThumbnailTime(ct);
                                       setVideoPosition(ct);
@@ -1034,17 +1060,12 @@ export default function ScheduleModal({
                   <View style={ms.lightboxVideo}>
                     {(
                       <TouchableOpacity
-                        onPress={() => {
+                        onPress={async () => {
                           if (Platform.OS === 'web' && videoRef.current) {
                             const vid = videoRef.current as HTMLVideoElement;
-                            const canvas = document.createElement('canvas');
-                            canvas.width = vid.videoWidth || 320;
-                            canvas.height = vid.videoHeight || 180;
-                            const ctx = canvas.getContext('2d');
-                            if (ctx) {
-                              ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-                              setCapturedThumbnail(canvas.toDataURL('image/jpeg', 0.7));
-                            }
+                            const frame = await captureCurrentVideoFrame(videoRef);
+                            if (frame) setCapturedThumbnail(frame);
+                            else Alert.alert('Thumbnail not ready', 'Play or scrub the video for a moment, then capture again.');
                             const ct = (vid.currentTime || 0) * 1000;
                             setThumbnailTime(ct);
                             setVideoPosition(ct);
