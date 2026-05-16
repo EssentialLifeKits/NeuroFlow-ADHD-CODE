@@ -20,6 +20,7 @@ import {
 import { useRouter, usePathname } from 'expo-router';
 import { colors, radius } from '../constants/theme';
 import { useAuth } from '../lib/auth';
+import { useBilling } from '../lib/billing';
 import { getAllSettings } from '../lib/adminDb';
 
 const MOBILE_SIDEBAR_W = 292;
@@ -70,6 +71,7 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
     const router = useRouter();
     const pathname = usePathname();
     const { user, signOut } = useAuth();
+    const { openCustomerPortal, status: billingStatus } = useBilling();
 
     const userEmail = user?.email as string | undefined;
     const isAdminUser = userEmail?.toLowerCase().trim() === 'essentiallifekits@gmail.com';
@@ -203,6 +205,13 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
                     <Pressable onPress={() => navigateTo('/(app)/admin')} style={styles.adminBtn}>
                         <Text style={styles.adminIcon}>🛡️</Text>
                         <Text style={styles.adminText}>Admin Portal</Text>
+                    </Pressable>
+                )}
+
+                {billingStatus?.billingConfigured && !billingStatus?.setupMode && (
+                    <Pressable onPress={openCustomerPortal} style={styles.billingBtn}>
+                        <Text style={styles.adminIcon}>💳</Text>
+                        <Text style={styles.billingText}>Manage Billing</Text>
                     </Pressable>
                 )}
 
@@ -393,6 +402,14 @@ const styles = StyleSheet.create({
     },
     adminIcon: { fontSize: 16 },
     adminText: { fontSize: 13, fontWeight: '700', color: NF_BLUE },
+    billingBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+        paddingVertical: 13, paddingHorizontal: 16,
+        backgroundColor: '#34D39912',
+        borderWidth: 1, borderColor: '#34D39955',
+        borderRadius: radius.md,
+    },
+    billingText: { fontSize: 13, fontWeight: '700', color: '#34D399' },
 
     signOutBtn: {
         flexDirection: 'row',

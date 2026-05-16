@@ -6,11 +6,13 @@
  */
 
 import React, { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Home, CalendarDays, Zap, BookOpen } from 'lucide-react-native';
 import { colors, radius, spacing } from '../../src/constants/theme';
 import Sidebar from '../../src/components/Sidebar';
+import PaywallScreen from '../../src/components/PaywallScreen';
+import { BillingProvider, useBilling } from '../../src/lib/billing';
 import { TasksProvider } from '../../src/lib/TasksContext';
 
 const NF_BLUE = '#4A90E2';
@@ -52,10 +54,31 @@ function DayBtn({ onPress }: { onPress: () => void }) {
 }
 
 export default function AppLayout() {
+  return (
+    <BillingProvider>
+      <AppLayoutContent />
+    </BillingProvider>
+  );
+}
+
+function AppLayoutContent() {
   const { width } = useWindowDimensions();
   const isDesktop = width > DESKTOP_BREAKPOINT;
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const router = useRouter();
+  const { hasAccess, isLoading } = useBilling();
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingRoot}>
+        <ActivityIndicator size="large" color={NF_BLUE} />
+      </View>
+    );
+  }
+
+  if (!hasAccess) {
+    return <PaywallScreen />;
+  }
 
   return (
     <TasksProvider>
@@ -144,6 +167,12 @@ const hStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  loadingRoot: {
+    flex: 1,
+    backgroundColor: colors.bgBase,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Desktop: horizontal row — sidebar | content
   rootDesktop: { flexDirection: 'row' },
   mainContent: { flex: 1 },

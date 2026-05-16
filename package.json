@@ -13,7 +13,8 @@
     "remotion:still": "remotion still src/remotion/index.ts NeuroFlowPromo --frame=150 --scale=0.25 out/neuroflow-promo-check.png",
     "remotion:voiceover": "node scripts/generate-neuroflow-voiceover.mjs",
     "migrate": "npx ts-node --project tsconfig.node.json src/scripts/migrate.ts",
-    "migrate:reminders": "npx ts-node --project tsconfig.node.json src/scripts/migrate-reminders.ts"
+    "migrate:reminders": "npx ts-node --project tsconfig.node.json src/scripts/migrate-reminders.ts",
+    "migrate:billing": "npx ts-node --project tsconfig.node.json src/scripts/migrate-billing.ts"
   },
   "dependencies": {
     "@insforge/sdk": "^1.1.6-dev.0",
@@ -45,6 +46,7 @@
     "react-native-svg": "15.12.1",
     "react-native-web": "^0.21.0",
     "react-native-webview": "^13.15.0",
+    "stripe": "^22.1.1",
     "tailwindcss": "^3.3.2"
   },
   "devDependencies": {
