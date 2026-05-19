@@ -2130,123 +2130,216 @@ const inlineStyles = StyleSheet.create({
 
 // ─── User Monitor ─────────────────────────────────────────────────────────────
 
-interface UserRow {
-  id: string;
+interface MonitorStats {
+  totalUsers: number;
+  active: number;
+  canceling: number;
+  canceled: number;
+  leads: number;
+}
+
+interface MonitorRow {
+  key: string;
+  name: string;
   email: string;
-  display_name?: string;
-  created_at: string;
-  onboarded?: boolean;
+  phone: string;
+  businessName: string;
+  instagramHandle: string;
+  signedUpAt?: string | null;
+  lastSignInAt?: string | null;
+  status: 'active' | 'canceling' | 'canceled' | 'lead' | 'past_due' | string;
+  statusLabel: string;
+  planName: string;
+  planInterval?: string | null;
+  subscriptionStatus: string;
+  priceId?: string | null;
+  currentPeriodEnd?: string | null;
+  cancelAtPeriodEnd: boolean;
+  cancellationLabel: string;
+  periodEndLabel: string;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+}
+
+interface MonitorPayload {
+  rows: MonitorRow[];
+  stats: MonitorStats;
+  stripeError?: string | null;
+  updatedAt: string;
+}
+
+function fmtMonitorDate(value?: string | null) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtMonitorDateTime(value?: string | null) {
+  if (!value) return '—';
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function statusBadgeStyle(status: string) {
+  if (status === 'active') return { wrap: s.monitorBadgeActive, text: s.monitorBadgeActiveText };
+  if (status === 'canceling') return { wrap: s.monitorBadgeCanceling, text: s.monitorBadgeCancelingText };
+  if (status === 'canceled' || status === 'past_due') return { wrap: s.monitorBadgeCanceled, text: s.monitorBadgeCanceledText };
+  return { wrap: s.monitorBadgeLead, text: s.monitorBadgeLeadText };
+}
+
+function StatBox({ value, label }: { value: number | string; label: string }) {
+  return (
+    <View style={s.monitorStatBox}>
+      <Text style={s.monitorStatValue}>{value}</Text>
+      <Text style={s.monitorStatLabel}>{label}</Text>
+    </View>
+  );
 }
 
 function UserMonitorSection() {
-  const [users,       setUsers]       = useState<UserRow[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [showLeads,   setShowLeads]   = useState(false);
+  const [payload, setPayload] = useState<MonitorPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('users').select('*').order('created_at', { ascending: false });
-        if (error) throw new Error(error.message);
-        setUsers((data ?? []) as UserRow[]);
-      } catch (e: any) {
-        Alert.alert('Error loading users', e.message);
-      } finally { setLoading(false); }
-    })();
+  const loadMonitor = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    setRefreshing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Admin session not available. Please sign in again.');
+      const res = await fetch('/api/admin-user-monitor', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Unable to load user monitor');
+      setPayload(data as MonitorPayload);
+    } catch (e: any) {
+      if (!quiet) Alert.alert('Error loading user monitor', e.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  const adminUser  = users.find(u => u.email?.toLowerCase().trim() === ADMIN_EMAIL);
-  const otherUsers = users.filter(u => u.email?.toLowerCase().trim() !== ADMIN_EMAIL);
-  const activeCount = otherUsers.filter(u => u.onboarded === true).length;
+  useEffect(() => {
+    loadMonitor();
+    const interval = setInterval(() => loadMonitor(true), 15000);
+    return () => clearInterval(interval);
+  }, [loadMonitor]);
 
-  function fmtDate(d: string) {
-    return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
+  const stats = payload?.stats ?? { totalUsers: 0, active: 0, canceling: 0, canceled: 0, leads: 0 };
+  const rows = payload?.rows ?? [];
 
   return (
     <AccordionCard
-      title={`👥 User Monitor`}
-      subtitle={`${otherUsers.length} registered users · ${activeCount} active`}
+      title="👥 User Monitor"
+      subtitle="View registered users, session activity, and account status"
+      defaultOpen
+      style={s.monitorCard}
     >
-      {loading && <ActivityIndicator color={NF_BLUE} style={{ marginVertical: 12 }} />}
-
-      {!loading && (
-        <>
-          {/* ── Admin row ── */}
-          <View style={{ backgroundColor: NF_BLUE + '12', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: NF_BLUE + '33' }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>🛡️ Admin Account</Text>
-            {adminUser ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={[s.userAvatar, { backgroundColor: NF_BLUE }]}>
-                  <Text style={s.userAvatarText}>A</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.userName}>{adminUser.display_name ?? 'Essential Life Kits'}</Text>
-                  <Text style={s.userEmail}>{adminUser.email}</Text>
-                  <Text style={s.userSince}>Joined {fmtDate(adminUser.created_at)}</Text>
-                </View>
-                <View style={{ alignItems: 'center', gap: 4 }}>
-                  <View style={s.activeDotWrap}><View style={s.activeDotGlow} /><View style={s.activeDot} /></View>
-                  <Text style={s.activeLabel}>Active</Text>
-                </View>
-              </View>
-            ) : (
-              <Text style={{ fontSize: 12, color: NF_BLUE }}>essentiallifekits@gmail.com · Active</Text>
-            )}
-          </View>
-
-          {/* ── User count summary ── */}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ flex: 1, backgroundColor: NF_GREEN + '12', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: NF_GREEN + '33', alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: '900', color: NF_GREEN }}>{activeCount}</Text>
-              <Text style={{ fontSize: 11, color: NF_GREEN, fontWeight: '700', marginTop: 2 }}>ACTIVE USERS</Text>
-            </View>
-            <View style={{ flex: 1, backgroundColor: colors.bgBase, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center' }}>
-              <Text style={{ fontSize: 24, fontWeight: '900', color: colors.textPrimary }}>{otherUsers.length}</Text>
-              <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700', marginTop: 2 }}>TOTAL USERS</Text>
-            </View>
-          </View>
-
-          {/* ── Lead capture list (hidden until toggled) ── */}
-          <Pressable
-            onPress={() => setShowLeads(l => !l)}
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 12, backgroundColor: colors.bgBase, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>
-              📋 Lead List ({otherUsers.length} contacts)
-            </Text>
-            <Text style={{ fontSize: 13, color: NF_BLUE }}>{showLeads ? '▾ Hide' : '▸ Reveal'}</Text>
-          </Pressable>
-
-          {showLeads && (
-            <ScrollView style={{ maxHeight: 360 }} nestedScrollEnabled showsVerticalScrollIndicator>
-              {otherUsers.length === 0 && (
-                <Text style={[s.emptyText, { padding: 12 }]}>No users yet.</Text>
-              )}
-              {otherUsers.map((u, idx) => (
-                <View key={u.id} style={[s.userRow, idx === otherUsers.length - 1 && { borderBottomWidth: 0 }]}>
-                  <View style={s.userAvatar}>
-                    <Text style={s.userAvatarText}>{(u.display_name ?? u.email)?.[0]?.toUpperCase() ?? '?'}</Text>
-                  </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={s.userName}>{u.display_name ?? '—'}</Text>
-                    <Text style={s.userEmail}>{u.email}</Text>
-                    <Text style={s.userSince}>Joined {fmtDate(u.created_at)}</Text>
-                  </View>
-                  <View style={{ alignItems: 'center', gap: 4 }}>
-                    {u.onboarded ? (
-                      <><View style={s.activeDotWrap}><View style={s.activeDotGlow} /><View style={s.activeDot} /></View><Text style={s.activeLabel}>Active</Text></>
-                    ) : (
-                      <><View style={s.pendingDot} /><Text style={s.pendingLabel}>Pending</Text></>
-                    )}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
+      <View style={s.monitorStatsWrap}>
+        <StatBox value={stats.totalUsers} label="TOTAL USERS" />
+        <StatBox value={stats.active} label="ACTIVE" />
+        <StatBox value={stats.canceling} label="CANCELING" />
+        <StatBox value={stats.leads} label="LEADS" />
+        <StatBox value={stats.canceled || '—'} label="CANCELED" />
+        <Pressable
+          onPress={() => loadMonitor()}
+          disabled={refreshing}
+          style={({ pressed }) => [s.monitorRefreshBtn, pressed && { opacity: 0.82 }, refreshing && { opacity: 0.72 }]}
+        >
+          {refreshing ? (
+            <ActivityIndicator color={NF_GREEN} />
+          ) : (
+            <Text style={s.monitorRefreshText}>Refresh Live Data</Text>
           )}
-        </>
+        </Pressable>
+      </View>
+
+      <Text style={s.monitorIntro}>
+        This monitor combines Supabase signup users with the latest Stripe customer/subscription data.
+        A signup without a paid subscription is shown as a lead in the same customer list.
+      </Text>
+
+      {payload?.stripeError ? (
+        <View style={s.monitorWarning}>
+          <Text style={s.monitorWarningText}>Stripe warning: {payload.stripeError}</Text>
+        </View>
+      ) : null}
+
+      {loading ? (
+        <ActivityIndicator color={NF_BLUE} style={{ marginVertical: 24 }} />
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator style={s.monitorTableScroll}>
+          <View style={s.monitorTable}>
+            <View style={[s.monitorTableRow, s.monitorTableHeader]}>
+              <Text style={[s.monitorTh, { width: 230 }]}>CUSTOMER</Text>
+              <Text style={[s.monitorTh, { width: 210 }]}>CONTACT</Text>
+              <Text style={[s.monitorTh, { width: 210 }]}>STATUS</Text>
+              <Text style={[s.monitorTh, { width: 210 }]}>PLAN</Text>
+              <Text style={[s.monitorTh, { width: 230 }]}>CANCELLATION / RENEWAL</Text>
+              <Text style={[s.monitorTh, { width: 220 }]}>STRIPE</Text>
+            </View>
+
+            {rows.length === 0 ? (
+              <View style={s.monitorEmptyRow}>
+                <Text style={s.emptyText}>No users or Stripe customers found yet.</Text>
+              </View>
+            ) : rows.map((row) => {
+              const badge = statusBadgeStyle(row.status);
+              return (
+                <View key={row.key} style={s.monitorTableRow}>
+                  <View style={[s.monitorTd, { width: 230 }]}>
+                    <Text style={s.monitorPrimary}>{row.name || '—'}</Text>
+                    <Text style={s.monitorMuted}>{row.email || 'No email'}</Text>
+                    <Text style={s.monitorMuted}>Signed up {fmtMonitorDate(row.signedUpAt)}</Text>
+                  </View>
+
+                  <View style={[s.monitorTd, { width: 210 }]}>
+                    <Text style={s.monitorPrimary}>{row.phone}</Text>
+                    <Text style={s.monitorMuted}>{row.businessName}</Text>
+                    <Text style={s.monitorMuted}>{row.instagramHandle}</Text>
+                  </View>
+
+                  <View style={[s.monitorTd, { width: 210 }]}>
+                    <View style={badge.wrap}>
+                      <Text style={badge.text}>{row.statusLabel}</Text>
+                    </View>
+                    <Text style={s.monitorMuted}>Last sign-in {fmtMonitorDate(row.lastSignInAt)}</Text>
+                  </View>
+
+                  <View style={[s.monitorTd, { width: 210 }]}>
+                    <Text style={s.monitorPrimary}>{row.planName || 'None'}</Text>
+                    {row.planInterval ? <Text style={s.monitorPrimary}>{row.planInterval}</Text> : null}
+                    <Text style={s.monitorMuted}>{row.subscriptionStatus || 'lead'}</Text>
+                  </View>
+
+                  <View style={[s.monitorTd, { width: 230 }]}>
+                    <Text style={[s.monitorPrimary, row.status === 'canceling' && s.monitorCancelText]}>
+                      {row.cancellationLabel}
+                    </Text>
+                    <Text style={s.monitorMuted}>Period end {row.periodEndLabel}</Text>
+                  </View>
+
+                  <View style={[s.monitorTd, { width: 220 }]}>
+                    <Text style={s.monitorMuted}>{row.stripeCustomerId || 'No Stripe customer'}</Text>
+                    <Text style={s.monitorMuted}>{row.stripeSubscriptionId || 'No subscription'}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
       )}
+
+      {payload?.updatedAt ? (
+        <Text style={s.monitorUpdated}>Updated {fmtMonitorDateTime(payload.updatedAt)}</Text>
+      ) : null}
     </AccordionCard>
   );
 }
@@ -2313,13 +2406,13 @@ export default function AdminScreen() {
           <ActivityIndicator color={NF_BLUE} style={{ marginTop: 40 }} />
         ) : (
           <>
+            <UserMonitorSection />
             <EmailTemplateSection settings={settings} onSave={handleSaveSetting} />
             <HowToVideoSection settings={settings} onSave={handleSaveSetting} />
             <CTACardSection settings={settings} onSave={handleSaveSetting} />
             <AffiliateSection settings={settings} onSave={handleSaveSetting} />
             <ResourcesSection />
             <AppSettingsSection settings={settings} onSave={handleSaveSetting} />
-            <UserMonitorSection />
           </>
         )}
 
@@ -2389,6 +2482,134 @@ const s = StyleSheet.create({
   pendingLabel:  { fontSize: 9, color: colors.textTertiary },
 
   emptyText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', paddingVertical: 8 },
+
+  monitorCard: { borderColor: '#6D4C9A', borderWidth: 1.5 },
+  monitorStatsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    alignItems: 'center',
+  },
+  monitorStatBox: {
+    minWidth: 150,
+    flexGrow: 1,
+    backgroundColor: colors.bgBase,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  monitorStatValue: { fontSize: 28, fontWeight: '900', color: colors.textPrimary },
+  monitorStatLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textSecondary,
+    letterSpacing: 1.2,
+    marginTop: 6,
+  },
+  monitorRefreshBtn: {
+    minWidth: 176,
+    minHeight: 58,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: NF_GREEN + '55',
+    backgroundColor: NF_GREEN + '14',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  monitorRefreshText: { color: NF_GREEN, fontSize: 15, fontWeight: '900' },
+  monitorIntro: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+  monitorWarning: {
+    backgroundColor: NF_ORANGE + '12',
+    borderColor: NF_ORANGE + '44',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+  },
+  monitorWarningText: { color: NF_ORANGE, fontSize: 12, fontWeight: '700' },
+  monitorTableScroll: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgBase,
+  },
+  monitorTable: { minWidth: 1310 },
+  monitorTableHeader: { backgroundColor: colors.bgCard },
+  monitorTableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    minHeight: 96,
+  },
+  monitorTh: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.1,
+  },
+  monitorTd: { paddingHorizontal: 16, paddingVertical: 16, gap: 4 },
+  monitorPrimary: { color: colors.textPrimary, fontSize: 14, fontWeight: '900', lineHeight: 21 },
+  monitorMuted: { color: colors.textSecondary, fontSize: 13, fontWeight: '600', lineHeight: 20 },
+  monitorCancelText: { color: '#FCA5A5' },
+  monitorEmptyRow: { padding: 24, alignItems: 'center' },
+  monitorUpdated: {
+    alignSelf: 'flex-end',
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  monitorBadgeActive: {
+    alignSelf: 'flex-start',
+    backgroundColor: NF_GREEN + '22',
+    borderColor: NF_GREEN + '55',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  monitorBadgeActiveText: { color: NF_GREEN, fontSize: 13, fontWeight: '900' },
+  monitorBadgeCanceling: {
+    alignSelf: 'flex-start',
+    backgroundColor: NF_RED + '20',
+    borderColor: NF_RED + '66',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    shadowColor: NF_RED,
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+  },
+  monitorBadgeCancelingText: { color: '#FECACA', fontSize: 13, fontWeight: '900' },
+  monitorBadgeCanceled: {
+    alignSelf: 'flex-start',
+    backgroundColor: NF_RED + '12',
+    borderColor: NF_RED + '44',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  monitorBadgeCanceledText: { color: NF_RED, fontSize: 13, fontWeight: '900' },
+  monitorBadgeLead: {
+    alignSelf: 'flex-start',
+    backgroundColor: NF_BLUE + '18',
+    borderColor: NF_BLUE + '44',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  monitorBadgeLeadText: { color: '#93C5FD', fontSize: 13, fontWeight: '900' },
 
   centerWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl, gap: 12 },
   lockIcon:   { fontSize: 48 },

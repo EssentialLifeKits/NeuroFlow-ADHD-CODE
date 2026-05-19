@@ -208,7 +208,7 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
                     </Pressable>
                 )}
 
-                {billingStatus?.billingConfigured && !billingStatus?.setupMode && (
+                {!isAdminUser && billingStatus?.billingConfigured && !billingStatus?.setupMode && (
                     <Pressable onPress={openCustomerPortal} style={styles.billingBtn}>
                         <Text style={styles.adminIcon}>💳</Text>
                         <Text style={styles.billingText}>Manage Billing</Text>
