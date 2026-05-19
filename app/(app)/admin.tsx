@@ -121,20 +121,49 @@ function AccordionCard({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const chevron = open ? '▾' : '▸';
+  const toggle = () => setOpen(o => !o);
+  const headerContent = (
+    <>
+      <View style={{ flex: 1 }}>
+        <Text style={s.sectionTitle}>{title}</Text>
+        {subtitle && !open && (
+          <Text style={[s.sectionSub, { marginTop: 2 }]} numberOfLines={1}>{subtitle}</Text>
+        )}
+      </View>
+      <Text style={{ fontSize: 18, color: NF_BLUE, marginLeft: 12 }}>{chevron}</Text>
+    </>
+  );
+
   return (
     <View style={[s.card, style]}>
-      <Pressable
-        onPress={() => setOpen(o => !o)}
-        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={s.sectionTitle}>{title}</Text>
-          {subtitle && !open && (
-            <Text style={[s.sectionSub, { marginTop: 2 }]} numberOfLines={1}>{subtitle}</Text>
-          )}
-        </View>
-        <Text style={{ fontSize: 18, color: NF_BLUE, marginLeft: 12 }}>{chevron}</Text>
-      </Pressable>
+      {Platform.OS === 'web'
+        ? React.createElement('button', {
+            type: 'button',
+            onClick: toggle,
+            'aria-expanded': open,
+            style: {
+              width: '100%',
+              border: 0,
+              padding: 0,
+              margin: 0,
+              background: 'transparent',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              textAlign: 'left',
+              font: 'inherit',
+            },
+          }, headerContent)
+        : (
+          <Pressable
+            onPress={toggle}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            {headerContent}
+          </Pressable>
+        )}
       {open && (
         <View style={{ marginTop: 14, gap: 14 }}>
           {subtitle && <Text style={s.sectionSub}>{subtitle}</Text>}
