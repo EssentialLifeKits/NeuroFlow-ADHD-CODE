@@ -36,9 +36,18 @@ function getVideoDownloadUrl(url: string): string {
   return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
 }
 
+const VIDEO_CLARITY_FILTER = 'brightness(1.32) contrast(1.1) saturate(1.08)';
+
 function getDrivePreviewFrameStyle(isPhone: boolean) {
   if (!isPhone) {
-    return { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', border: 'none' };
+    return {
+      width: '100%',
+      height: '100%',
+      borderRadius: 12,
+      backgroundColor: '#000',
+      border: 'none',
+      filter: VIDEO_CLARITY_FILTER,
+    };
   }
 
   return {
@@ -52,6 +61,7 @@ function getDrivePreviewFrameStyle(isPhone: boolean) {
     borderRadius: 12,
     backgroundColor: '#000',
     border: 'none',
+    filter: VIDEO_CLARITY_FILTER,
   };
 }
 
@@ -169,7 +179,7 @@ export default function NeuroFlowVideoPlayer({
                 src: url,
                 controls: true,
                 controlsList: 'nodownload',
-                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain' },
+                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain', filter: VIDEO_CLARITY_FILTER, opacity: 1 },
                 preload: 'metadata',
               }),
               React.createElement('button', {
