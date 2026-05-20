@@ -82,6 +82,8 @@ export default function NeuroFlowVideoPlayer({
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
   const downloadUrl = getVideoDownloadUrl(url);
+  const mediaUrl = isDriveLink ? downloadUrl : url;
+  const shouldUseNativeVideo = isDirectVideoUrl(url) || isDriveLink;
   const isPhone = width <= 480;
   const playerMaxWidth = isPhone ? 296 : '100%';
   const playerHeight = isPhone ? 167 : 320;
@@ -90,7 +92,11 @@ export default function NeuroFlowVideoPlayer({
     if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-video-fs-btn')) {
       const s = document.createElement('style');
       s.id = 'nf-hide-video-fs-btn';
-      s.textContent = 'video::-webkit-media-controls-fullscreen-button { display: none !important; }';
+      s.textContent = `
+        video::-webkit-media-controls-fullscreen-button { display: none !important; }
+        video::-webkit-media-controls-panel { background-color: rgba(0,0,0,0.62) !important; }
+        video::-webkit-media-controls-timeline { align-self: flex-end !important; }
+      `;
       document.head.appendChild(s);
     }
   }, []);
@@ -149,8 +155,26 @@ export default function NeuroFlowVideoPlayer({
       </View>
 
       <View style={[styles.frame, styles.videoFrame, isPhone && styles.videoFrameMobile, { height: playerHeight, maxWidth: playerMaxWidth as any }]}>
-        {isDriveLink || !isDirectVideoUrl(url)
+        {shouldUseNativeVideo
           ? React.createElement('div', {
+              ref: playerContainerRef,
+              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+            },
+              React.createElement('video', {
+                ref: videoRef,
+                src: mediaUrl,
+                controls: true,
+                controlsList: 'nodownload',
+                playsInline: true,
+                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain', filter: VIDEO_CLARITY_FILTER, opacity: 1 },
+                preload: 'metadata',
+              }),
+              React.createElement('button', {
+                onClick: exitFullscreen,
+                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
+              }, '✕ Exit Full Screen'),
+            )
+          : React.createElement('div', {
               ref: playerContainerRef,
               style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 12 },
             },
@@ -164,23 +188,6 @@ export default function NeuroFlowVideoPlayer({
               React.createElement('div', {
                 style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
                 onClick: (e: any) => e.stopPropagation(),
-              }),
-              React.createElement('button', {
-                onClick: exitFullscreen,
-                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
-              }, '✕ Exit Full Screen'),
-            )
-          : React.createElement('div', {
-              ref: playerContainerRef,
-              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-            },
-              React.createElement('video', {
-                ref: videoRef,
-                src: url,
-                controls: true,
-                controlsList: 'nodownload',
-                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain', filter: VIDEO_CLARITY_FILTER, opacity: 1 },
-                preload: 'metadata',
               }),
               React.createElement('button', {
                 onClick: exitFullscreen,

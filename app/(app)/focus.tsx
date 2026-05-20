@@ -95,25 +95,6 @@ function getDriveDocumentFrameStyle(isMobile: boolean) {
   };
 }
 
-function getDriveAudioFrameStyle(isMobile: boolean) {
-  if (!isMobile) {
-    return { width: '100%', height: '100%', border: 'none', backgroundColor: '#fff', display: 'block' };
-  }
-
-  return {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    width: '138%',
-    height: '138%',
-    transform: 'translate(-50%, -50%) scale(0.725)',
-    transformOrigin: 'center center',
-    border: 'none',
-    backgroundColor: '#fff',
-    display: 'block',
-  };
-}
-
 /** Shows exact duration: 45s · 1m 30s · 5m */
 function formatDuration(mins: number): string {
   const totalSec = Math.round(mins * 60);
@@ -939,7 +920,10 @@ export default function FocusScreen() {
           <Text style={s.blueprintLinkText}>📘 Download the NeuroFlow Deep Work Blueprint</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => setAudioOpen(true)} activeOpacity={0.7} style={[s.blueprintLink, { marginTop: 4 }]}>
+        <TouchableOpacity onPress={() => {
+          setAudioOpen(true);
+          if (isMobile) setAudioFullscreen(true);
+        }} activeOpacity={0.7} style={[s.blueprintLink, { marginTop: 4 }]}>
           <Text style={s.blueprintLinkText}>🎧 Listen to the Deep Work Audio Blueprint</Text>
         </TouchableOpacity>
 
@@ -1247,27 +1231,15 @@ export default function FocusScreen() {
         ]),
         React.createElement('div', {
           key: 'audio-wrap',
-          style: { width: '100%', height: 96, padding: audioUrl.includes('drive.google.com') ? 0 : 12, backgroundColor: colors.bgBase, borderRadius: '0 0 16px 16px', overflow: 'hidden', position: 'relative' },
-        }, [
-          audioUrl.includes('drive.google.com')
-            ? [
-                React.createElement('iframe', {
-                  key: 'audio-drive-player',
-                  src: getGoogleDriveEmbedUrl(audioUrl),
-                  style: { ...getDriveAudioFrameStyle(isMobile), filter: 'brightness(1.08) contrast(1.04) saturate(1.04)' },
-                  allow: 'autoplay',
-                  title: 'Deep Work Audio Blueprint',
-                }),
-              ]
-            : React.createElement('audio', {
-                key: 'audio-player',
-                src: getGoogleDriveDownloadUrl(audioUrl),
-                controls: true,
-                preload: 'metadata',
-                style: { width: '100%', display: 'block' },
-                title: 'Deep Work Audio Blueprint',
-              }),
-        ]),
+          style: { width: '100%', minHeight: 86, padding: 12, backgroundColor: colors.bgBase, borderRadius: '0 0 16px 16px', overflow: 'hidden', position: 'relative', boxSizing: 'border-box' },
+        }, React.createElement('audio', {
+          key: 'audio-player',
+          src: getGoogleDriveDownloadUrl(audioUrl),
+          controls: true,
+          preload: 'metadata',
+          style: { width: '100%', display: 'block', backgroundColor: '#111827', borderRadius: 12, accentColor: NF_BLUE },
+          title: 'Deep Work Audio Blueprint',
+        })),
         React.createElement('button', {
           key: 'audio-download-drive',
           onClick: (e: any) => { e.stopPropagation(); Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)); },
@@ -1307,17 +1279,19 @@ export default function FocusScreen() {
           overflow: 'hidden',
           padding: 'max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom))',
           boxSizing: 'border-box',
+          isolation: 'isolate',
+          overscrollBehavior: 'contain',
         },
       }, [
         // Top bar
-        React.createElement('div', { key: 'topbar', style: { position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'max(12px, env(safe-area-inset-top)) 16px 12px', borderBottom: '1px solid rgba(74,144,226,0.15)', backgroundColor: 'rgba(5,7,15,0.78)', backdropFilter: 'blur(12px)', boxSizing: 'border-box', zIndex: 3 } }, [
+        React.createElement('div', { key: 'topbar', style: { position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 'max(12px, env(safe-area-inset-top)) 12px 12px', borderBottom: '1px solid rgba(74,144,226,0.15)', backgroundColor: 'rgba(5,7,15,0.92)', backdropFilter: 'blur(12px)', boxSizing: 'border-box', zIndex: 3 } }, [
           React.createElement('div', { key: 'brand', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
             React.createElement('div', { key: 'dot', style: { width: 28, height: 28, borderRadius: 8, backgroundColor: `${NF_BLUE}33`, border: `1px solid ${NF_BLUE}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 } }, '🧠'),
             React.createElement('span', { key: 'name', style: { fontSize: 15, fontWeight: 800, color: NF_BLUE, letterSpacing: -0.3 } }, 'NeuroFlow'),
             React.createElement('span', { key: 'sub', style: { fontSize: 11, color: '#6b7280', marginLeft: 4 } }, 'Focus Series'),
           ]),
-          React.createElement('div', { key: 'actions', style: { display: 'flex', gap: 8 } }, [
-            React.createElement('button', { key: 'download', onClick: () => Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)), style: { padding: '6px 14px', borderRadius: 8, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}15`, color: NF_BLUE, cursor: 'pointer', fontSize: 12, fontWeight: 700 } }, 'Download in Google Drive'),
+          React.createElement('div', { key: 'actions', style: { display: 'flex', gap: 6, flexShrink: 0 } }, [
+            React.createElement('button', { key: 'download', onClick: () => Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)), style: { padding: '6px 10px', borderRadius: 8, border: `1px solid ${NF_BLUE}55`, backgroundColor: `${NF_BLUE}15`, color: NF_BLUE, cursor: 'pointer', fontSize: 12, fontWeight: 700 } }, 'Download'),
             React.createElement('button', { key: 'pip', onClick: () => setAudioFullscreen(false), style: { padding: '6px 14px', borderRadius: 8, border: `1px solid ${colors.border}`, backgroundColor: 'rgba(255,255,255,0.06)', color: '#9ca3af', cursor: 'pointer', fontSize: 12, fontWeight: 600 } }, '⊡ Mini'),
             React.createElement('button', { key: 'close', onClick: () => { setAudioOpen(false); setAudioFullscreen(false); setAudioPos(null); }, style: { padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(248,113,113,0.3)', backgroundColor: 'rgba(248,113,113,0.08)', color: '#F87171', cursor: 'pointer', fontSize: 12, fontWeight: 600 } }, '✕ Close'),
           ]),
@@ -1350,25 +1324,15 @@ export default function FocusScreen() {
         React.createElement('div', { key: 'tag', style: { fontSize: 13, color: '#9ca3af', marginBottom: 18, textAlign: 'center', maxWidth: 380, lineHeight: 1.5, position: 'relative', zIndex: 1 } }, 'Science-backed protocols for deep focus — no willpower required.'),
 
         // audio player
-        React.createElement('div', { key: 'player-wrap', style: { width: '100%', maxWidth: 560, height: 112, borderRadius: 16, overflow: 'hidden', border: `1px solid rgba(74,144,226,0.25)`, boxShadow: '0 0 40px rgba(74,144,226,0.15)', position: 'relative', zIndex: 1, backgroundColor: '#0e0e1a' } },
-          audioUrl.includes('drive.google.com')
-            ? [
-                React.createElement('iframe', {
-                  key: 'audio-drive-player-fs',
-                  src: getGoogleDriveEmbedUrl(audioUrl),
-                  style: { ...getDriveAudioFrameStyle(false), filter: 'brightness(1.08) contrast(1.04) saturate(1.04)' },
-                  allow: 'autoplay',
-                  title: 'Deep Work Audio Blueprint',
-                }),
-              ]
-            : React.createElement('audio', {
-                key: 'audio-player-fs',
-                src: getGoogleDriveDownloadUrl(audioUrl),
-                controls: true,
-                preload: 'metadata',
-                style: { width: '100%', display: 'block', backgroundColor: '#0e0e1a' },
-                title: 'Deep Work Audio Blueprint',
-              }),
+        React.createElement('div', { key: 'player-wrap', style: { width: '100%', maxWidth: 560, minHeight: 86, borderRadius: 16, overflow: 'hidden', border: `1px solid rgba(74,144,226,0.25)`, boxShadow: '0 0 40px rgba(74,144,226,0.15)', position: 'relative', zIndex: 1, backgroundColor: '#0e0e1a', padding: 14, boxSizing: 'border-box' } },
+          React.createElement('audio', {
+            key: 'audio-player-fs',
+            src: getGoogleDriveDownloadUrl(audioUrl),
+            controls: true,
+            preload: 'metadata',
+            style: { width: '100%', display: 'block', backgroundColor: '#0e0e1a', borderRadius: 12, accentColor: NF_BLUE },
+            title: 'Deep Work Audio Blueprint',
+          }),
         ),
         React.createElement('button', {
           key: 'audio-download-drive-fs',
