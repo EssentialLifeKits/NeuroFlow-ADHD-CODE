@@ -36,34 +36,18 @@ function getVideoDownloadUrl(url: string): string {
   return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
 }
 
-// Google Drive's /preview embed switches to a compact "mobile mode" when the iframe
-// is narrow (≤ ~480px). In mobile mode it: puts the scrubber at the TOP, applies a
-// dark overlay on the video, and hides the bottom controls entirely.
-//
-// Fix: give Drive a desktop-width iframe (560px) so it renders in full desktop mode
-// with controls at the bottom, then scale it down to the actual container width using
-// transform-origin: top left — this way the bottom controls are NEVER cropped.
-//
-// Desktop: simple 100%/100% fill (no transform needed).
-const DRIVE_DESKTOP_W = 560;
-const DRIVE_DESKTOP_H = Math.round(DRIVE_DESKTOP_W * 9 / 16); // 315px
+// For native <video> streaming from Drive: use the usercontent subdomain with confirm=t
+// to bypass the virus-scan interstitial. This serves the file directly as a video stream.
+// Requires the Drive file to be shared "Anyone with the link".
+function getDriveStreamUrl(url: string): string {
+  const id = getGoogleDriveFileId(url);
+  if (!id) return url;
+  return `https://drive.usercontent.google.com/download?id=${id}&export=download&authuser=0&confirm=t`;
+}
 
-function getDrivePreviewFrameStyle(isPhone: boolean, containerWidth: number): React.CSSProperties {
-  if (!isPhone) {
-    return { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' };
-  }
-  const scale = Math.min(1, containerWidth / DRIVE_DESKTOP_W);
-  return {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: DRIVE_DESKTOP_W,
-    height: DRIVE_DESKTOP_H,
-    transform: `scale(${scale})`,
-    transformOrigin: 'top left',
-    border: 'none',
-    backgroundColor: '#000',
-  };
+// Desktop iframe: simple 100% fill. (Mobile uses native <video> — no iframe styling needed.)
+function getDrivePreviewFrameStyle(): React.CSSProperties {
+  return { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' };
 }
 
 function isDirectVideoUrl(url: string): boolean {
@@ -80,18 +64,27 @@ export default function NeuroFlowVideoPlayer({
   const playerContainerRef = useRef<any>(null);
   const { width } = useWindowDimensions();
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showPlayer, setShowPlayer] = useState(true); // X button toggles this
+
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
   const downloadUrl = getVideoDownloadUrl(url);
-  // Only use native <video> for direct video file URLs (mp4/mov/webm).
-  // Drive links always use the iframe embed — it handles auth and playback reliably.
-  const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink;
   const isPhone = width <= 480;
-  // Mobile: player fills full screen width. Height = Drive desktop iframe (315px)
-  // scaled down by the same ratio we pass to the iframe, so the container matches exactly.
-  const mobileScale = isPhone ? Math.min(1, width / DRIVE_DESKTOP_W) : 1;
+
+  // MOBILE FIX: On mobile, bypass Drive's broken /preview iframe (which puts the
+  // scrubber at top, applies a dark overlay, and hides bottom controls). Instead
+  // use a native <video> element with Drive's direct streaming URL — this gives
+  // iOS Safari's built-in controls (scrubber at bottom, all buttons accessible).
+  //
+  // DESKTOP: unchanged — keeps the iframe embed (works fine on desktop).
+  const shouldUseNativeVideo = isDirectVideoUrl(url) || (isDriveLink && isPhone);
+  const videoSrc =
+    isDriveLink && shouldUseNativeVideo ? getDriveStreamUrl(url) : url;
+
+  // Mobile: full container width, height matches 16:9 of available width.
+  // Desktop: unchanged (320px tall, 100% wide).
   const playerMaxWidth = '100%';
-  const playerHeight = isPhone ? Math.round(DRIVE_DESKTOP_H * mobileScale) : 320;
+  const playerHeight = isPhone ? Math.round(Math.min(width, 560) * 9 / 16) : 320;
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-video-fs-btn')) {
@@ -136,6 +129,18 @@ export default function NeuroFlowVideoPlayer({
     else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
   };
 
+  // X button: stops playback, resets to start, and unloads the iframe/video.
+  // User can click anywhere on the placeholder to bring the player back.
+  const closePlayer = () => {
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      } catch {}
+    }
+    setShowPlayer(false);
+  };
+
   if (Platform.OS !== 'web') {
     return (
       <Pressable onPress={() => Linking.openURL(downloadUrl)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
@@ -158,23 +163,35 @@ export default function NeuroFlowVideoPlayer({
       </View>
 
       <View style={[styles.frame, styles.videoFrame, isPhone && styles.videoFrameMobile, { height: playerHeight, maxWidth: playerMaxWidth as any }]}>
-        {shouldUseNativeVideo
+        {!showPlayer
+          ? React.createElement('div', {
+              onClick: () => setShowPlayer(true),
+              style: { width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#000', borderRadius: 12, cursor: 'pointer', color: '#9ca3af', fontSize: 14 },
+            },
+              React.createElement('div', { style: { fontSize: 32 } }, '▶'),
+              React.createElement('div', null, 'Tap to play again'),
+            )
+          : shouldUseNativeVideo
           ? React.createElement('div', {
               ref: playerContainerRef,
               style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
             },
               React.createElement('video', {
                 ref: videoRef,
-                src: url,
+                src: videoSrc,
                 controls: true,
                 controlsList: 'nodownload',
                 playsInline: true,
-                // IMPORTANT: Do NOT add CSS filter to <video> elements.
-                // CSS filter forces a new GPU compositing layer on video, which renders
-                // as solid black in Safari/WebKit. Keep the style clean.
+                // IMPORTANT: Do NOT add CSS filter to <video> elements — causes black rendering in WebKit.
                 style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain' },
                 preload: 'metadata',
               }),
+              // X close button — top right of player, always reachable on mobile
+              isPhone && React.createElement('button', {
+                onClick: closePlayer,
+                'aria-label': 'Close video',
+                style: { position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: 16, border: 'none', backgroundColor: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 30, lineHeight: 1 },
+              }, '✕'),
               React.createElement('button', {
                 onClick: exitFullscreen,
                 style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
@@ -182,16 +199,14 @@ export default function NeuroFlowVideoPlayer({
             )
           : React.createElement('div', {
               ref: playerContainerRef,
-              // position:relative + overflow:hidden required for the absolute-positioned iframe
-              // on mobile. No flex centering — the iframe anchors top-left and scales down.
-              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', overflow: 'hidden', borderRadius: 12 },
+              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 12 },
             },
               React.createElement('iframe', {
                 src: embedUrl,
                 frameBorder: 0,
                 allow: 'autoplay; fullscreen',
                 title,
-                style: getDrivePreviewFrameStyle(isPhone, width),
+                style: getDrivePreviewFrameStyle(),
               }),
               React.createElement('div', {
                 style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
@@ -223,7 +238,7 @@ const styles = StyleSheet.create({
   toolbarBtnText: { fontSize: 12, fontWeight: '700' },
   frame: { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#1a1a2e', position: 'relative' },
   videoFrame: { backgroundColor: '#000' },
-  videoFrameMobile: { alignSelf: 'stretch' },
+  videoFrameMobile: { alignSelf: 'center' },
   downloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18, paddingHorizontal: 24, borderRadius: radius.xl, marginTop: 8 },
   downloadIcon: { fontSize: 22 },
   downloadLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
