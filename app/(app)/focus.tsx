@@ -76,6 +76,12 @@ function getGoogleDriveDownloadUrl(url: string): string {
   return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
 }
 
+// Audio iframe style: simple full-width embed, no dark filter.
+// CSS filter on iframes does NOT affect iframe content — only the box — so omit it entirely.
+function getDriveAudioFrameStyle() {
+  return { width: '100%', height: 86, border: 'none', display: 'block', borderRadius: 12 };
+}
+
 function getDriveDocumentFrameStyle(isMobile: boolean) {
   if (!isMobile) {
     return { width: '100%', height: '100%', border: 'none', backgroundColor: '#fff', display: 'block' };
@@ -1232,14 +1238,27 @@ export default function FocusScreen() {
         React.createElement('div', {
           key: 'audio-wrap',
           style: { width: '100%', minHeight: 86, padding: 12, backgroundColor: colors.bgBase, borderRadius: '0 0 16px 16px', overflow: 'hidden', position: 'relative', boxSizing: 'border-box' },
-        }, React.createElement('audio', {
-          key: 'audio-player',
-          src: getGoogleDriveDownloadUrl(audioUrl),
-          controls: true,
-          preload: 'metadata',
-          style: { width: '100%', display: 'block', backgroundColor: '#111827', borderRadius: 12, accentColor: NF_BLUE },
-          title: 'Deep Work Audio Blueprint',
-        })),
+        },
+          // Drive audio: use iframe embed — it handles auth + playback reliably.
+          // Direct audio URLs (mp3/wav): use native <audio> element.
+          // IMPORTANT: No CSS filter here — filter on iframe doesn't affect content.
+          audioUrl.includes('drive.google.com')
+            ? React.createElement('iframe', {
+                key: 'audio-drive-player',
+                src: getGoogleDriveEmbedUrl(audioUrl),
+                style: getDriveAudioFrameStyle(),
+                allow: 'autoplay',
+                title: 'Deep Work Audio Blueprint',
+              })
+            : React.createElement('audio', {
+                key: 'audio-player',
+                src: audioUrl,
+                controls: true,
+                preload: 'metadata',
+                style: { width: '100%', display: 'block', borderRadius: 12, accentColor: NF_BLUE },
+                title: 'Deep Work Audio Blueprint',
+              })
+        ),
         React.createElement('button', {
           key: 'audio-download-drive',
           onClick: (e: any) => { e.stopPropagation(); Linking.openURL(getGoogleDriveDownloadUrl(audioUrl)); },
@@ -1263,7 +1282,14 @@ export default function FocusScreen() {
       ])}
 
       {/* ── Audio Fullscreen Overlay ── */}
-      {audioOpen && audioFullscreen && React.createElement('div', {
+      <Modal
+        visible={audioOpen && audioFullscreen}
+        transparent={false}
+        animationType="fade"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setAudioFullscreen(false)}
+      >
+      {React.createElement('div', {
         style: {
           position: 'fixed',
           inset: 0,
@@ -1323,16 +1349,24 @@ export default function FocusScreen() {
         // Tagline
         React.createElement('div', { key: 'tag', style: { fontSize: 13, color: '#9ca3af', marginBottom: 18, textAlign: 'center', maxWidth: 380, lineHeight: 1.5, position: 'relative', zIndex: 1 } }, 'Science-backed protocols for deep focus — no willpower required.'),
 
-        // audio player
-        React.createElement('div', { key: 'player-wrap', style: { width: '100%', maxWidth: 560, minHeight: 86, borderRadius: 16, overflow: 'hidden', border: `1px solid rgba(74,144,226,0.25)`, boxShadow: '0 0 40px rgba(74,144,226,0.15)', position: 'relative', zIndex: 1, backgroundColor: '#0e0e1a', padding: 14, boxSizing: 'border-box' } },
-          React.createElement('audio', {
-            key: 'audio-player-fs',
-            src: getGoogleDriveDownloadUrl(audioUrl),
-            controls: true,
-            preload: 'metadata',
-            style: { width: '100%', display: 'block', backgroundColor: '#0e0e1a', borderRadius: 12, accentColor: NF_BLUE },
-            title: 'Deep Work Audio Blueprint',
-          }),
+        // audio player — fullscreen version
+        React.createElement('div', { key: 'player-wrap', style: { width: '100%', maxWidth: 560, minHeight: 86, borderRadius: 16, overflow: 'hidden', border: `1px solid rgba(74,144,226,0.25)`, boxShadow: '0 0 40px rgba(74,144,226,0.15)', position: 'relative', zIndex: 1, backgroundColor: '#0e0e1a', padding: audioUrl.includes('drive.google.com') ? 0 : 14, boxSizing: 'border-box' } },
+          audioUrl.includes('drive.google.com')
+            ? React.createElement('iframe', {
+                key: 'audio-player-fs',
+                src: getGoogleDriveEmbedUrl(audioUrl),
+                style: { width: '100%', height: 86, border: 'none', display: 'block', borderRadius: 16 },
+                allow: 'autoplay',
+                title: 'Deep Work Audio Blueprint',
+              })
+            : React.createElement('audio', {
+                key: 'audio-player-fs',
+                src: audioUrl,
+                controls: true,
+                preload: 'metadata',
+                style: { width: '100%', display: 'block', borderRadius: 12, accentColor: NF_BLUE },
+                title: 'Deep Work Audio Blueprint',
+              })
         ),
         React.createElement('button', {
           key: 'audio-download-drive-fs',
@@ -1360,6 +1394,7 @@ export default function FocusScreen() {
         // Bottom badge
         React.createElement('div', { key: 'badge', style: { position: 'absolute', bottom: 24, fontSize: 11, color: '#4b5563', zIndex: 1 } }, 'Built for your brain ✨ · NeuroFlow ADHD Focus Planner'),
       ])}
+      </Modal>
     </SafeAreaView>
   );
 }

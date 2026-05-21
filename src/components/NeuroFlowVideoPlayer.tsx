@@ -36,8 +36,10 @@ function getVideoDownloadUrl(url: string): string {
   return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
 }
 
-const VIDEO_CLARITY_FILTER = 'brightness(1.32) contrast(1.1) saturate(1.08)';
-
+// Mobile: scale the Drive iframe down so its chrome is hidden and the video fills the box.
+// Desktop: simple 100% fill.
+// IMPORTANT: Do NOT add CSS filter to the iframe — it has no effect on iframe content
+// and causes unnecessary compositing overhead.
 function getDrivePreviewFrameStyle(isPhone: boolean) {
   if (!isPhone) {
     return {
@@ -46,7 +48,6 @@ function getDrivePreviewFrameStyle(isPhone: boolean) {
       borderRadius: 12,
       backgroundColor: '#000',
       border: 'none',
-      filter: VIDEO_CLARITY_FILTER,
     };
   }
 
@@ -61,7 +62,6 @@ function getDrivePreviewFrameStyle(isPhone: boolean) {
     borderRadius: 12,
     backgroundColor: '#000',
     border: 'none',
-    filter: VIDEO_CLARITY_FILTER,
   };
 }
 
@@ -82,8 +82,9 @@ export default function NeuroFlowVideoPlayer({
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
   const downloadUrl = getVideoDownloadUrl(url);
-  const mediaUrl = isDriveLink ? downloadUrl : url;
-  const shouldUseNativeVideo = isDirectVideoUrl(url) || isDriveLink;
+  // Only use native <video> for direct video file URLs (mp4/mov/webm).
+  // Drive links always use the iframe embed — it handles auth and playback reliably.
+  const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink;
   const isPhone = width <= 480;
   const playerMaxWidth = isPhone ? 296 : '100%';
   const playerHeight = isPhone ? 167 : 320;
@@ -92,11 +93,9 @@ export default function NeuroFlowVideoPlayer({
     if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-video-fs-btn')) {
       const s = document.createElement('style');
       s.id = 'nf-hide-video-fs-btn';
-      s.textContent = `
-        video::-webkit-media-controls-fullscreen-button { display: none !important; }
-        video::-webkit-media-controls-panel { background-color: rgba(0,0,0,0.62) !important; }
-        video::-webkit-media-controls-timeline { align-self: flex-end !important; }
-      `;
+      // Only hide the browser fullscreen button — do NOT override timeline position
+      // or controls panel color (those changes break mobile layout).
+      s.textContent = 'video::-webkit-media-controls-fullscreen-button { display: none !important; }';
       document.head.appendChild(s);
     }
   }, []);
@@ -162,11 +161,14 @@ export default function NeuroFlowVideoPlayer({
             },
               React.createElement('video', {
                 ref: videoRef,
-                src: mediaUrl,
+                src: url,
                 controls: true,
                 controlsList: 'nodownload',
                 playsInline: true,
-                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain', filter: VIDEO_CLARITY_FILTER, opacity: 1 },
+                // IMPORTANT: Do NOT add CSS filter to <video> elements.
+                // CSS filter forces a new GPU compositing layer on video, which renders
+                // as solid black in Safari/WebKit. Keep the style clean.
+                style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain' },
                 preload: 'metadata',
               }),
               React.createElement('button', {
