@@ -36,20 +36,6 @@ function getVideoDownloadUrl(url: string): string {
   return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
 }
 
-// For native <video> streaming from Drive: use the usercontent subdomain with confirm=t
-// to bypass the virus-scan interstitial. This serves the file directly as a video stream.
-// Requires the Drive file to be shared "Anyone with the link".
-function getDriveStreamUrl(url: string): string {
-  const id = getGoogleDriveFileId(url);
-  if (!id) return url;
-  return `https://drive.usercontent.google.com/download?id=${id}&export=download&authuser=0&confirm=t`;
-}
-
-// Desktop iframe: simple 100% fill. (Mobile uses native <video> — no iframe styling needed.)
-function getDrivePreviewFrameStyle(): React.CSSProperties {
-  return { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' };
-}
-
 function isDirectVideoUrl(url: string): boolean {
   return /\.(mp4|mov|webm)(\?|$)/i.test(url);
 }
@@ -60,38 +46,64 @@ export default function NeuroFlowVideoPlayer({
   title = 'Video Player',
   showOpenButton = true,
 }: Props) {
-  const videoRef = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerContainerRef = useRef<any>(null);
   const { width } = useWindowDimensions();
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showPlayer, setShowPlayer] = useState(true); // X button toggles this
+  const [isLoaded, setIsLoaded] = useState(true); // toggled by X close button
 
   const isDriveLink = url.includes('drive.google.com');
   const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
   const downloadUrl = getVideoDownloadUrl(url);
+  const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink;
   const isPhone = width <= 480;
 
-  // MOBILE FIX: On mobile, bypass Drive's broken /preview iframe (which puts the
-  // scrubber at top, applies a dark overlay, and hides bottom controls). Instead
-  // use a native <video> element with Drive's direct streaming URL — this gives
-  // iOS Safari's built-in controls (scrubber at bottom, all buttons accessible).
-  //
-  // DESKTOP: unchanged — keeps the iframe embed (works fine on desktop).
-  const shouldUseNativeVideo = isDirectVideoUrl(url) || (isDriveLink && isPhone);
-  const videoSrc =
-    isDriveLink && shouldUseNativeVideo ? getDriveStreamUrl(url) : url;
-
-  // Mobile: full container width, height matches 16:9 of available width.
-  // Desktop: unchanged (320px tall, 100% wide).
-  const playerMaxWidth = '100%';
+  // Mobile: full width, 16:9 height. Desktop: unchanged at 320px tall.
   const playerHeight = isPhone ? Math.round(Math.min(width, 560) * 9 / 16) : 320;
 
+  // Stop ALL playback — works for both iframe (set src to about:blank) and native video.
+  const stopPlayback = useCallback(() => {
+    if (iframeRef.current) {
+      try { iframeRef.current.src = 'about:blank'; } catch {}
+    }
+    if (videoRef.current) {
+      try { videoRef.current.pause(); videoRef.current.currentTime = 0; } catch {}
+    }
+  }, []);
+
+  // 1) STOP when the screen this player lives on loses focus (Expo Router navigation).
+  useFocusEffect(
+    useCallback(() => {
+      return () => stopPlayback();
+    }, [stopPlayback]),
+  );
+
+  // 2) STOP when the component unmounts (modal closes / page changes).
+  useEffect(() => {
+    return () => stopPlayback();
+  }, [stopPlayback]);
+
+  // 3) STOP when the browser tab/page becomes hidden (user switches tab, locks phone, etc.).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const onVisibility = () => {
+      if (document.hidden) stopPlayback();
+    };
+    const onPageHide = () => stopPlayback();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [stopPlayback]);
+
+  // Inject CSS to hide the browser's native fullscreen button (we provide our own).
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-video-fs-btn')) {
       const s = document.createElement('style');
       s.id = 'nf-hide-video-fs-btn';
-      // Only hide the browser fullscreen button — do NOT override timeline position
-      // or controls panel color (those changes break mobile layout).
       s.textContent = 'video::-webkit-media-controls-fullscreen-button { display: none !important; }';
       document.head.appendChild(s);
     }
@@ -108,14 +120,6 @@ export default function NeuroFlowVideoPlayer({
     };
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        if (videoRef.current) videoRef.current.pause();
-      };
-    }, []),
-  );
-
   const openFullscreen = () => {
     const el = playerContainerRef.current;
     if (!el) return;
@@ -129,16 +133,15 @@ export default function NeuroFlowVideoPlayer({
     else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
   };
 
-  // X button: stops playback, resets to start, and unloads the iframe/video.
-  // User can click anywhere on the placeholder to bring the player back.
-  const closePlayer = () => {
-    if (videoRef.current) {
-      try {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-      } catch {}
-    }
-    setShowPlayer(false);
+  // X close button: stop playback and show "Tap to play again" placeholder.
+  const closeAndStop = () => {
+    stopPlayback();
+    setIsLoaded(false);
+  };
+
+  // Replay placeholder click: reload the iframe/video.
+  const reload = () => {
+    setIsLoaded(true);
   };
 
   if (Platform.OS !== 'web') {
@@ -162,13 +165,13 @@ export default function NeuroFlowVideoPlayer({
         </Pressable>
       </View>
 
-      <View style={[styles.frame, styles.videoFrame, isPhone && styles.videoFrameMobile, { height: playerHeight, maxWidth: playerMaxWidth as any }]}>
-        {!showPlayer
+      <View style={[styles.frame, styles.videoFrame, { height: playerHeight, alignSelf: 'stretch' }]}>
+        {!isLoaded
           ? React.createElement('div', {
-              onClick: () => setShowPlayer(true),
-              style: { width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#000', borderRadius: 12, cursor: 'pointer', color: '#9ca3af', fontSize: 14 },
+              onClick: reload,
+              style: { width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#000', borderRadius: 12, cursor: 'pointer', color: '#9ca3af', fontSize: 14 },
             },
-              React.createElement('div', { style: { fontSize: 32 } }, '▶'),
+              React.createElement('div', { style: { fontSize: 36, color: accentColor } }, '▶'),
               React.createElement('div', null, 'Tap to play again'),
             )
           : shouldUseNativeVideo
@@ -178,43 +181,44 @@ export default function NeuroFlowVideoPlayer({
             },
               React.createElement('video', {
                 ref: videoRef,
-                src: videoSrc,
+                src: url,
                 controls: true,
                 controlsList: 'nodownload',
                 playsInline: true,
-                // IMPORTANT: Do NOT add CSS filter to <video> elements — causes black rendering in WebKit.
                 style: { width: '100%', height: '100%', borderRadius: 12, backgroundColor: '#000', outline: 'none', display: 'block', objectFit: 'contain' },
                 preload: 'metadata',
               }),
-              // X close button — top right of player, always reachable on mobile
-              isPhone && React.createElement('button', {
-                onClick: closePlayer,
-                'aria-label': 'Close video',
-                style: { position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: 16, border: 'none', backgroundColor: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 30, lineHeight: 1 },
+              React.createElement('button', {
+                onClick: closeAndStop,
+                'aria-label': 'Stop video',
+                style: { position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: 16, border: 'none', backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 30, lineHeight: 1 },
               }, '✕'),
               React.createElement('button', {
                 onClick: exitFullscreen,
-                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
+                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 56, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
               }, '✕ Exit Full Screen'),
             )
           : React.createElement('div', {
               ref: playerContainerRef,
-              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 12 },
+              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', overflow: 'hidden', borderRadius: 12 },
             },
               React.createElement('iframe', {
+                ref: iframeRef,
                 src: embedUrl,
                 frameBorder: 0,
                 allow: 'autoplay; fullscreen',
                 title,
-                style: getDrivePreviewFrameStyle(),
+                style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' },
               }),
-              React.createElement('div', {
-                style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
-                onClick: (e: any) => e.stopPropagation(),
-              }),
+              // X close button — top-right, always above iframe, always reachable.
+              React.createElement('button', {
+                onClick: closeAndStop,
+                'aria-label': 'Stop video',
+                style: { position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: 16, border: 'none', backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 30, lineHeight: 1 },
+              }, '✕'),
               React.createElement('button', {
                 onClick: exitFullscreen,
-                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 16, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
+                style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 56, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
               }, '✕ Exit Full Screen'),
             )
         }
@@ -238,7 +242,6 @@ const styles = StyleSheet.create({
   toolbarBtnText: { fontSize: 12, fontWeight: '700' },
   frame: { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#1a1a2e', position: 'relative' },
   videoFrame: { backgroundColor: '#000' },
-  videoFrameMobile: { alignSelf: 'center' },
   downloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18, paddingHorizontal: 24, borderRadius: radius.xl, marginTop: 8 },
   downloadIcon: { fontSize: 22 },
   downloadLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
