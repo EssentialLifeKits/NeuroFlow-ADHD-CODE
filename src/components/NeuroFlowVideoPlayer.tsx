@@ -36,18 +36,33 @@ function getVideoDownloadUrl(url: string): string {
   return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
 }
 
-// Simple 100% fill for both mobile and desktop.
-// The old mobile scaling trick (138%/scale(0.725)) was intended to crop Drive's
-// top chrome bar, but it also cropped the BOTTOM controls (play/pause/volume/timeline)
-// making the player completely unusable on mobile — scrubber visible at top, nothing reachable.
-// Use a clean fill instead and let the Drive player render its own controls normally.
-function getDrivePreviewFrameStyle(_isPhone: boolean) {
+// Google Drive's /preview embed switches to a compact "mobile mode" when the iframe
+// is narrow (≤ ~480px). In mobile mode it: puts the scrubber at the TOP, applies a
+// dark overlay on the video, and hides the bottom controls entirely.
+//
+// Fix: give Drive a desktop-width iframe (560px) so it renders in full desktop mode
+// with controls at the bottom, then scale it down to the actual container width using
+// transform-origin: top left — this way the bottom controls are NEVER cropped.
+//
+// Desktop: simple 100%/100% fill (no transform needed).
+const DRIVE_DESKTOP_W = 560;
+const DRIVE_DESKTOP_H = Math.round(DRIVE_DESKTOP_W * 9 / 16); // 315px
+
+function getDrivePreviewFrameStyle(isPhone: boolean, containerWidth: number): React.CSSProperties {
+  if (!isPhone) {
+    return { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' };
+  }
+  const scale = Math.min(1, containerWidth / DRIVE_DESKTOP_W);
   return {
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-    backgroundColor: '#000',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: DRIVE_DESKTOP_W,
+    height: DRIVE_DESKTOP_H,
+    transform: `scale(${scale})`,
+    transformOrigin: 'top left',
     border: 'none',
+    backgroundColor: '#000',
   };
 }
 
@@ -72,11 +87,11 @@ export default function NeuroFlowVideoPlayer({
   // Drive links always use the iframe embed — it handles auth and playback reliably.
   const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink;
   const isPhone = width <= 480;
-  // Mobile: full width (no artificial 296px cap) with 16:9 height.
-  // Removed the 296px cap — it was constraining the player unnecessarily on wider phones.
-  // 210px gives a usable 16:9 frame on ~375px wide screens with room for Drive's control bar.
+  // Mobile: player fills full screen width. Height = Drive desktop iframe (315px)
+  // scaled down by the same ratio we pass to the iframe, so the container matches exactly.
+  const mobileScale = isPhone ? Math.min(1, width / DRIVE_DESKTOP_W) : 1;
   const playerMaxWidth = '100%';
-  const playerHeight = isPhone ? 210 : 320;
+  const playerHeight = isPhone ? Math.round(DRIVE_DESKTOP_H * mobileScale) : 320;
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-video-fs-btn')) {
@@ -167,14 +182,16 @@ export default function NeuroFlowVideoPlayer({
             )
           : React.createElement('div', {
               ref: playerContainerRef,
-              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 12 },
+              // position:relative + overflow:hidden required for the absolute-positioned iframe
+              // on mobile. No flex centering — the iframe anchors top-left and scales down.
+              style: { position: 'relative', width: '100%', height: '100%', backgroundColor: '#000', overflow: 'hidden', borderRadius: 12 },
             },
               React.createElement('iframe', {
                 src: embedUrl,
                 frameBorder: 0,
                 allow: 'autoplay; fullscreen',
                 title,
-                style: getDrivePreviewFrameStyle(isPhone),
+                style: getDrivePreviewFrameStyle(isPhone, width),
               }),
               React.createElement('div', {
                 style: { position: 'absolute', bottom: 0, right: 0, width: 56, height: 56, zIndex: 10, cursor: 'default' },
