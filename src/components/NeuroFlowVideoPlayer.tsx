@@ -36,29 +36,15 @@ function getVideoDownloadUrl(url: string): string {
   return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
 }
 
-// Mobile: scale the Drive iframe down so its chrome is hidden and the video fills the box.
-// Desktop: simple 100% fill.
-// IMPORTANT: Do NOT add CSS filter to the iframe — it has no effect on iframe content
-// and causes unnecessary compositing overhead.
-function getDrivePreviewFrameStyle(isPhone: boolean) {
-  if (!isPhone) {
-    return {
-      width: '100%',
-      height: '100%',
-      borderRadius: 12,
-      backgroundColor: '#000',
-      border: 'none',
-    };
-  }
-
+// Simple 100% fill for both mobile and desktop.
+// The old mobile scaling trick (138%/scale(0.725)) was intended to crop Drive's
+// top chrome bar, but it also cropped the BOTTOM controls (play/pause/volume/timeline)
+// making the player completely unusable on mobile — scrubber visible at top, nothing reachable.
+// Use a clean fill instead and let the Drive player render its own controls normally.
+function getDrivePreviewFrameStyle(_isPhone: boolean) {
   return {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    width: '138%',
-    height: '138%',
-    transform: 'translate(-50%, -50%) scale(0.725)',
-    transformOrigin: 'center center',
+    width: '100%',
+    height: '100%',
     borderRadius: 12,
     backgroundColor: '#000',
     border: 'none',
@@ -86,8 +72,11 @@ export default function NeuroFlowVideoPlayer({
   // Drive links always use the iframe embed — it handles auth and playback reliably.
   const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink;
   const isPhone = width <= 480;
-  const playerMaxWidth = isPhone ? 296 : '100%';
-  const playerHeight = isPhone ? 167 : 320;
+  // Mobile: full width (no artificial 296px cap) with 16:9 height.
+  // Removed the 296px cap — it was constraining the player unnecessarily on wider phones.
+  // 210px gives a usable 16:9 frame on ~375px wide screens with room for Drive's control bar.
+  const playerMaxWidth = '100%';
+  const playerHeight = isPhone ? 210 : 320;
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('nf-hide-video-fs-btn')) {
@@ -217,7 +206,7 @@ const styles = StyleSheet.create({
   toolbarBtnText: { fontSize: 12, fontWeight: '700' },
   frame: { width: '100%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#1a1a2e', position: 'relative' },
   videoFrame: { backgroundColor: '#000' },
-  videoFrameMobile: { alignSelf: 'center' },
+  videoFrameMobile: { alignSelf: 'stretch' },
   downloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 18, paddingHorizontal: 24, borderRadius: radius.xl, marginTop: 8 },
   downloadIcon: { fontSize: 22 },
   downloadLabel: { fontSize: 16, fontWeight: '800', color: '#fff' },
