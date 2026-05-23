@@ -1448,7 +1448,8 @@ function InlineCardRow({
                   {(card.slide_deck_url.includes('drive.google.com') ||
                     /\.(mp4|mov|webm)/i.test(card.slide_deck_url) ||
                     card.slide_deck_url.includes('/video/') ||
-                    card.slide_deck_url.includes('videos/'))
+                    card.slide_deck_url.includes('videos/') ||
+                    /(?:youtube\.com|youtu\.be)/.test(card.slide_deck_url))
                     ? '🎬 Video' : '📎 Deck'}
                 </Text>
               </View>

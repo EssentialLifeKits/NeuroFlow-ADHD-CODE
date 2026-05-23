@@ -73,8 +73,9 @@ function isVideoUrl(url: string): boolean {
   const lower = url.toLowerCase().split('?')[0];
   if (lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
       lower.includes('/video/') || lower.includes('videos/')) return true;
-  // Google Drive links that point to video files — treat as embeddable video
   if (url.includes('drive.google.com')) return true;
+  // YouTube links (youtu.be shortlinks + youtube.com/watch URLs)
+  if (/(?:youtube\.com|youtu\.be)/.test(url)) return true;
   return false;
 }
 

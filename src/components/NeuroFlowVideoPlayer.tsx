@@ -18,6 +18,29 @@ type Props = {
   showOpenButton?: boolean;
 };
 
+// ── YouTube helpers ───────────────────────────────────────────────────────────
+function isYouTubeUrl(url: string): boolean {
+  return /(?:youtube\.com|youtu\.be)/.test(url);
+}
+
+function getYouTubeVideoId(url: string): string | null {
+  // handles youtu.be/ID, youtube.com/watch?v=ID, youtube.com/embed/ID
+  return (
+    url.match(/youtu\.be\/([^?&#]+)/)?.[1] ??
+    url.match(/[?&]v=([^&#]+)/)?.[1] ??
+    url.match(/\/embed\/([^?&#]+)/)?.[1] ??
+    null
+  );
+}
+
+function getYouTubeEmbedUrl(url: string): string {
+  const id = getYouTubeVideoId(url);
+  if (!id) return url;
+  // rel=0 hides related videos, modestbranding=1 reduces YouTube logo
+  return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1`;
+}
+
+// ── Google Drive helpers ──────────────────────────────────────────────────────
 function getGoogleDriveEmbedUrl(url: string): string {
   if (!url.includes('drive.google.com')) return url;
   if (url.includes('/preview')) return url;
@@ -53,10 +76,16 @@ export default function NeuroFlowVideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(true); // toggled by X close button
 
+  const isYouTube = isYouTubeUrl(url);
   const isDriveLink = url.includes('drive.google.com');
-  const embedUrl = isDriveLink ? getGoogleDriveEmbedUrl(url) : url;
+  const embedUrl = isYouTube
+    ? getYouTubeEmbedUrl(url)
+    : isDriveLink
+    ? getGoogleDriveEmbedUrl(url)
+    : url;
   const downloadUrl = getVideoDownloadUrl(url);
-  const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink;
+  // Native <video> only for direct mp4/mov/webm — YouTube and Drive use iframe
+  const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink && !isYouTube;
   const isPhone = width <= 480;
 
   // Mobile: full width, 16:9 height. Desktop: unchanged at 320px tall.
