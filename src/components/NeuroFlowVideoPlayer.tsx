@@ -13,6 +13,8 @@ import { colors, radius } from '../constants/theme';
 
 type Props = {
   url: string;
+  /** Explicit download URL (e.g. Google Drive). If omitted, falls back to deriving from url. */
+  downloadUrl?: string;
   accentColor?: string;
   title?: string;
   showOpenButton?: boolean;
@@ -65,6 +67,7 @@ function isDirectVideoUrl(url: string): boolean {
 
 export default function NeuroFlowVideoPlayer({
   url,
+  downloadUrl: explicitDownloadUrl,
   accentColor = '#FBBF24',
   title = 'Video Player',
   showOpenButton = true,
@@ -83,7 +86,9 @@ export default function NeuroFlowVideoPlayer({
     : isDriveLink
     ? getGoogleDriveEmbedUrl(url)
     : url;
-  const downloadUrl = getVideoDownloadUrl(url);
+  // Use explicit download URL if provided (e.g. Google Drive link when player URL is YouTube).
+  // Otherwise fall back to deriving a download URL from the player URL itself.
+  const downloadUrl = explicitDownloadUrl ?? getVideoDownloadUrl(url);
   // Native <video> only for direct mp4/mov/webm — YouTube and Drive use iframe
   const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink && !isYouTube;
   const isPhone = width <= 480;

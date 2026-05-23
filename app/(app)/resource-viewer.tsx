@@ -485,7 +485,7 @@ function CardDetail({ card }: { card: ResourceCard }) {
       {/* Auto-detect viewer */}
       {card.slide_deck_url ? (
         isVideoUrl(card.slide_deck_url) ? (
-          <NeuroFlowVideoPlayer url={card.slide_deck_url} accentColor={card.accent_color} title={card.title} />
+          <NeuroFlowVideoPlayer url={card.slide_deck_url} downloadUrl={card.download_url ?? undefined} accentColor={card.accent_color} title={card.title} />
         ) : card.slide_deck_url.includes(',') ? (
           <ImageSlideViewer
             urls={card.slide_deck_url.split(',').map(u => u.trim()).filter(Boolean)}

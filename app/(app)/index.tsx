@@ -45,7 +45,9 @@ import NeuroFlowVideoPlayer from '../../src/components/NeuroFlowVideoPlayer';
 
 const NF_BLUE = '#4A90E2';
 const DESKTOP_BREAKPOINT = 1024;
-const DEFAULT_HOWTO_VIDEO_URL = '/neuroflow-promo-9x16.mp4';
+// Keep this empty: the dashboard How-To must come from the saved admin setting,
+// not from a promo/product demo fallback asset.
+const DEFAULT_HOWTO_VIDEO_URL = '';
 
 // ─── Email → Display Name mapping ────────────────────────────────────────────
 function resolveDisplayName(email: string | null | undefined, rawDisplayName: string | null | undefined): string {
@@ -283,9 +285,10 @@ export default function DashboardScreen() {
   const ctaTranslateY = useRef(new Animated.Value(12)).current;
 
   // How To video — inline card + button opens modal
-  const [howToUrl,     setHowToUrl]     = useState(DEFAULT_HOWTO_VIDEO_URL);
-  const [howToTitle,   setHowToTitle]   = useState('How To Use NeuroFlow');
-  const [howToDesc,    setHowToDesc]    = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
+  const [howToUrl,          setHowToUrl]          = useState(DEFAULT_HOWTO_VIDEO_URL);
+  const [howToDownloadUrl,  setHowToDownloadUrl]  = useState('');
+  const [howToTitle,        setHowToTitle]        = useState('How To Use NeuroFlow');
+  const [howToDesc,         setHowToDesc]         = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
   const [howToVisible, setHowToVisible] = useState(false);
 
   // Supercharge Routine CTA card — dynamic from DB
@@ -299,6 +302,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     getSetting('howto_video_url').then(v => { if (v) setHowToUrl(v); }).catch(() => {});
+    getSetting('howto_download_url').then(v => { if (v) setHowToDownloadUrl(v); }).catch(() => {});
     getSetting('howto_video_title').then(v => { if (v) setHowToTitle(v); }).catch(() => {});
     getSetting('howto_video_desc').then(v => { if (v) setHowToDesc(v); }).catch(() => {});
     getSetting('cta_icon').then(v => { if (v) setCtaIcon(v); }).catch(() => {});
@@ -628,7 +632,7 @@ export default function DashboardScreen() {
             </View>
             {howToDesc ? <Text style={styles.howToDesc}>{howToDesc}</Text> : null}
             {howToUrl ? (
-              <NeuroFlowVideoPlayer url={howToUrl} title={howToTitle} accentColor="#FBBF24" />
+              <NeuroFlowVideoPlayer url={howToUrl} downloadUrl={howToDownloadUrl || undefined} title={howToTitle} accentColor="#FBBF24" />
             ) : (
               <View style={styles.howToEmpty}>
                 <Text style={styles.howToEmptyText}>🎬 Video coming soon</Text>

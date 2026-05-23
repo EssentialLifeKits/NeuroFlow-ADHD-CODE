@@ -20,6 +20,7 @@ export interface ResourceCard {
   sort_order: number;
   is_active: boolean;
   slide_deck_url: string | null;
+  download_url: string | null;
   icon_image_url: string | null;
   created_at: string;
   updated_at: string;

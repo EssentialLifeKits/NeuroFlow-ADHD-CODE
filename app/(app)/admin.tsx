@@ -978,7 +978,8 @@ function HowToVideoSection({
   settings: Record<string, string>;
   onSave: (key: string, value: string) => Promise<void>;
 }) {
-  const [videoUrl,       setVideoUrl]       = useState(settings['howto_video_url']   ?? '');
+  const [videoUrl,       setVideoUrl]       = useState(settings['howto_video_url']    ?? '');
+  const [downloadUrl,    setDownloadUrl]    = useState(settings['howto_download_url'] ?? '');
   const [title,          setTitle]          = useState(settings['howto_video_title']  ?? 'How To Use NeuroFlow');
   const [desc,           setDesc]           = useState(settings['howto_video_desc']   ?? 'Watch this short explainer to get the most out of your ADHD toolkit.');
   const [saving,         setSaving]         = useState(false);
@@ -990,9 +991,10 @@ function HowToVideoSection({
     setSaving(true);
     try {
       await Promise.all([
-        onSave('howto_video_url',   videoUrl),
-        onSave('howto_video_title', title),
-        onSave('howto_video_desc',  desc),
+        onSave('howto_video_url',    videoUrl),
+        onSave('howto_download_url', downloadUrl),
+        onSave('howto_video_title',  title),
+        onSave('howto_video_desc',   desc),
       ]);
       Alert.alert('Saved', 'How To video card updated.');
     } finally { setSaving(false); }
@@ -1098,7 +1100,22 @@ function HowToVideoSection({
           placeholderTextColor={colors.textTertiary}
         />
         <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
-          Google Drive, YouTube embed, Vimeo, or any direct video link. No size limit.
+          YouTube (unlisted), Google Drive, Vimeo, or any direct video link. No size limit.
+        </Text>
+      </View>
+
+      {/* Download URL — separate Google Drive link for the Download button */}
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>📥 GOOGLE DRIVE DOWNLOAD LINK</Text>
+        <TextInput
+          style={s.input}
+          value={downloadUrl}
+          onChangeText={setDownloadUrl}
+          placeholder="https://drive.google.com/file/d/…/view"
+          placeholderTextColor={colors.textTertiary}
+        />
+        <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
+          Powers the "Download in Google Drive" button. Paste your Google Drive share link here.
         </Text>
         <Text style={{ fontSize: 10, color: '#FB923C', marginTop: 2 }}>
           ⚠️ Google Drive: Right-click file → Share → "Anyone with the link" → Copy link
@@ -1274,7 +1291,7 @@ const BLANK_CARD: CardDraft = {
   icon_bg: 'rgba(74,144,226,0.12)', accent_color: '#4A90E2',
   link: '#', link_label: 'Learn More →',
   sort_order: 0, is_active: true,
-  slide_deck_url: null, icon_image_url: null,
+  slide_deck_url: null, download_url: null, icon_image_url: null,
 };
 
 const ACCENT_PRESETS = [
@@ -1311,6 +1328,7 @@ function InlineCardRow({
     link_label: card.link_label, sort_order: card.sort_order,
     is_active: card.is_active,
     slide_deck_url: card.slide_deck_url ?? null,
+    download_url:   card.download_url   ?? null,
     icon_image_url: card.icon_image_url ?? null,
   });
   const [saving, setSaving]           = useState(false);
@@ -1576,14 +1594,29 @@ function InlineCardRow({
                       </>
                   }
                 </Pressable>
-                <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a Google Drive / YouTube link below —</Text>
+                <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a YouTube / Google Drive link below —</Text>
                 <TextInput
                   style={s.input}
                   value={draft.slide_deck_url ?? ''}
                   onChangeText={v => set('slide_deck_url', v || null)}
+                  placeholder="https://youtu.be/… or https://drive.google.com/…"
+                  placeholderTextColor={colors.textTertiary}
+                />
+                <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
+                  🎬 Paste your YouTube unlisted link here for the video player.
+                </Text>
+                {/* Download URL — separate field for Google Drive download link */}
+                <Text style={[s.fieldLabel, { marginTop: 14 }]}>📥 GOOGLE DRIVE DOWNLOAD LINK</Text>
+                <TextInput
+                  style={s.input}
+                  value={draft.download_url ?? ''}
+                  onChangeText={v => set('download_url', v || null)}
                   placeholder="https://drive.google.com/file/d/…/view"
                   placeholderTextColor={colors.textTertiary}
                 />
+                <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
+                  Powers the "Download in Google Drive" button. Paste your Google Drive share link here.
+                </Text>
                 <Text style={{ fontSize: 10, color: '#FB923C', marginTop: 2 }}>
                   ⚠️ Google Drive: Right-click file → Share → "Anyone with the link" → Copy link
                 </Text>
