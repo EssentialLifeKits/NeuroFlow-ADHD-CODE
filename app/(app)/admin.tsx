@@ -1558,69 +1558,69 @@ function InlineCardRow({
             />
           </View>
 
-          {/* Content file upload (video, PDF, PPTX, DOCX, etc.) */}
+          {/* ── Video Player URL (YouTube) — always visible ── */}
           <View style={s.fieldWrap}>
-            <Text style={s.fieldLabel}>CONTENT FILE (VIDEO, PDF, PPTX, DOCX, …)</Text>
-            <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 6 }}>
-              Upload files up to 100MB, or paste a Google Drive share link for large videos (free, no size limit).
-              The viewer auto-detects the file type.
+            <Text style={s.fieldLabel}>🎬 VIDEO PLAYER LINK (YOUTUBE)</Text>
+            <TextInput
+              style={s.input}
+              value={draft.slide_deck_url ?? ''}
+              onChangeText={v => set('slide_deck_url', v || null)}
+              placeholder="https://youtu.be/… (paste YouTube unlisted link)"
+              placeholderTextColor={colors.textTertiary}
+            />
+            <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
+              Paste your YouTube unlisted link here. This powers the video player.
             </Text>
-            {draft.slide_deck_url ? (
-              <View style={{ gap: 6 }}>
-                <View style={inlineStyles.deckRow}>
-                  <Text style={{ fontSize: 12, color: NF_GREEN, flex: 1 }} numberOfLines={1}>
-                    ✅ File uploaded
-                  </Text>
-                  <Pressable onPress={() => Linking.openURL(draft.slide_deck_url!)} style={inlineStyles.deckViewBtn}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE }}>View</Text>
-                  </Pressable>
-                  <Pressable onPress={pickContentFile} disabled={uploadingDeck} style={inlineStyles.deckViewBtn}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: NF_ORANGE }}>Replace</Text>
-                  </Pressable>
-                  <Pressable onPress={() => set('slide_deck_url', null)} style={inlineStyles.deckViewBtn}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
-                  </Pressable>
-                </View>
+          </View>
+
+          {/* ── Google Drive Download URL — always visible ── */}
+          <View style={s.fieldWrap}>
+            <Text style={s.fieldLabel}>📥 GOOGLE DRIVE DOWNLOAD LINK</Text>
+            <TextInput
+              style={s.input}
+              value={draft.download_url ?? ''}
+              onChangeText={v => set('download_url', v || null)}
+              placeholder="https://drive.google.com/file/d/…/view"
+              placeholderTextColor={colors.textTertiary}
+            />
+            <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
+              Powers the "Download in Google Drive" button. Paste your Google Drive share link here.
+            </Text>
+            <Text style={{ fontSize: 10, color: '#FB923C', marginTop: 2 }}>
+              ⚠️ Google Drive: Right-click file → Share → "Anyone with the link" → Copy link
+            </Text>
+          </View>
+
+          {/* ── PDF / PPTX / DOCX upload (non-video content) ── */}
+          <View style={s.fieldWrap}>
+            <Text style={s.fieldLabel}>CONTENT FILE (PDF, PPTX, DOCX — non-video only)</Text>
+            <Text style={{ fontSize: 11, color: colors.textTertiary, marginBottom: 6 }}>
+              Only needed for PDF/slide decks. For videos, use the YouTube link above instead.
+            </Text>
+            {draft.slide_deck_url && /\.(pdf|pptx|ppt|docx|doc)/i.test(draft.slide_deck_url) ? (
+              <View style={inlineStyles.deckRow}>
+                <Text style={{ fontSize: 12, color: NF_GREEN, flex: 1 }} numberOfLines={1}>✅ File uploaded</Text>
+                <Pressable onPress={() => Linking.openURL(draft.slide_deck_url!)} style={inlineStyles.deckViewBtn}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_BLUE }}>View</Text>
+                </Pressable>
+                <Pressable onPress={pickContentFile} disabled={uploadingDeck} style={inlineStyles.deckViewBtn}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_ORANGE }}>Replace</Text>
+                </Pressable>
+                <Pressable onPress={() => set('slide_deck_url', null)} style={inlineStyles.deckViewBtn}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: NF_RED }}>Remove</Text>
+                </Pressable>
               </View>
             ) : (
-              <View style={{ gap: 8 }}>
-                <Pressable onPress={pickContentFile} disabled={uploadingDeck} style={inlineStyles.deckUploadBtn}>
-                  {uploadingDeck
-                    ? <ActivityIndicator size="small" color={NF_BLUE} />
-                    : <>
-                        <Text style={{ fontSize: 18 }}>📁</Text>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload from Computer</Text>
-                        <Text style={{ fontSize: 10, color: colors.textTertiary }}>MP4 · MOV · PDF · PPTX · DOCX</Text>
-                      </>
-                  }
-                </Pressable>
-                <Text style={{ fontSize: 11, color: colors.textTertiary, textAlign: 'center' }}>— or paste a YouTube / Google Drive link below —</Text>
-                <TextInput
-                  style={s.input}
-                  value={draft.slide_deck_url ?? ''}
-                  onChangeText={v => set('slide_deck_url', v || null)}
-                  placeholder="https://youtu.be/… or https://drive.google.com/…"
-                  placeholderTextColor={colors.textTertiary}
-                />
-                <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
-                  🎬 Paste your YouTube unlisted link here for the video player.
-                </Text>
-                {/* Download URL — separate field for Google Drive download link */}
-                <Text style={[s.fieldLabel, { marginTop: 14 }]}>📥 GOOGLE DRIVE DOWNLOAD LINK</Text>
-                <TextInput
-                  style={s.input}
-                  value={draft.download_url ?? ''}
-                  onChangeText={v => set('download_url', v || null)}
-                  placeholder="https://drive.google.com/file/d/…/view"
-                  placeholderTextColor={colors.textTertiary}
-                />
-                <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 4 }}>
-                  Powers the "Download in Google Drive" button. Paste your Google Drive share link here.
-                </Text>
-                <Text style={{ fontSize: 10, color: '#FB923C', marginTop: 2 }}>
-                  ⚠️ Google Drive: Right-click file → Share → "Anyone with the link" → Copy link
-                </Text>
-              </View>
+              <Pressable onPress={pickContentFile} disabled={uploadingDeck} style={inlineStyles.deckUploadBtn}>
+                {uploadingDeck
+                  ? <ActivityIndicator size="small" color={NF_BLUE} />
+                  : <>
+                      <Text style={{ fontSize: 18 }}>📁</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: NF_BLUE }}>Upload PDF / PPTX / DOCX</Text>
+                      <Text style={{ fontSize: 10, color: colors.textTertiary }}>PDF · PPTX · DOCX</Text>
+                    </>
+                }
+              </Pressable>
             )}
           </View>
 
