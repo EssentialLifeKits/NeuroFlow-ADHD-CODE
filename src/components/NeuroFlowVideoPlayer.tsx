@@ -58,7 +58,10 @@ function getGoogleDriveFileId(url: string): string | null {
 function getVideoDownloadUrl(url: string): string {
   if (!url.includes('drive.google.com')) return url;
   const id = getGoogleDriveFileId(url);
-  return id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
+  // Google Drive's direct download endpoint shows a virus-scan warning for
+  // large public videos. Open the Drive file page instead so users get Drive's
+  // native download flow without the scary error-looking interstitial.
+  return id ? `https://drive.google.com/file/d/${id}/view?usp=sharing` : url;
 }
 
 function isDirectVideoUrl(url: string): boolean {
@@ -87,8 +90,8 @@ export default function NeuroFlowVideoPlayer({
     ? getGoogleDriveEmbedUrl(url)
     : url;
   // Use explicit download URL if provided (e.g. Google Drive link when player URL is YouTube).
-  // Otherwise fall back to deriving a download URL from the player URL itself.
-  const downloadUrl = explicitDownloadUrl ?? getVideoDownloadUrl(url);
+  // Normalize Drive links so pasted share/direct links behave consistently.
+  const downloadUrl = getVideoDownloadUrl(explicitDownloadUrl ?? url);
   // Native <video> only for direct mp4/mov/webm — YouTube and Drive use iframe
   const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink && !isYouTube;
   const isPhone = width <= 480;
