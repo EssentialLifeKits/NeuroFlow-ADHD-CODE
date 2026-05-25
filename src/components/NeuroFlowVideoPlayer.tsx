@@ -247,12 +247,6 @@ export default function NeuroFlowVideoPlayer({
                 title,
                 style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' },
               }),
-              // X close button — top-right, always above iframe, always reachable.
-              React.createElement('button', {
-                onClick: closeAndStop,
-                'aria-label': 'Stop video',
-                style: { position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: 16, border: 'none', backgroundColor: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 30, lineHeight: 1 },
-              }, '✕'),
               React.createElement('button', {
                 onClick: exitFullscreen,
                 style: { display: isFullscreen ? 'flex' : 'none', position: 'absolute', top: 16, right: 56, zIndex: 9999, padding: '10px 24px', borderRadius: 10, border: '1px solid rgba(248,113,113,0.5)', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171', cursor: 'pointer', fontSize: 14, fontWeight: 700, alignItems: 'center', gap: 8 },
