@@ -158,6 +158,15 @@ export default function NeuroFlowVideoPlayer({
   }, []);
 
   const openFullscreen = () => {
+    // iOS does not support requestFullscreen() on divs or cross-origin iframes.
+    // On mobile with a YouTube video, open the YouTube app/site instead —
+    // that gives real fullscreen with all native controls.
+    if (isPhone && isYouTube) {
+      const id = getYouTubeVideoId(url);
+      const watchUrl = id ? `https://www.youtube.com/watch?v=${id}` : url;
+      Linking.openURL(watchUrl);
+      return;
+    }
     const el = playerContainerRef.current;
     if (!el) return;
     if (el.requestFullscreen) el.requestFullscreen();
