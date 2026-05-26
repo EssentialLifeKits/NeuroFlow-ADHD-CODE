@@ -246,7 +246,20 @@ export default function NeuroFlowVideoPlayer({
                 allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen',
                 allowFullScreen: true,
                 title,
-                style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' },
+                // On mobile, YouTube hides gear/settings and fullscreen buttons when the iframe
+                // is narrower than ~480px. Fix: render at 560px virtual width so YouTube sees a
+                // "wide" player and shows all 4 native controls, then CSS-scale down to fit.
+                // Desktop is unchanged (100% width/height).
+                style: (isPhone && isYouTube)
+                  ? {
+                      width: '560px',
+                      height: `${Math.round(560 * 9 / 16)}px`,
+                      transform: `scale(${width / 560})`,
+                      transformOrigin: 'top left',
+                      border: 'none',
+                      backgroundColor: '#000',
+                    }
+                  : { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' },
               }),
               React.createElement('button', {
                 onClick: exitFullscreen,
