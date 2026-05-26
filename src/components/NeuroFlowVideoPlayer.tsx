@@ -38,8 +38,8 @@ function getYouTubeVideoId(url: string): string | null {
 function getYouTubeEmbedUrl(url: string): string {
   const id = getYouTubeVideoId(url);
   if (!id) return url;
-  // rel=0 hides related videos, modestbranding=1 reduces YouTube logo
-  return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1`;
+  // Keep YouTube's native controls enabled on mobile and desktop.
+  return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&controls=1&fs=1&playsinline=1`;
 }
 
 // ── Google Drive helpers ──────────────────────────────────────────────────────
@@ -243,7 +243,8 @@ export default function NeuroFlowVideoPlayer({
                 ref: iframeRef,
                 src: embedUrl,
                 frameBorder: 0,
-                allow: 'autoplay; fullscreen',
+                allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen',
+                allowFullScreen: true,
                 title,
                 style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' },
               }),
