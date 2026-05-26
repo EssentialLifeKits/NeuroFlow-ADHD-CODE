@@ -268,6 +268,16 @@ export default function NeuroFlowVideoPlayer({
                 frameBorder: 0,
                 allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen',
                 allowFullScreen: true,
+                // sandbox blocks the iframe from navigating the parent browser tab.
+                // Without this, YouTube's "Watch on YouTube" button navigates the parent
+                // to youtube.com, iOS intercepts it to open the YouTube app, and the
+                // browser tab is left at about:blank with no way back.
+                // allow-popups lets YouTube open share/subscribe flows in a new tab.
+                // allow-popups-to-escape-sandbox ensures those popups work normally.
+                // allow-presentation enables the Fullscreen API inside the iframe.
+                // Omitting allow-top-navigation / allow-top-navigation-by-user-activation
+                // is what prevents the parent-tab hijack.
+                sandbox: 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation allow-forms',
                 title,
                 style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' },
               }),
