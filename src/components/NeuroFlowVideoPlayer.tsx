@@ -38,8 +38,8 @@ function getYouTubeVideoId(url: string): string | null {
 function getYouTubeEmbedUrl(url: string): string {
   const id = getYouTubeVideoId(url);
   if (!id) return url;
-  // Keep YouTube's native controls enabled on mobile and desktop.
-  return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&controls=1&fs=1&playsinline=1`;
+  // enablejsapi=1 lets us send postMessage pause commands without destroying the iframe.
+  return `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1&controls=1&fs=1&playsinline=1&enablejsapi=1`;
 }
 
 // ── Google Drive helpers ──────────────────────────────────────────────────────
@@ -121,11 +121,25 @@ export default function NeuroFlowVideoPlayer({
     return () => stopPlayback();
   }, [stopPlayback]);
 
-  // 3) STOP when the browser tab/page becomes hidden (user switches tab, locks phone, etc.).
+  // 3) PAUSE/STOP when the browser tab/page becomes hidden.
+  // For YouTube iframes we send a postMessage pause instead of blanking src —
+  // this way returning to the app shows the paused player rather than a blank screen.
+  // pagehide still fully stops (page is being unloaded anyway).
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const onVisibility = () => {
-      if (document.hidden) stopPlayback();
+      if (!document.hidden) return;
+      // Gentle pause for YouTube so the player survives tab/app switching.
+      if (iframeRef.current?.contentWindow && isYouTube) {
+        try {
+          iframeRef.current.contentWindow.postMessage(
+            '{"event":"command","func":"pauseVideo","args":""}',
+            'https://www.youtube.com',
+          );
+        } catch {}
+      } else {
+        stopPlayback();
+      }
     };
     const onPageHide = () => stopPlayback();
     document.addEventListener('visibilitychange', onVisibility);
@@ -134,7 +148,7 @@ export default function NeuroFlowVideoPlayer({
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pagehide', onPageHide);
     };
-  }, [stopPlayback]);
+  }, [stopPlayback, isYouTube]);
 
   // Inject CSS to hide the browser's native fullscreen button (we provide our own).
   useEffect(() => {
