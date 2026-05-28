@@ -171,27 +171,49 @@ export default function NeuroFlowVideoPlayer({
     };
   }, []);
 
-  // Open an external URL without stranding the user on a blank screen.
+  // Open an external URL without navigating the current Safari tab away.
   //
-  // YouTube URLs  → window.location.href
-  //   iOS Universal Links intercepts the navigation and opens the YouTube app
-  //   BEFORE Safari actually leaves the current page. The app tab stays on
-  //   NeuroFlow. When the user comes back to Safari they see the app, not a
-  //   blank tab. (If YouTube app isn't installed Safari navigates to youtube.com
-  //   and the user can tap the browser back-button to return.)
+  // YouTube URLs → youtube:// custom URL scheme
+  //   Custom schemes are NOT http/https, so Safari cannot render them and
+  //   never navigates away. iOS routes the scheme directly to the YouTube app
+  //   and the NeuroFlow tab stays intact. When the user returns to Safari the
+  //   app is exactly as they left it — no blank screen, no sign-in required.
+  //
+  //   Fallback: if the YouTube app is not installed, the scheme silently fails.
+  //   We detect this via document.visibilitychange — if the page never became
+  //   hidden (i.e. the app never opened), we fall back to opening the web URL
+  //   in a new tab after 500 ms so the app tab is still preserved.
   //
   // All other URLs (Drive, etc.) → window.open(_blank)
   //   Opens in a new tab so the app tab is never disturbed.
   //
-  // Native → Linking.openURL is correct; it hands off to the OS without
-  //   touching the current screen.
+  // Native → Linking.openURL — correct on iOS/Android; hands off to the OS
+  //   without affecting the current screen.
   const openExternal = (externalUrl: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       if (isYouTubeUrl(externalUrl)) {
-        window.location.href = externalUrl;
-      } else {
-        window.open(externalUrl, '_blank', 'noopener,noreferrer');
+        const id = getYouTubeVideoId(externalUrl);
+        if (id) {
+          let appOpened = false;
+          const onVisibility = () => { if (document.hidden) appOpened = true; };
+          document.addEventListener('visibilitychange', onVisibility);
+
+          // youtube:// never causes Safari to navigate — iOS hands it off to the app.
+          window.location.href = `youtube://watch?v=${id}`;
+
+          // If the YouTube app wasn't installed (page never went hidden),
+          // fall back to opening the web URL in a new tab.
+          setTimeout(() => {
+            document.removeEventListener('visibilitychange', onVisibility);
+            if (!appOpened) {
+              window.open(`https://www.youtube.com/watch?v=${id}`, '_blank', 'noopener,noreferrer');
+            }
+          }, 500);
+          return;
+        }
       }
+      // Non-YouTube (Drive, etc.) — new tab, app tab stays untouched.
+      window.open(externalUrl, '_blank', 'noopener,noreferrer');
     } else {
       Linking.openURL(externalUrl);
     }
