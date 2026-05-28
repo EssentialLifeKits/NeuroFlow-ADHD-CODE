@@ -171,24 +171,22 @@ export default function NeuroFlowVideoPlayer({
     };
   }, []);
 
-  // Open an external URL without navigating the current Safari tab away.
+  // Open a YouTube URL in the YouTube app without navigating the current browser
+  // tab — works in both Safari and Chrome on iOS.
   //
-  // YouTube URLs → youtube:// custom URL scheme
-  //   Custom schemes are NOT http/https, so Safari cannot render them and
-  //   never navigates away. iOS routes the scheme directly to the YouTube app
-  //   and the NeuroFlow tab stays intact. When the user returns to Safari the
-  //   app is exactly as they left it — no blank screen, no sign-in required.
+  // The trick: fire the youtube:// scheme from a HIDDEN IFRAME, not from the
+  // main page. The iframe navigation never changes the main page's URL or
+  // unloads its JavaScript, so the app and session stay fully intact.
+  // iOS intercepts the custom scheme at the OS level (WKWebView underneath
+  // every iOS browser) and opens the YouTube app regardless of whether the
+  // navigation originated from the main frame or an iframe.
   //
-  //   Fallback: if the YouTube app is not installed, the scheme silently fails.
-  //   We detect this via document.visibilitychange — if the page never became
-  //   hidden (i.e. the app never opened), we fall back to opening the web URL
-  //   in a new tab after 500 ms so the app tab is still preserved.
+  // Fallback: if the YouTube app is not installed, the iframe navigation fails
+  // silently and document never becomes hidden. After 1 s we open the https
+  // web URL in a new tab instead (app tab still untouched).
   //
-  // All other URLs (Drive, etc.) → window.open(_blank)
-  //   Opens in a new tab so the app tab is never disturbed.
-  //
-  // Native → Linking.openURL — correct on iOS/Android; hands off to the OS
-  //   without affecting the current screen.
+  // All other URLs (Drive, etc.) → window.open(_blank), new tab only.
+  // Native → Linking.openURL, correct on iOS/Android native.
   const openExternal = (externalUrl: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       if (isYouTubeUrl(externalUrl)) {
@@ -198,17 +196,26 @@ export default function NeuroFlowVideoPlayer({
           const onVisibility = () => { if (document.hidden) appOpened = true; };
           document.addEventListener('visibilitychange', onVisibility);
 
-          // youtube:// never causes Safari to navigate — iOS hands it off to the app.
-          window.location.href = `youtube://watch?v=${id}`;
+          // Hidden off-screen iframe — triggers the scheme without touching
+          // the main page URL in Safari or Chrome.
+          const iframe = document.createElement('iframe');
+          iframe.style.cssText =
+            'position:absolute;width:1px;height:1px;top:-9999px;left:-9999px;border:none;opacity:0;';
+          iframe.src = `youtube://watch?v=${id}`;
+          document.body.appendChild(iframe);
 
-          // If the YouTube app wasn't installed (page never went hidden),
-          // fall back to opening the web URL in a new tab.
           setTimeout(() => {
             document.removeEventListener('visibilitychange', onVisibility);
+            try { document.body.removeChild(iframe); } catch {}
             if (!appOpened) {
-              window.open(`https://www.youtube.com/watch?v=${id}`, '_blank', 'noopener,noreferrer');
+              // YouTube app not installed — open web URL in a new tab.
+              window.open(
+                `https://www.youtube.com/watch?v=${id}`,
+                '_blank',
+                'noopener,noreferrer',
+              );
             }
-          }, 500);
+          }, 1000);
           return;
         }
       }
