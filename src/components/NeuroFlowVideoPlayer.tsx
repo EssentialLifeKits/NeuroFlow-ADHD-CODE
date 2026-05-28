@@ -26,11 +26,14 @@ function isYouTubeUrl(url: string): boolean {
 }
 
 function getYouTubeVideoId(url: string): string | null {
-  // handles youtu.be/ID, youtube.com/watch?v=ID, youtube.com/embed/ID
+  // handles youtu.be/ID, watch?v=ID, /embed/ID, /shorts/ID, /live/ID, /v/ID
   return (
-    url.match(/youtu\.be\/([^?&#]+)/)?.[1] ??
+    url.match(/youtu\.be\/([^?&#/]+)/)?.[1] ??
     url.match(/[?&]v=([^&#]+)/)?.[1] ??
-    url.match(/\/embed\/([^?&#]+)/)?.[1] ??
+    url.match(/\/embed\/([^?&#/]+)/)?.[1] ??
+    url.match(/\/shorts\/([^?&#/]+)/)?.[1] ??
+    url.match(/\/live\/([^?&#/]+)/)?.[1] ??
+    url.match(/\/v\/([^?&#/]+)/)?.[1] ??
     null
   );
 }
@@ -108,10 +111,20 @@ export default function NeuroFlowVideoPlayer({
   // We only generate this href on web + mobile.  Desktop has no YouTube app,
   // so the button falls back to opening youtube.com in a new tab.
   const youtubeVideoId = isYouTube ? getYouTubeVideoId(url) : null;
-  const youtubeAppHref =
-    Platform.OS === 'web' && isPhone && youtubeVideoId
-      ? `youtube://watch?v=${youtubeVideoId}`
-      : null;
+  // Build the deep-link href for the YouTube app button.
+  // When we have a video ID → youtube://watch?v=ID (guaranteed to open that exact video).
+  // When isYouTube but ID couldn't be extracted (e.g. channel/playlist/rare format) →
+  //   use the original https URL as the <a> href; iOS universal links route it to the
+  //   YouTube app, and the browser falls back gracefully if the app isn't installed.
+  // When NOT a YouTube URL → null (no YouTube button — show Drive/download instead).
+  // IMPORTANT: we derive this from `url` (slide_deck_url), NEVER from `downloadUrl`,
+  // so the YouTube button always opens the same video the iframe is showing.
+  const youtubeAppHref: string | null = (() => {
+    if (Platform.OS !== 'web' || !isPhone || !isYouTube) return null;
+    if (youtubeVideoId) return `youtube://watch?v=${youtubeVideoId}`;
+    // Fallback: original https YouTube URL — iOS universal links open the YouTube app.
+    return url;
+  })();
 
   // Stop ALL playback — works for both iframe and native video.
   const stopPlayback = useCallback(() => {
