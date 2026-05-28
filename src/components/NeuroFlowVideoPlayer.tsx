@@ -171,14 +171,26 @@ export default function NeuroFlowVideoPlayer({
     };
   }, []);
 
+  // Open an external URL without navigating the current tab away.
+  // On web we use window.open(_blank) so the app tab is never replaced.
+  // On native Linking.openURL is correct (it switches to a different app).
+  const openExternal = (externalUrl: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(externalUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      Linking.openURL(externalUrl);
+    }
+  };
+
   const openFullscreen = () => {
     // iOS does not support requestFullscreen() on divs or cross-origin iframes.
     // On mobile with a YouTube video, open the YouTube app/site instead —
     // that gives real fullscreen with all native controls.
+    // Use openExternal so the current tab is never navigated away.
     if (isPhone && isYouTube) {
       const id = getYouTubeVideoId(url);
       const watchUrl = id ? `https://www.youtube.com/watch?v=${id}` : url;
-      Linking.openURL(watchUrl);
+      openExternal(watchUrl);
       return;
     }
     const el = playerContainerRef.current;
@@ -206,7 +218,7 @@ export default function NeuroFlowVideoPlayer({
 
   if (Platform.OS !== 'web') {
     return (
-      <Pressable onPress={() => Linking.openURL(downloadUrl)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
+      <Pressable onPress={() => openExternal(downloadUrl)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
         <Text style={styles.downloadIcon}>▶️</Text>
         <View>
           <Text style={styles.downloadLabel}>Download in Google Drive</Text>
@@ -290,7 +302,7 @@ export default function NeuroFlowVideoPlayer({
       </View>
 
       {showOpenButton && (
-        <Pressable onPress={() => Linking.openURL(downloadUrl)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
+        <Pressable onPress={() => openExternal(downloadUrl)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
           <Text style={{ fontSize: 16 }}>📥</Text>
           <Text style={styles.downloadBtnFullText}>Download in Google Drive</Text>
         </Pressable>
