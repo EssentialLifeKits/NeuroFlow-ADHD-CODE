@@ -58,9 +58,6 @@ function getGoogleDriveFileId(url: string): string | null {
 function getVideoDownloadUrl(url: string): string {
   if (!url.includes('drive.google.com')) return url;
   const id = getGoogleDriveFileId(url);
-  // Google Drive's direct download endpoint shows a virus-scan warning for
-  // large public videos. Open the Drive file page instead so users get Drive's
-  // native download flow without the scary error-looking interstitial.
   return id ? `https://drive.google.com/file/d/${id}/view?usp=sharing` : url;
 }
 
@@ -80,7 +77,7 @@ export default function NeuroFlowVideoPlayer({
   const playerContainerRef = useRef<any>(null);
   const { width } = useWindowDimensions();
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(true); // toggled by X close button
+  const [isLoaded, setIsLoaded] = useState(true);
 
   const isYouTube = isYouTubeUrl(url);
   const isDriveLink = url.includes('drive.google.com');
@@ -89,17 +86,34 @@ export default function NeuroFlowVideoPlayer({
     : isDriveLink
     ? getGoogleDriveEmbedUrl(url)
     : url;
-  // Use explicit download URL if provided (e.g. Google Drive link when player URL is YouTube).
-  // Normalize Drive links so pasted share/direct links behave consistently.
   const downloadUrl = getVideoDownloadUrl(explicitDownloadUrl ?? url);
-  // Native <video> only for direct mp4/mov/webm — YouTube and Drive use iframe
   const shouldUseNativeVideo = isDirectVideoUrl(url) && !isDriveLink && !isYouTube;
   const isPhone = width <= 480;
-
-  // Mobile: full width, 16:9 height. Desktop: unchanged at 320px tall.
   const playerHeight = isPhone ? Math.round(Math.min(width, 560) * 9 / 16) : 320;
 
-  // Stop ALL playback — works for both iframe (set src to about:blank) and native video.
+  // ── youtube:// deep-link href ─────────────────────────────────────────────
+  // On iOS every browser (Safari, Chrome, Firefox…) is built on WKWebView.
+  // When the USER taps a real <a href="youtube://…"> link — as opposed to any
+  // programmatic navigation — WKWebView passes the custom scheme to iOS BEFORE
+  // the browser navigates the current page.  iOS opens the YouTube app and the
+  // browser tab never moves.  This is identical to tapping a YouTube link
+  // inside the Notes app: Notes stays open, YouTube appears on top, and the
+  // iOS back button (‹ Chrome / ‹ Notes) returns cleanly.
+  //
+  // Programmatic approaches (window.location.href, window.open, hidden iframe)
+  // all tell the browser to "navigate", which blanks the tab before iOS can
+  // intercept — so none of them work.  A real <a> click is the only reliable
+  // path.
+  //
+  // We only generate this href on web + mobile.  Desktop has no YouTube app,
+  // so the button falls back to opening youtube.com in a new tab.
+  const youtubeVideoId = isYouTube ? getYouTubeVideoId(url) : null;
+  const youtubeAppHref =
+    Platform.OS === 'web' && isPhone && youtubeVideoId
+      ? `youtube://watch?v=${youtubeVideoId}`
+      : null;
+
+  // Stop ALL playback — works for both iframe and native video.
   const stopPlayback = useCallback(() => {
     if (iframeRef.current) {
       try { iframeRef.current.src = 'about:blank'; } catch {}
@@ -124,12 +138,10 @@ export default function NeuroFlowVideoPlayer({
   // 3) PAUSE/STOP when the browser tab/page becomes hidden.
   // For YouTube iframes we send a postMessage pause instead of blanking src —
   // this way returning to the app shows the paused player rather than a blank screen.
-  // pagehide still fully stops (page is being unloaded anyway).
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const onVisibility = () => {
       if (!document.hidden) return;
-      // Gentle pause for YouTube so the player survives tab/app switching.
       if (iframeRef.current?.contentWindow && isYouTube) {
         try {
           iframeRef.current.contentWindow.postMessage(
@@ -171,55 +183,11 @@ export default function NeuroFlowVideoPlayer({
     };
   }, []);
 
-  // Open a YouTube URL in the YouTube app without navigating the current browser
-  // tab — works in both Safari and Chrome on iOS.
-  //
-  // The trick: fire the youtube:// scheme from a HIDDEN IFRAME, not from the
-  // main page. The iframe navigation never changes the main page's URL or
-  // unloads its JavaScript, so the app and session stay fully intact.
-  // iOS intercepts the custom scheme at the OS level (WKWebView underneath
-  // every iOS browser) and opens the YouTube app regardless of whether the
-  // navigation originated from the main frame or an iframe.
-  //
-  // Fallback: if the YouTube app is not installed, the iframe navigation fails
-  // silently and document never becomes hidden. After 1 s we open the https
-  // web URL in a new tab instead (app tab still untouched).
-  //
-  // All other URLs (Drive, etc.) → window.open(_blank), new tab only.
-  // Native → Linking.openURL, correct on iOS/Android native.
+  // Open Drive / non-YouTube external URLs in a new tab (app tab untouched).
+  // For YouTube on mobile we use <a href="youtube://…"> rendered in JSX instead
+  // of any programmatic navigation — see youtubeAppHref above.
   const openExternal = (externalUrl: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (isYouTubeUrl(externalUrl)) {
-        const id = getYouTubeVideoId(externalUrl);
-        if (id) {
-          let appOpened = false;
-          const onVisibility = () => { if (document.hidden) appOpened = true; };
-          document.addEventListener('visibilitychange', onVisibility);
-
-          // Hidden off-screen iframe — triggers the scheme without touching
-          // the main page URL in Safari or Chrome.
-          const iframe = document.createElement('iframe');
-          iframe.style.cssText =
-            'position:absolute;width:1px;height:1px;top:-9999px;left:-9999px;border:none;opacity:0;';
-          iframe.src = `youtube://watch?v=${id}`;
-          document.body.appendChild(iframe);
-
-          setTimeout(() => {
-            document.removeEventListener('visibilitychange', onVisibility);
-            try { document.body.removeChild(iframe); } catch {}
-            if (!appOpened) {
-              // YouTube app not installed — open web URL in a new tab.
-              window.open(
-                `https://www.youtube.com/watch?v=${id}`,
-                '_blank',
-                'noopener,noreferrer',
-              );
-            }
-          }, 1000);
-          return;
-        }
-      }
-      // Non-YouTube (Drive, etc.) — new tab, app tab stays untouched.
       window.open(externalUrl, '_blank', 'noopener,noreferrer');
     } else {
       Linking.openURL(externalUrl);
@@ -227,16 +195,10 @@ export default function NeuroFlowVideoPlayer({
   };
 
   const openFullscreen = () => {
-    // iOS does not support requestFullscreen() on divs or cross-origin iframes.
-    // On mobile with a YouTube video, open the YouTube app/site instead —
-    // that gives real fullscreen with all native controls.
-    // Use openExternal so the current tab is never navigated away.
-    if (isPhone && isYouTube) {
-      const id = getYouTubeVideoId(url);
-      const watchUrl = id ? `https://www.youtube.com/watch?v=${id}` : url;
-      openExternal(watchUrl);
-      return;
-    }
+    // On desktop, use the Fullscreen API.
+    // On mobile with YouTube the toolbar button is rendered as an <a> link
+    // (see youtubeAppHref), so this code path is only reached for non-YouTube
+    // or non-phone cases.
     const el = playerContainerRef.current;
     if (!el) return;
     if (el.requestFullscreen) el.requestFullscreen();
@@ -249,20 +211,13 @@ export default function NeuroFlowVideoPlayer({
     else if ((document as any).webkitExitFullscreen) (document as any).webkitExitFullscreen();
   };
 
-  // X close button: stop playback and show "Tap to play again" placeholder.
-  const closeAndStop = () => {
-    stopPlayback();
-    setIsLoaded(false);
-  };
+  const closeAndStop = () => { stopPlayback(); setIsLoaded(false); };
+  const reload = () => { setIsLoaded(true); };
 
-  // Replay placeholder click: reload the iframe/video.
-  const reload = () => {
-    setIsLoaded(true);
-  };
-
+  // ── Native (non-web) fallback ─────────────────────────────────────────────
   if (Platform.OS !== 'web') {
     return (
-      <Pressable onPress={() => openExternal(downloadUrl)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
+      <Pressable onPress={() => Linking.openURL(downloadUrl)} style={[styles.downloadBtn, { backgroundColor: accentColor }]}>
         <Text style={styles.downloadIcon}>▶️</Text>
         <View>
           <Text style={styles.downloadLabel}>Download in Google Drive</Text>
@@ -272,13 +227,53 @@ export default function NeuroFlowVideoPlayer({
     );
   }
 
+  // ── Shared anchor style for the YouTube-app button ────────────────────────
+  // Rendered as a real <a> so iOS intercepts the youtube:// scheme before the
+  // browser navigates — preserving the current tab and session.
+  const ytAnchorStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingTop: 14,
+    paddingBottom: 14,
+    borderRadius: radius.lg,
+    marginTop: 2,
+    backgroundColor: accentColor,
+    textDecoration: 'none',
+    cursor: 'pointer',
+  };
+
   return (
     <View style={styles.wrap}>
       <View style={styles.toolbar}>
         <Text style={styles.toolbarLabel}>▶ Video Player</Text>
-        <Pressable onPress={openFullscreen} style={[styles.toolbarBtn, { borderColor: accentColor }]}>
-          <Text style={[styles.toolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
-        </Pressable>
+
+        {/* On mobile + YouTube: real <a> link so iOS intercepts without page nav.
+            On desktop or non-YouTube: Pressable calling requestFullscreen. */}
+        {youtubeAppHref
+          ? React.createElement(
+              'a',
+              {
+                href: youtubeAppHref,
+                style: {
+                  display: 'flex', flexDirection: 'row', alignItems: 'center',
+                  gap: 5, paddingLeft: 14, paddingRight: 14, paddingTop: 7, paddingBottom: 7,
+                  borderRadius: radius.full, border: `1.5px solid ${accentColor}`,
+                  textDecoration: 'none', color: accentColor,
+                  fontSize: 12, fontWeight: '700', fontFamily: 'Inter, sans-serif',
+                  cursor: 'pointer',
+                },
+              },
+              '⛶ Full Screen',
+            )
+          : (
+            <Pressable onPress={openFullscreen} style={[styles.toolbarBtn, { borderColor: accentColor }]}>
+              <Text style={[styles.toolbarBtnText, { color: accentColor }]}>⛶ Full Screen</Text>
+            </Pressable>
+          )
+        }
       </View>
 
       <View style={[styles.frame, styles.videoFrame, { height: playerHeight, alignSelf: 'stretch' }]}>
@@ -324,15 +319,6 @@ export default function NeuroFlowVideoPlayer({
                 frameBorder: 0,
                 allow: 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen',
                 allowFullScreen: true,
-                // sandbox blocks the iframe from navigating the parent browser tab.
-                // Without this, YouTube's "Watch on YouTube" button navigates the parent
-                // to youtube.com, iOS intercepts it to open the YouTube app, and the
-                // browser tab is left at about:blank with no way back.
-                // allow-popups lets YouTube open share/subscribe flows in a new tab.
-                // allow-popups-to-escape-sandbox ensures those popups work normally.
-                // allow-presentation enables the Fullscreen API inside the iframe.
-                // Omitting allow-top-navigation / allow-top-navigation-by-user-activation
-                // is what prevents the parent-tab hijack.
                 sandbox: 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation allow-forms',
                 title,
                 style: { width: '100%', height: '100%', border: 'none', backgroundColor: '#000' },
@@ -346,10 +332,26 @@ export default function NeuroFlowVideoPlayer({
       </View>
 
       {showOpenButton && (
-        <Pressable onPress={() => openExternal(downloadUrl)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
-          <Text style={{ fontSize: 16 }}>📥</Text>
-          <Text style={styles.downloadBtnFullText}>Download in Google Drive</Text>
-        </Pressable>
+        // On mobile + YouTube: real <a href="youtube://…"> so iOS intercepts the
+        // tap before Chrome navigates — tab stays on the app, session preserved.
+        // On desktop or non-YouTube: Pressable + window.open in a new tab.
+        youtubeAppHref
+          ? React.createElement(
+              'a',
+              { href: youtubeAppHref, style: ytAnchorStyle },
+              React.createElement('span', { style: { fontSize: 16 } }, '▶️'),
+              React.createElement(
+                'span',
+                { style: { fontSize: 15, fontWeight: '800', color: '#fff', fontFamily: 'Inter, sans-serif' } },
+                'Watch in YouTube App',
+              ),
+            )
+          : (
+            <Pressable onPress={() => openExternal(downloadUrl)} style={[styles.downloadBtnFull, { backgroundColor: accentColor }]}>
+              <Text style={{ fontSize: 16 }}>📥</Text>
+              <Text style={styles.downloadBtnFullText}>Download in Google Drive</Text>
+            </Pressable>
+          )
       )}
     </View>
   );
