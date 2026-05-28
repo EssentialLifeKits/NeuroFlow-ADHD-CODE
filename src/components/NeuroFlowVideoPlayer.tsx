@@ -171,12 +171,27 @@ export default function NeuroFlowVideoPlayer({
     };
   }, []);
 
-  // Open an external URL without navigating the current tab away.
-  // On web we use window.open(_blank) so the app tab is never replaced.
-  // On native Linking.openURL is correct (it switches to a different app).
+  // Open an external URL without stranding the user on a blank screen.
+  //
+  // YouTube URLs  → window.location.href
+  //   iOS Universal Links intercepts the navigation and opens the YouTube app
+  //   BEFORE Safari actually leaves the current page. The app tab stays on
+  //   NeuroFlow. When the user comes back to Safari they see the app, not a
+  //   blank tab. (If YouTube app isn't installed Safari navigates to youtube.com
+  //   and the user can tap the browser back-button to return.)
+  //
+  // All other URLs (Drive, etc.) → window.open(_blank)
+  //   Opens in a new tab so the app tab is never disturbed.
+  //
+  // Native → Linking.openURL is correct; it hands off to the OS without
+  //   touching the current screen.
   const openExternal = (externalUrl: string) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open(externalUrl, '_blank', 'noopener,noreferrer');
+      if (isYouTubeUrl(externalUrl)) {
+        window.location.href = externalUrl;
+      } else {
+        window.open(externalUrl, '_blank', 'noopener,noreferrer');
+      }
     } else {
       Linking.openURL(externalUrl);
     }
