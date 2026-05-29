@@ -565,7 +565,7 @@ export default function LoginScreen() {
             {/* Card brand row — G-Logic auth-logo: logo 28px + gradient brand name */}
             <View style={styles.cardBrand}>
               <Image source={require('../../assets/neuroflow-logo.png')} style={styles.cardLogo} />
-              <GradientText style={styles.cardBrandText}>NeuroFlow</GradientText>
+              <GradientText style={styles.cardBrandText}>NeuroFlow ADHD</GradientText>
             </View>
 
             {/* Error / message */}

@@ -43,7 +43,7 @@ export default function PaywallScreen() {
         <View style={styles.brandRow}>
           <Image source={require('../../assets/neuroflow-logo.png')} style={styles.logo} />
           <View>
-            <Text style={styles.brand}>NeuroFlow+</Text>
+            <Text style={styles.brand}>NeuroFlow Pro</Text>
             <Text style={styles.subBrand}>by Essential Life Kits</Text>
           </View>
         </View>
@@ -55,7 +55,7 @@ export default function PaywallScreen() {
               Unlock your focus dashboard.
             </Text>
             <Text style={styles.body}>
-              NeuroFlow+ gives you the Dashboard, Calendar, Hyperfocus Lotus, smart reminders,
+              NeuroFlow Pro gives you the Dashboard, Calendar, Hyperfocus Lotus, smart reminders,
               downloadable videos, audio, PDFs, and focus resources in one private workspace.
             </Text>
 
@@ -67,7 +67,7 @@ export default function PaywallScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.planName}>NeuroFlow+</Text>
+            <Text style={styles.planName}>NeuroFlow Pro</Text>
             <View style={styles.priceRow}>
               <Text style={styles.price}>$9.99</Text>
               <Text style={styles.interval}>/ month</Text>
