@@ -1848,19 +1848,39 @@ function CTACardSection({
   settings: Record<string, string>;
   onSave: (key: string, value: string) => Promise<void>;
 }) {
-  const [icon,        setIcon]        = useState(settings['cta_icon']        ?? '🚀');
-  const [title,       setTitle]       = useState(settings['cta_title']       ?? 'Supercharge Routine');
-  const [desc,        setDesc]        = useState(settings['cta_desc']        ?? 'Stop leaving focus on the table. Automate your daily routines and ADHD strategy inside one view.');
-  const [btnText,     setBtnText]     = useState(settings['cta_button_text'] ?? 'Explore Automations');
-  const [btnColor,    setBtnColor]    = useState(settings['cta_button_color']?? '#4A90E2');
-  const [link,        setLink]        = useState(settings['cta_link']        ?? '/(app)/resources');
-  const [isInternal,  setIsInternal]  = useState((settings['cta_is_internal'] ?? 'true') === 'true');
+  // Saved values ref — for discard (revert to last saved state)
+  const initRef = useRef({
+    enabled:    (settings['cta_enabled']      ?? 'true') !== 'false',
+    icon:       settings['cta_icon']          ?? '🚀',
+    title:      settings['cta_title']         ?? 'Supercharge Routine',
+    desc:       settings['cta_desc']          ?? 'Stop leaving focus on the table. Automate your daily routines and ADHD strategy inside one view.',
+    btnText:    settings['cta_button_text']   ?? 'Explore Automations',
+    btnColor:   settings['cta_button_color']  ?? '#4A90E2',
+    link:       settings['cta_link']          ?? '/(app)/resources',
+    isInternal: (settings['cta_is_internal']  ?? 'true') === 'true',
+  });
+
+  const [enabled,     setEnabled]     = useState(initRef.current.enabled);
+  const [icon,        setIcon]        = useState(initRef.current.icon);
+  const [title,       setTitle]       = useState(initRef.current.title);
+  const [desc,        setDesc]        = useState(initRef.current.desc);
+  const [btnText,     setBtnText]     = useState(initRef.current.btnText);
+  const [btnColor,    setBtnColor]    = useState(initRef.current.btnColor);
+  const [link,        setLink]        = useState(initRef.current.link);
+  const [isInternal,  setIsInternal]  = useState(initRef.current.isInternal);
   const [saving,      setSaving]      = useState(false);
+
+  function discard() {
+    const i = initRef.current;
+    setEnabled(i.enabled); setIcon(i.icon); setTitle(i.title); setDesc(i.desc);
+    setBtnText(i.btnText); setBtnColor(i.btnColor); setLink(i.link); setIsInternal(i.isInternal);
+  }
 
   async function save() {
     setSaving(true);
     try {
       await Promise.all([
+        onSave('cta_enabled',      enabled ? 'true' : 'false'),
         onSave('cta_icon',         icon),
         onSave('cta_title',        title),
         onSave('cta_desc',         desc),
@@ -1869,17 +1889,67 @@ function CTACardSection({
         onSave('cta_link',         link),
         onSave('cta_is_internal',  isInternal ? 'true' : 'false'),
       ]);
+      initRef.current = { enabled, icon, title, desc, btnText, btnColor, link, isInternal };
       Alert.alert('Saved', 'Supercharge Routine card updated.');
     } finally { setSaving(false); }
   }
 
   return (
-    <AccordionCard title="🚀 Supercharge Routine Card" subtitle="The promotional banner on the Dashboard">
+    <AccordionCard title="🚀 Supercharge Routine Card" subtitle="Promotional banner on the Dashboard — live preview updates as you type">
+
+      {/* Visibility toggle */}
+      <View style={s.toggleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.fieldLabel}>SHOW CARD ON DASHBOARD</Text>
+          <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 2 }}>
+            {enabled ? '✅ Card is visible to all users' : '🔒 Card is hidden from users'}
+          </Text>
+        </View>
+        <Switch
+          value={enabled}
+          onValueChange={setEnabled}
+          trackColor={{ false: colors.border, true: NF_GREEN }}
+          thumbColor="#fff"
+        />
+      </View>
+
+      {/* Real-time preview — always visible, updates instantly as you type */}
+      <View style={{ marginBottom: 16 }}>
+        <Text style={[s.fieldLabel, { marginBottom: 8 }]}>
+          LIVE PREVIEW {enabled ? '— visible to users' : '— hidden (toggle on to show)'}
+        </Text>
+        <View style={{
+          borderRadius: 16, borderWidth: 1.5,
+          borderColor: enabled ? NF_BLUE + '44' : colors.border,
+          backgroundColor: '#10142a', padding: 18, overflow: 'hidden', gap: 10, alignItems: 'center',
+          opacity: enabled ? 1 : 0.5,
+        }}>
+          {/* Glow accent */}
+          <View style={{ position: 'absolute', top: -60, right: -30, width: 160, height: 160, backgroundColor: NF_BLUE, opacity: 0.07, borderRadius: 80 }} />
+          <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '800', textAlign: 'center', letterSpacing: -0.5 }}>
+            {icon || '🚀'} {title || 'Supercharge Routine'}
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', lineHeight: 20, maxWidth: 320 }} numberOfLines={4}>
+            {desc || 'Description…'}
+          </Text>
+          <View style={{ backgroundColor: btnColor || '#4A90E2', borderRadius: 24, paddingHorizontal: 22, paddingVertical: 10, marginTop: 4 }}>
+            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>{btnText || 'Explore Automations'}</Text>
+          </View>
+          {link ? (
+            <Text style={{ color: NF_BLUE, fontSize: 10, opacity: 0.8 }} numberOfLines={1}>
+              → {isInternal ? `internal: ${link}` : link}
+            </Text>
+          ) : null}
+          <Text style={{ color: colors.textTertiary, fontSize: 9, letterSpacing: 1 }}>POWERED BY NEUROFLOW</Text>
+        </View>
+      </View>
+
       <Field label="Icon (emoji)" value={icon} onChangeText={setIcon} placeholder="🚀" />
       <Field label="Title" value={title} onChangeText={setTitle} placeholder="Supercharge Routine" />
       <Field label="Description" value={desc} onChangeText={setDesc} multiline placeholder="Stop leaving focus on the table…" />
       <Field label="Button Text" value={btnText} onChangeText={setBtnText} placeholder="Explore Automations" />
-      <Field label="Button Color (hex)" value={btnColor} onChangeText={setBtnColor} placeholder="#4A90E2" />
+      <Field label="Button Color (hex, e.g. #4A90E2)" value={btnColor} onChangeText={setBtnColor} placeholder="#4A90E2" />
+
       <View style={s.fieldWrap}>
         <Text style={s.fieldLabel}>LINK DESTINATION</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1887,13 +1957,13 @@ function CTACardSection({
             onPress={() => setIsInternal(true)}
             style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}
           >
-            <Text style={{ color: isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>Internal Page</Text>
+            <Text style={{ color: isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>📱 Internal Page</Text>
           </Pressable>
           <Pressable
             onPress={() => setIsInternal(false)}
             style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}
           >
-            <Text style={{ color: !isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>External URL</Text>
+            <Text style={{ color: !isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>🔗 External URL</Text>
           </Pressable>
         </View>
         <TextInput
@@ -1909,7 +1979,22 @@ function CTACardSection({
           </Text>
         )}
       </View>
-      <Btn label={saving ? 'Saving…' : '💾 Save CTA Card'} onPress={save} disabled={saving} />
+
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable
+          onPress={discard}
+          style={[s.btn, { flex: 1, borderWidth: 1, borderColor: NF_ORANGE, backgroundColor: 'transparent' }]}
+        >
+          <Text style={{ color: NF_ORANGE, fontWeight: '700', fontSize: 13 }}>↩ Discard</Text>
+        </Pressable>
+        <Pressable
+          onPress={save}
+          disabled={saving}
+          style={[s.btn, { flex: 2, backgroundColor: NF_BLUE, opacity: saving ? 0.65 : 1 }]}
+        >
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{saving ? 'Saving…' : '💾 Save Card'}</Text>
+        </Pressable>
+      </View>
     </AccordionCard>
   );
 }
@@ -1922,13 +2007,29 @@ function AffiliateSection({
   settings: Record<string, string>;
   onSave: (key: string, value: string) => Promise<void>;
 }) {
-  const [visible,  setVisible]  = useState((settings['affiliate_visible'] ?? 'false') === 'true');
-  const [icon,     setIcon]     = useState(settings['affiliate_icon']    ?? '⚡');
-  const [title,    setTitle]    = useState(settings['affiliate_title']   ?? 'Featured Affiliate');
-  const [sub,      setSub]      = useState(settings['affiliate_sub']     ?? 'Supercharge your focus flow');
-  const [link,     setLink]     = useState(settings['affiliate_link']    ?? '');
-  const [badge,    setBadge]    = useState(settings['affiliate_badge']   ?? '');
-  const [saving,   setSaving]   = useState(false);
+  // Saved values ref — for discard
+  const initRef = useRef({
+    visible: (settings['affiliate_visible'] ?? 'false') === 'true',
+    icon:    settings['affiliate_icon']    ?? '⚡',
+    title:   settings['affiliate_title']   ?? 'Featured Affiliate',
+    sub:     settings['affiliate_sub']     ?? 'Supercharge your focus flow',
+    link:    settings['affiliate_link']    ?? '',
+    badge:   settings['affiliate_badge']   ?? '',
+  });
+
+  const [visible, setVisible] = useState(initRef.current.visible);
+  const [icon,    setIcon]    = useState(initRef.current.icon);
+  const [title,   setTitle]   = useState(initRef.current.title);
+  const [sub,     setSub]     = useState(initRef.current.sub);
+  const [link,    setLink]    = useState(initRef.current.link);
+  const [badge,   setBadge]   = useState(initRef.current.badge);
+  const [saving,  setSaving]  = useState(false);
+
+  function discard() {
+    const i = initRef.current;
+    setVisible(i.visible); setIcon(i.icon); setTitle(i.title);
+    setSub(i.sub); setLink(i.link); setBadge(i.badge);
+  }
 
   async function save() {
     setSaving(true);
@@ -1941,18 +2042,20 @@ function AffiliateSection({
         onSave('affiliate_link',    link),
         onSave('affiliate_badge',   badge),
       ]);
+      initRef.current = { visible, icon, title, sub, link, badge };
       Alert.alert('Saved', `Featured Affiliate ${visible ? 'is now visible in the sidebar' : 'is hidden from users'}.`);
     } finally { setSaving(false); }
   }
 
   return (
-    <AccordionCard title="⚡ Featured Affiliate (Sidebar)" subtitle="Affiliate card in the left sidebar — toggle to show/hide from users">
+    <AccordionCard title="⚡ Featured Affiliate (Sidebar)" subtitle="Affiliate card in the left sidebar — live preview updates as you type">
 
+      {/* Visibility toggle */}
       <View style={s.toggleRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.fieldLabel}>SHOW IN SIDEBAR</Text>
           <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 2 }}>
-            {visible ? '✅ Visible to all users' : '🔒 Hidden from users (only you can see it in Admin)'}
+            {visible ? '✅ Visible to all users in the sidebar' : '🔒 Hidden from users — toggle on to show'}
           </Text>
         </View>
         <Switch
@@ -1963,10 +2066,44 @@ function AffiliateSection({
         />
       </View>
 
+      {/* Real-time preview — always visible */}
+      <View style={{ marginBottom: 16 }}>
+        <Text style={[s.fieldLabel, { marginBottom: 8 }]}>
+          LIVE PREVIEW {visible ? '— active in sidebar' : '— toggle on to make visible'}
+        </Text>
+        <View style={{
+          borderRadius: 12, borderWidth: 1.5,
+          borderColor: visible ? NF_BLUE + '55' : colors.border,
+          backgroundColor: '#1a1f30', padding: 14, gap: 6,
+          opacity: visible ? 1 : 0.5,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: NF_BLUE + '22', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 18 }}>{icon || '⚡'}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '800' }}>{title || 'Featured Affiliate'}</Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }} numberOfLines={2}>{sub || 'Supercharge your focus flow'}</Text>
+            </View>
+            {badge ? (
+              <View style={{ backgroundColor: NF_BLUE, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{badge}</Text>
+              </View>
+            ) : null}
+          </View>
+          {link ? (
+            <Text style={{ color: NF_BLUE, fontSize: 10, marginTop: 2 }} numberOfLines={1}>🔗 {link}</Text>
+          ) : (
+            <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2, fontStyle: 'italic' }}>No link set — card will be non-clickable</Text>
+          )}
+        </View>
+        {visible && <Text style={{ color: NF_GREEN, fontSize: 11, marginTop: 6 }}>✅ Saved & live in sidebar for all users.</Text>}
+      </View>
+
       <Field label="Icon (emoji or letter)" value={icon} onChangeText={setIcon} placeholder="⚡" />
       <Field label="Title" value={title} onChangeText={setTitle} placeholder="Featured Affiliate" />
       <Field label="Subtitle / Tagline" value={sub} onChangeText={setSub} placeholder="Supercharge your focus flow" />
-      <Field label="Badge Label (optional, e.g. 'New' or 'Hot')" value={badge} onChangeText={setBadge} placeholder="Soon" />
+      <Field label="Badge Label (optional — e.g. 'New' or 'Hot')" value={badge} onChangeText={setBadge} placeholder="Soon" />
       <View style={s.fieldWrap}>
         <Text style={s.fieldLabel}>AFFILIATE LINK (EXTERNAL ONLY)</Text>
         <TextInput
@@ -1982,39 +2119,22 @@ function AffiliateSection({
           ⚠️ Must be a full external URL. Leave blank to show as non-clickable.
         </Text>
       </View>
-      <Btn label={saving ? 'Saving…' : '💾 Save Affiliate Card'} onPress={save} disabled={saving} />
 
-      {/* Live preview — mirrors what users see in the sidebar */}
-      {visible && (
-        <View style={{ marginTop: 16 }}>
-          <Text style={[s.fieldLabel, { marginBottom: 8 }]}>LIVE PREVIEW (how it looks in the sidebar)</Text>
-          <View style={{
-            borderRadius: 12, borderWidth: 1.5, borderColor: NF_BLUE + '55',
-            backgroundColor: '#1a1f30', padding: 14, gap: 6,
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: NF_BLUE + '22', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 18 }}>{icon || '⚡'}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '800' }}>{title || 'Featured Affiliate'}</Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }} numberOfLines={2}>{sub || 'Supercharge your focus flow'}</Text>
-              </View>
-              {badge ? (
-                <View style={{ backgroundColor: NF_BLUE, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-                  <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{badge}</Text>
-                </View>
-              ) : null}
-            </View>
-            {link ? (
-              <Text style={{ color: NF_BLUE, fontSize: 10, marginTop: 2 }} numberOfLines={1}>🔗 {link}</Text>
-            ) : (
-              <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2, fontStyle: 'italic' }}>No link set — card will be non-clickable</Text>
-            )}
-          </View>
-          <Text style={{ color: NF_GREEN, fontSize: 11, marginTop: 6 }}>✅ This card is currently visible in the sidebar for all users.</Text>
-        </View>
-      )}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable
+          onPress={discard}
+          style={[s.btn, { flex: 1, borderWidth: 1, borderColor: NF_ORANGE, backgroundColor: 'transparent' }]}
+        >
+          <Text style={{ color: NF_ORANGE, fontWeight: '700', fontSize: 13 }}>↩ Discard</Text>
+        </Pressable>
+        <Pressable
+          onPress={save}
+          disabled={saving}
+          style={[s.btn, { flex: 2, backgroundColor: NF_BLUE, opacity: saving ? 0.65 : 1 }]}
+        >
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{saving ? 'Saving…' : '💾 Save Affiliate Card'}</Text>
+        </Pressable>
+      </View>
     </AccordionCard>
   );
 }
@@ -2027,15 +2147,29 @@ function CalendarCTASection({
   settings: Record<string, string>;
   onSave: (key: string, value: string) => Promise<void>;
 }) {
-  const [enabled,   setEnabled]   = useState((settings['cal_cta_enabled'] ?? 'true') !== 'false');
-  const [title,     setTitle]     = useState(settings['cal_cta_title']     ?? '🚀 Automate Your ADHD Workflow');
-  const [sub,       setSub]       = useState(settings['cal_cta_sub']       ?? 'Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.');
-  const [btnLabel,  setBtnLabel]  = useState(settings['cal_cta_btn_label'] ?? 'Try Free');
-  const [link,      setLink]      = useState(settings['cal_cta_link']      ?? '');
-  const [linkType,  setLinkType]  = useState<'external' | 'internal' | 'none'>(
-    (settings['cal_cta_link_type'] as any) ?? 'external'
-  );
-  const [saving,    setSaving]    = useState(false);
+  // Saved values ref — for discard
+  const initRef = useRef({
+    enabled:  (settings['cal_cta_enabled']    ?? 'true') !== 'false',
+    title:    settings['cal_cta_title']        ?? '🚀 Automate Your ADHD Workflow',
+    sub:      settings['cal_cta_sub']          ?? 'Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.',
+    btnLabel: settings['cal_cta_btn_label']    ?? 'Try Free',
+    link:     settings['cal_cta_link']         ?? '/(app)/resources',
+    linkType: (settings['cal_cta_link_type']   ?? 'internal') as 'external' | 'internal' | 'none',
+  });
+
+  const [enabled,  setEnabled]  = useState(initRef.current.enabled);
+  const [title,    setTitle]    = useState(initRef.current.title);
+  const [sub,      setSub]      = useState(initRef.current.sub);
+  const [btnLabel, setBtnLabel] = useState(initRef.current.btnLabel);
+  const [link,     setLink]     = useState(initRef.current.link);
+  const [linkType, setLinkType] = useState<'external' | 'internal' | 'none'>(initRef.current.linkType);
+  const [saving,   setSaving]   = useState(false);
+
+  function discard() {
+    const i = initRef.current;
+    setEnabled(i.enabled); setTitle(i.title); setSub(i.sub);
+    setBtnLabel(i.btnLabel); setLink(i.link); setLinkType(i.linkType);
+  }
 
   async function save() {
     setSaving(true);
@@ -2048,14 +2182,15 @@ function CalendarCTASection({
         onSave('cal_cta_link',       link),
         onSave('cal_cta_link_type',  linkType),
       ]);
+      initRef.current = { enabled, title, sub, btnLabel, link, linkType };
       Alert.alert('Saved', `Calendar CTA banner ${enabled ? 'is now visible' : 'is hidden'}.`);
     } finally { setSaving(false); }
   }
 
   return (
-    <AccordionCard title="📅 Calendar CTA Banner" subtitle="Promotional banner shown at the bottom of the Calendar page">
+    <AccordionCard title="📅 Calendar CTA Banner" subtitle="Promotional banner at the bottom of the Calendar page — live preview updates as you type">
 
-      {/* Enabled toggle */}
+      {/* Visibility toggle */}
       <View style={s.toggleRow}>
         <View style={{ flex: 1 }}>
           <Text style={s.fieldLabel}>SHOW BANNER ON CALENDAR PAGE</Text>
@@ -2071,6 +2206,31 @@ function CalendarCTASection({
         />
       </View>
 
+      {/* Real-time preview — always visible */}
+      <View style={{ marginBottom: 16 }}>
+        <Text style={[s.fieldLabel, { marginBottom: 8 }]}>
+          LIVE PREVIEW {enabled ? '— visible on Calendar page' : '— hidden (toggle on to show)'}
+        </Text>
+        <View style={{
+          borderRadius: 14, borderWidth: 1.5,
+          borderColor: enabled ? NF_BLUE + '44' : colors.border,
+          backgroundColor: '#10142a', padding: 18, overflow: 'hidden', gap: 8, alignItems: 'center',
+          opacity: enabled ? 1 : 0.5,
+        }}>
+          <View style={{ position: 'absolute', top: -60, right: -30, width: 160, height: 160, backgroundColor: NF_BLUE, opacity: 0.06, borderRadius: 80 }} />
+          <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '800', textAlign: 'center' }}>{title || '🚀 Automate Your ADHD Workflow'}</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'center', lineHeight: 18 }} numberOfLines={3}>{sub || 'Supporting copy…'}</Text>
+          <View style={{ backgroundColor: NF_BLUE, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 }}>
+            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{btnLabel || 'Try Free'}</Text>
+          </View>
+          {link && linkType !== 'none' && (
+            <Text style={{ color: NF_BLUE, fontSize: 10 }} numberOfLines={1}>
+              → {linkType === 'internal' ? `internal: ${link}` : link}
+            </Text>
+          )}
+        </View>
+      </View>
+
       <Field label="Banner Title" value={title} onChangeText={setTitle} placeholder="🚀 Automate Your ADHD Workflow" />
       <Field label="Subtitle / Description" value={sub} onChangeText={setSub} placeholder="Supporting copy…" />
       <Field label="Button Label" value={btnLabel} onChangeText={setBtnLabel} placeholder="Try Free" />
@@ -2078,8 +2238,8 @@ function CalendarCTASection({
       {/* Link type selector */}
       <View style={s.fieldWrap}>
         <Text style={s.fieldLabel}>LINK TYPE</Text>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-          {(['external', 'internal', 'none'] as const).map(t => (
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+          {(['internal', 'external', 'none'] as const).map(t => (
             <Pressable
               key={t}
               onPress={() => setLinkType(t)}
@@ -2096,47 +2256,35 @@ function CalendarCTASection({
             </Pressable>
           ))}
         </View>
-        {linkType === 'external' && (
-          <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 4 }}>External URLs open in the browser (affiliate links, landing pages, etc.)</Text>
-        )}
-        {linkType === 'internal' && (
-          <Text style={{ fontSize: 10, color: NF_BLUE, marginTop: 4 }}>Internal routes: e.g. <Text style={{ fontWeight: '700' }}>/(app)/resources</Text> or <Text style={{ fontWeight: '700' }}>/(app)/focus</Text></Text>
-        )}
-        {linkType === 'none' && (
-          <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 4 }}>Banner is decorative — button press does nothing.</Text>
-        )}
+        {linkType === 'internal' && <Text style={{ fontSize: 10, color: NF_BLUE, marginTop: 4 }}>e.g. /(app)/resources · /(app)/focus · /(app)/calendar</Text>}
+        {linkType === 'external' && <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 4 }}>Full external URL — opens in browser (affiliate links, landing pages, etc.)</Text>}
+        {linkType === 'none'     && <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 4 }}>Banner is decorative — button press does nothing.</Text>}
       </View>
 
       {linkType !== 'none' && (
         <Field
-          label={linkType === 'external' ? 'URL (full https:// link)' : 'Internal Route (e.g. /(app)/focus)'}
+          label={linkType === 'external' ? 'URL (full https:// link)' : 'Internal Route'}
           value={link}
           onChangeText={setLink}
           placeholder={linkType === 'external' ? 'https://your-affiliate-link.com' : '/(app)/resources'}
         />
       )}
 
-      {/* Live preview */}
-      {enabled && (
-        <View style={{ marginTop: 12 }}>
-          <Text style={[s.fieldLabel, { marginBottom: 8 }]}>LIVE PREVIEW</Text>
-          <View style={{
-            borderRadius: 14, borderWidth: 1, borderColor: NF_BLUE + '33',
-            backgroundColor: '#161c2e', padding: 16, overflow: 'hidden', gap: 8, alignItems: 'center',
-          }}>
-            <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '800', textAlign: 'center' }}>{title || '🚀 Automate Your ADHD Workflow'}</Text>
-            <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'center', lineHeight: 18 }} numberOfLines={3}>{sub || 'Supporting copy…'}</Text>
-            <View style={{ backgroundColor: NF_BLUE, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 }}>
-              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{btnLabel || 'Try Free'}</Text>
-            </View>
-            {link && linkType !== 'none' && (
-              <Text style={{ color: NF_BLUE, fontSize: 10 }} numberOfLines={1}>→ {link}</Text>
-            )}
-          </View>
-        </View>
-      )}
-
-      <Btn label={saving ? 'Saving…' : '💾 Save Banner Settings'} onPress={save} disabled={saving} />
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable
+          onPress={discard}
+          style={[s.btn, { flex: 1, borderWidth: 1, borderColor: NF_ORANGE, backgroundColor: 'transparent' }]}
+        >
+          <Text style={{ color: NF_ORANGE, fontWeight: '700', fontSize: 13 }}>↩ Discard</Text>
+        </Pressable>
+        <Pressable
+          onPress={save}
+          disabled={saving}
+          style={[s.btn, { flex: 2, backgroundColor: NF_BLUE, opacity: saving ? 0.65 : 1 }]}
+        >
+          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{saving ? 'Saving…' : '💾 Save Banner'}</Text>
+        </Pressable>
+      </View>
     </AccordionCard>
   );
 }

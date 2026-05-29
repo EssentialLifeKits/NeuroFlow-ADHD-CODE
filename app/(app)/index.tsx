@@ -292,6 +292,7 @@ export default function DashboardScreen() {
   const [howToVisible, setHowToVisible] = useState(false);
 
   // Supercharge Routine CTA card — dynamic from DB
+  const [ctaEnabled,  setCtaEnabled]  = useState(true);
   const [ctaIcon,    setCtaIcon]    = useState('🚀');
   const [ctaTitle,   setCtaTitle]   = useState('Supercharge Routine');
   const [ctaDesc,    setCtaDesc]    = useState('Stop leaving focus on the table. Automate your daily routines and ADHD strategy inside one view.');
@@ -305,6 +306,7 @@ export default function DashboardScreen() {
     getSetting('howto_download_url').then(v => { if (v) setHowToDownloadUrl(v); }).catch(() => {});
     getSetting('howto_video_title').then(v => { if (v) setHowToTitle(v); }).catch(() => {});
     getSetting('howto_video_desc').then(v => { if (v) setHowToDesc(v); }).catch(() => {});
+    getSetting('cta_enabled').then(v => { if (v !== null && v !== undefined) setCtaEnabled(v !== 'false'); }).catch(() => {});
     getSetting('cta_icon').then(v => { if (v) setCtaIcon(v); }).catch(() => {});
     getSetting('cta_title').then(v => { if (v) setCtaTitle(v); }).catch(() => {});
     getSetting('cta_desc').then(v => { if (v) setCtaDesc(v); }).catch(() => {});
@@ -563,8 +565,8 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* ── Affiliate CTA — horizontal banner on desktop ── */}
-        <Animated.View style={[
+        {/* ── Affiliate CTA — horizontal banner on desktop (admin-toggleable) ── */}
+        {ctaEnabled && <Animated.View style={[
           styles.ctaCard,
           isDesktop && styles.ctaCardDesktop,
           { opacity: ctaOpacity, transform: [{ translateY: ctaTranslateY }] },
@@ -588,7 +590,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <Text style={styles.ctaSub}>POWERED BY NEUROFLOW</Text>
           </View>
-        </Animated.View>
+        </Animated.View>}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
