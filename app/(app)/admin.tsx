@@ -1870,6 +1870,14 @@ function CTACardSection({
   const [isInternal,  setIsInternal]  = useState(initRef.current.isInternal);
   const [saving,      setSaving]      = useState(false);
 
+  // On mount: clear link if saved mode and saved value don't match
+  // (e.g. external mode was saved but link still has an internal path, or vice versa)
+  useEffect(() => {
+    const { isInternal: i, link: l } = initRef.current;
+    if (!i && l.startsWith('/')) { setLink(''); initRef.current = { ...initRef.current, link: '' }; }
+    if (i && (l.startsWith('http://') || l.startsWith('https://'))) { setLink(''); initRef.current = { ...initRef.current, link: '' }; }
+  }, []);
+
   function discard() {
     const i = initRef.current;
     setEnabled(i.enabled); setIcon(i.icon); setTitle(i.title); setDesc(i.desc);
@@ -2028,6 +2036,13 @@ function AffiliateSection({
   const [isInternal, setIsInternal] = useState(initRef.current.isInternal);
   const [saving,     setSaving]     = useState(false);
 
+  // On mount: clear link if saved mode and saved value are inconsistent
+  useEffect(() => {
+    const { isInternal: i, link: l } = initRef.current;
+    if (!i && l.startsWith('/')) { setLink(''); initRef.current = { ...initRef.current, link: '' }; }
+    if (i && (l.startsWith('http://') || l.startsWith('https://'))) { setLink(''); initRef.current = { ...initRef.current, link: '' }; }
+  }, []);
+
   function discard() {
     const i = initRef.current;
     setVisible(i.visible); setIcon(i.icon); setTitle(i.title);
@@ -2157,6 +2172,13 @@ function CalendarCTASection({
   const [link,       setLink]       = useState(initRef.current.link);
   const [isInternal, setIsInternal] = useState(initRef.current.isInternal);
   const [saving,     setSaving]     = useState(false);
+
+  // On mount: clear link if saved mode and saved value are inconsistent
+  useEffect(() => {
+    const { isInternal: i, link: l } = initRef.current;
+    if (!i && l.startsWith('/')) { setLink(''); initRef.current = { ...initRef.current, link: '' }; }
+    if (i && (l.startsWith('http://') || l.startsWith('https://'))) { setLink(''); initRef.current = { ...initRef.current, link: '' }; }
+  }, []);
 
   function discard() {
     const i = initRef.current;
