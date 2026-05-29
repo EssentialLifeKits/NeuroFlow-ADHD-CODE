@@ -340,21 +340,21 @@ export default function CalendarScreen() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Calendar CTA Banner settings (admin-editable) ──────────────────────────
-  const [ctaEnabled,   setCtaEnabled]   = useState(true);
-  const [ctaTitle,     setCtaTitle]     = useState('🚀 Automate Your ADHD Workflow');
-  const [ctaSub,       setCtaSub]       = useState('Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.');
-  const [ctaBtnLabel,  setCtaBtnLabel]  = useState('Try Free');
-  const [ctaLink,      setCtaLink]      = useState('');
-  const [ctaLinkType,  setCtaLinkType]  = useState<'external' | 'internal' | 'none'>('external');
+  const [ctaEnabled,    setCtaEnabled]    = useState(true);
+  const [ctaTitle,      setCtaTitle]      = useState('🚀 Automate Your ADHD Workflow');
+  const [ctaSub,        setCtaSub]        = useState('Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.');
+  const [ctaBtnLabel,   setCtaBtnLabel]   = useState('Try Free');
+  const [ctaLink,       setCtaLink]       = useState('/(app)/resources');
+  const [ctaIsInternal, setCtaIsInternal] = useState(true);
 
   useEffect(() => {
     getAllSettings().then(s => {
-      if (s['cal_cta_enabled'] !== undefined) setCtaEnabled(s['cal_cta_enabled'] !== 'false');
-      if (s['cal_cta_title'])     setCtaTitle(s['cal_cta_title']);
-      if (s['cal_cta_sub'])       setCtaSub(s['cal_cta_sub']);
-      if (s['cal_cta_btn_label']) setCtaBtnLabel(s['cal_cta_btn_label']);
-      if (s['cal_cta_link'])      setCtaLink(s['cal_cta_link']);
-      if (s['cal_cta_link_type']) setCtaLinkType(s['cal_cta_link_type'] as any);
+      if (s['cal_cta_enabled']     !== undefined) setCtaEnabled(s['cal_cta_enabled'] !== 'false');
+      if (s['cal_cta_title'])      setCtaTitle(s['cal_cta_title']);
+      if (s['cal_cta_sub'])        setCtaSub(s['cal_cta_sub']);
+      if (s['cal_cta_btn_label'])  setCtaBtnLabel(s['cal_cta_btn_label']);
+      if (s['cal_cta_link'])       setCtaLink(s['cal_cta_link']);
+      if (s['cal_cta_is_internal'] !== undefined) setCtaIsInternal(s['cal_cta_is_internal'] !== 'false');
     }).catch(() => {});
   }, []);
 
@@ -581,8 +581,8 @@ export default function CalendarScreen() {
 
   // ── Calendar CTA Banner (admin-controlled) ───────────────────────────────
   const handleCtaPress = () => {
-    if (!ctaLink || ctaLinkType === 'none') return;
-    if (ctaLinkType === 'internal') {
+    if (!ctaLink) return;
+    if (ctaIsInternal) {
       router.push(ctaLink as any);
     } else {
       Linking.openURL(ctaLink).catch(() => {});
@@ -592,7 +592,7 @@ export default function CalendarScreen() {
   const AffiliateCTA = ctaEnabled ? (
     <TouchableOpacity
       style={[s.cta, isDesktop && s.ctaDesktop]}
-      activeOpacity={ctaLinkType !== 'none' && ctaLink ? 0.85 : 1}
+      activeOpacity={ctaLink ? 0.85 : 1}
       onPress={handleCtaPress}
     >
       <View style={s.ctaGlow} />

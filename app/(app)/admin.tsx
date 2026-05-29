@@ -2009,40 +2009,43 @@ function AffiliateSection({
 }) {
   // Saved values ref — for discard
   const initRef = useRef({
-    visible: (settings['affiliate_visible'] ?? 'false') === 'true',
-    icon:    settings['affiliate_icon']    ?? '⚡',
-    title:   settings['affiliate_title']   ?? 'Featured Affiliate',
-    sub:     settings['affiliate_sub']     ?? 'Supercharge your focus flow',
-    link:    settings['affiliate_link']    ?? '',
-    badge:   settings['affiliate_badge']   ?? '',
+    visible:    (settings['affiliate_visible']     ?? 'false') === 'true',
+    icon:       settings['affiliate_icon']         ?? '⚡',
+    title:      settings['affiliate_title']        ?? 'Featured Affiliate',
+    sub:        settings['affiliate_sub']          ?? 'Supercharge your focus flow',
+    link:       settings['affiliate_link']         ?? '',
+    badge:      settings['affiliate_badge']        ?? '',
+    isInternal: (settings['affiliate_is_internal'] ?? 'false') === 'true',
   });
 
-  const [visible, setVisible] = useState(initRef.current.visible);
-  const [icon,    setIcon]    = useState(initRef.current.icon);
-  const [title,   setTitle]   = useState(initRef.current.title);
-  const [sub,     setSub]     = useState(initRef.current.sub);
-  const [link,    setLink]    = useState(initRef.current.link);
-  const [badge,   setBadge]   = useState(initRef.current.badge);
-  const [saving,  setSaving]  = useState(false);
+  const [visible,    setVisible]    = useState(initRef.current.visible);
+  const [icon,       setIcon]       = useState(initRef.current.icon);
+  const [title,      setTitle]      = useState(initRef.current.title);
+  const [sub,        setSub]        = useState(initRef.current.sub);
+  const [link,       setLink]       = useState(initRef.current.link);
+  const [badge,      setBadge]      = useState(initRef.current.badge);
+  const [isInternal, setIsInternal] = useState(initRef.current.isInternal);
+  const [saving,     setSaving]     = useState(false);
 
   function discard() {
     const i = initRef.current;
     setVisible(i.visible); setIcon(i.icon); setTitle(i.title);
-    setSub(i.sub); setLink(i.link); setBadge(i.badge);
+    setSub(i.sub); setLink(i.link); setBadge(i.badge); setIsInternal(i.isInternal);
   }
 
   async function save() {
     setSaving(true);
     try {
       await Promise.all([
-        onSave('affiliate_visible', visible ? 'true' : 'false'),
-        onSave('affiliate_icon',    icon),
-        onSave('affiliate_title',   title),
-        onSave('affiliate_sub',     sub),
-        onSave('affiliate_link',    link),
-        onSave('affiliate_badge',   badge),
+        onSave('affiliate_visible',     visible    ? 'true' : 'false'),
+        onSave('affiliate_icon',        icon),
+        onSave('affiliate_title',       title),
+        onSave('affiliate_sub',         sub),
+        onSave('affiliate_link',        link),
+        onSave('affiliate_badge',       badge),
+        onSave('affiliate_is_internal', isInternal ? 'true' : 'false'),
       ]);
-      initRef.current = { visible, icon, title, sub, link, badge };
+      initRef.current = { visible, icon, title, sub, link, badge, isInternal };
       Alert.alert('Saved', `Featured Affiliate ${visible ? 'is now visible in the sidebar' : 'is hidden from users'}.`);
     } finally { setSaving(false); }
   }
@@ -2058,12 +2061,7 @@ function AffiliateSection({
             {visible ? '✅ Visible to all users in the sidebar' : '🔒 Hidden from users — toggle on to show'}
           </Text>
         </View>
-        <Switch
-          value={visible}
-          onValueChange={setVisible}
-          trackColor={{ false: colors.border, true: NF_GREEN }}
-          thumbColor="#fff"
-        />
+        <Switch value={visible} onValueChange={setVisible} trackColor={{ false: colors.border, true: NF_GREEN }} thumbColor="#fff" />
       </View>
 
       {/* Real-time preview — always visible */}
@@ -2071,12 +2069,7 @@ function AffiliateSection({
         <Text style={[s.fieldLabel, { marginBottom: 8 }]}>
           LIVE PREVIEW {visible ? '— active in sidebar' : '— toggle on to make visible'}
         </Text>
-        <View style={{
-          borderRadius: 12, borderWidth: 1.5,
-          borderColor: visible ? NF_BLUE + '55' : colors.border,
-          backgroundColor: '#1a1f30', padding: 14, gap: 6,
-          opacity: visible ? 1 : 0.5,
-        }}>
+        <View style={{ borderRadius: 12, borderWidth: 1.5, borderColor: visible ? NF_BLUE + '55' : colors.border, backgroundColor: '#1a1f30', padding: 14, gap: 6, opacity: visible ? 1 : 0.5 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: NF_BLUE + '22', alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 18 }}>{icon || '⚡'}</Text>
@@ -2085,17 +2078,12 @@ function AffiliateSection({
               <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '800' }}>{title || 'Featured Affiliate'}</Text>
               <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }} numberOfLines={2}>{sub || 'Supercharge your focus flow'}</Text>
             </View>
-            {badge ? (
-              <View style={{ backgroundColor: NF_BLUE, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-                <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{badge}</Text>
-              </View>
-            ) : null}
+            {badge ? <View style={{ backgroundColor: NF_BLUE, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}><Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{badge}</Text></View> : null}
           </View>
-          {link ? (
-            <Text style={{ color: NF_BLUE, fontSize: 10, marginTop: 2 }} numberOfLines={1}>🔗 {link}</Text>
-          ) : (
-            <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2, fontStyle: 'italic' }}>No link set — card will be non-clickable</Text>
-          )}
+          {link
+            ? <Text style={{ color: NF_BLUE, fontSize: 10, marginTop: 2 }} numberOfLines={1}>{isInternal ? '📱' : '🔗'} {isInternal ? `internal: ${link}` : link}</Text>
+            : <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2, fontStyle: 'italic' }}>No link set — card will be non-clickable</Text>
+          }
         </View>
         {visible && <Text style={{ color: NF_GREEN, fontSize: 11, marginTop: 6 }}>✅ Saved & live in sidebar for all users.</Text>}
       </View>
@@ -2104,34 +2092,38 @@ function AffiliateSection({
       <Field label="Title" value={title} onChangeText={setTitle} placeholder="Featured Affiliate" />
       <Field label="Subtitle / Tagline" value={sub} onChangeText={setSub} placeholder="Supercharge your focus flow" />
       <Field label="Badge Label (optional — e.g. 'New' or 'Hot')" value={badge} onChangeText={setBadge} placeholder="Soon" />
+
+      {/* Uniform link destination — same pattern as Supercharge Routine */}
       <View style={s.fieldWrap}>
-        <Text style={s.fieldLabel}>AFFILIATE LINK (EXTERNAL ONLY)</Text>
+        <Text style={s.fieldLabel}>LINK DESTINATION</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable onPress={() => setIsInternal(true)} style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}>
+            <Text style={{ color: isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>📱 Internal Page</Text>
+          </Pressable>
+          <Pressable onPress={() => setIsInternal(false)} style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}>
+            <Text style={{ color: !isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>🔗 External URL</Text>
+          </Pressable>
+        </View>
         <TextInput
           style={s.input}
           value={link}
           onChangeText={setLink}
-          placeholder="https://your-affiliate-link.com"
+          placeholder={isInternal ? '/(app)/resources' : 'https://your-affiliate-link.com'}
           placeholderTextColor={colors.textTertiary}
           autoCapitalize="none"
-          keyboardType="url"
+          keyboardType={isInternal ? 'default' : 'url'}
         />
-        <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 2 }}>
-          ⚠️ Must be a full external URL. Leave blank to show as non-clickable.
-        </Text>
+        {isInternal
+          ? <Text style={{ fontSize: 10, color: NF_BLUE, marginTop: 2 }}>Internal paths: /(app)/resources · /(app)/focus · /(app)/calendar</Text>
+          : <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 2 }}>Must be a full https:// URL. Leave blank to show as non-clickable.</Text>
+        }
       </View>
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Pressable
-          onPress={discard}
-          style={[s.btn, { flex: 1, borderWidth: 1, borderColor: NF_ORANGE, backgroundColor: 'transparent' }]}
-        >
+        <Pressable onPress={discard} style={[s.btn, { flex: 1, borderWidth: 1, borderColor: NF_ORANGE, backgroundColor: 'transparent' }]}>
           <Text style={{ color: NF_ORANGE, fontWeight: '700', fontSize: 13 }}>↩ Discard</Text>
         </Pressable>
-        <Pressable
-          onPress={save}
-          disabled={saving}
-          style={[s.btn, { flex: 2, backgroundColor: NF_BLUE, opacity: saving ? 0.65 : 1 }]}
-        >
+        <Pressable onPress={save} disabled={saving} style={[s.btn, { flex: 2, backgroundColor: NF_BLUE, opacity: saving ? 0.65 : 1 }]}>
           <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{saving ? 'Saving…' : '💾 Save Affiliate Card'}</Text>
         </Pressable>
       </View>
@@ -2149,40 +2141,40 @@ function CalendarCTASection({
 }) {
   // Saved values ref — for discard
   const initRef = useRef({
-    enabled:  (settings['cal_cta_enabled']    ?? 'true') !== 'false',
-    title:    settings['cal_cta_title']        ?? '🚀 Automate Your ADHD Workflow',
-    sub:      settings['cal_cta_sub']          ?? 'Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.',
-    btnLabel: settings['cal_cta_btn_label']    ?? 'Try Free',
-    link:     settings['cal_cta_link']         ?? '/(app)/resources',
-    linkType: (settings['cal_cta_link_type']   ?? 'internal') as 'external' | 'internal' | 'none',
+    enabled:    (settings['cal_cta_enabled']     ?? 'true') !== 'false',
+    title:      settings['cal_cta_title']         ?? '🚀 Automate Your ADHD Workflow',
+    sub:        settings['cal_cta_sub']           ?? 'Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.',
+    btnLabel:   settings['cal_cta_btn_label']     ?? 'Try Free',
+    link:       settings['cal_cta_link']          ?? '/(app)/resources',
+    isInternal: (settings['cal_cta_is_internal']  ?? 'true') === 'true',
   });
 
-  const [enabled,  setEnabled]  = useState(initRef.current.enabled);
-  const [title,    setTitle]    = useState(initRef.current.title);
-  const [sub,      setSub]      = useState(initRef.current.sub);
-  const [btnLabel, setBtnLabel] = useState(initRef.current.btnLabel);
-  const [link,     setLink]     = useState(initRef.current.link);
-  const [linkType, setLinkType] = useState<'external' | 'internal' | 'none'>(initRef.current.linkType);
-  const [saving,   setSaving]   = useState(false);
+  const [enabled,    setEnabled]    = useState(initRef.current.enabled);
+  const [title,      setTitle]      = useState(initRef.current.title);
+  const [sub,        setSub]        = useState(initRef.current.sub);
+  const [btnLabel,   setBtnLabel]   = useState(initRef.current.btnLabel);
+  const [link,       setLink]       = useState(initRef.current.link);
+  const [isInternal, setIsInternal] = useState(initRef.current.isInternal);
+  const [saving,     setSaving]     = useState(false);
 
   function discard() {
     const i = initRef.current;
     setEnabled(i.enabled); setTitle(i.title); setSub(i.sub);
-    setBtnLabel(i.btnLabel); setLink(i.link); setLinkType(i.linkType);
+    setBtnLabel(i.btnLabel); setLink(i.link); setIsInternal(i.isInternal);
   }
 
   async function save() {
     setSaving(true);
     try {
       await Promise.all([
-        onSave('cal_cta_enabled',    enabled ? 'true' : 'false'),
-        onSave('cal_cta_title',      title),
-        onSave('cal_cta_sub',        sub),
-        onSave('cal_cta_btn_label',  btnLabel),
-        onSave('cal_cta_link',       link),
-        onSave('cal_cta_link_type',  linkType),
+        onSave('cal_cta_enabled',     enabled    ? 'true' : 'false'),
+        onSave('cal_cta_title',       title),
+        onSave('cal_cta_sub',         sub),
+        onSave('cal_cta_btn_label',   btnLabel),
+        onSave('cal_cta_link',        link),
+        onSave('cal_cta_is_internal', isInternal ? 'true' : 'false'),
       ]);
-      initRef.current = { enabled, title, sub, btnLabel, link, linkType };
+      initRef.current = { enabled, title, sub, btnLabel, link, isInternal };
       Alert.alert('Saved', `Calendar CTA banner ${enabled ? 'is now visible' : 'is hidden'}.`);
     } finally { setSaving(false); }
   }
@@ -2198,12 +2190,7 @@ function CalendarCTASection({
             {enabled ? '✅ Banner is visible to all users' : '🔒 Banner is hidden'}
           </Text>
         </View>
-        <Switch
-          value={enabled}
-          onValueChange={setEnabled}
-          trackColor={{ false: colors.border, true: NF_GREEN }}
-          thumbColor="#fff"
-        />
+        <Switch value={enabled} onValueChange={setEnabled} trackColor={{ false: colors.border, true: NF_GREEN }} thumbColor="#fff" />
       </View>
 
       {/* Real-time preview — always visible */}
@@ -2211,23 +2198,14 @@ function CalendarCTASection({
         <Text style={[s.fieldLabel, { marginBottom: 8 }]}>
           LIVE PREVIEW {enabled ? '— visible on Calendar page' : '— hidden (toggle on to show)'}
         </Text>
-        <View style={{
-          borderRadius: 14, borderWidth: 1.5,
-          borderColor: enabled ? NF_BLUE + '44' : colors.border,
-          backgroundColor: '#10142a', padding: 18, overflow: 'hidden', gap: 8, alignItems: 'center',
-          opacity: enabled ? 1 : 0.5,
-        }}>
+        <View style={{ borderRadius: 14, borderWidth: 1.5, borderColor: enabled ? NF_BLUE + '44' : colors.border, backgroundColor: '#10142a', padding: 18, overflow: 'hidden', gap: 8, alignItems: 'center', opacity: enabled ? 1 : 0.5 }}>
           <View style={{ position: 'absolute', top: -60, right: -30, width: 160, height: 160, backgroundColor: NF_BLUE, opacity: 0.06, borderRadius: 80 }} />
           <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '800', textAlign: 'center' }}>{title || '🚀 Automate Your ADHD Workflow'}</Text>
           <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'center', lineHeight: 18 }} numberOfLines={3}>{sub || 'Supporting copy…'}</Text>
           <View style={{ backgroundColor: NF_BLUE, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 }}>
             <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{btnLabel || 'Try Free'}</Text>
           </View>
-          {link && linkType !== 'none' && (
-            <Text style={{ color: NF_BLUE, fontSize: 10 }} numberOfLines={1}>
-              → {linkType === 'internal' ? `internal: ${link}` : link}
-            </Text>
-          )}
+          {link ? <Text style={{ color: NF_BLUE, fontSize: 10 }} numberOfLines={1}>→ {isInternal ? `internal: ${link}` : link}</Text> : null}
         </View>
       </View>
 
@@ -2235,53 +2213,37 @@ function CalendarCTASection({
       <Field label="Subtitle / Description" value={sub} onChangeText={setSub} placeholder="Supporting copy…" />
       <Field label="Button Label" value={btnLabel} onChangeText={setBtnLabel} placeholder="Try Free" />
 
-      {/* Link type selector */}
+      {/* Uniform link destination — identical to Supercharge Routine */}
       <View style={s.fieldWrap}>
-        <Text style={s.fieldLabel}>LINK TYPE</Text>
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-          {(['internal', 'external', 'none'] as const).map(t => (
-            <Pressable
-              key={t}
-              onPress={() => setLinkType(t)}
-              style={{
-                paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-                borderWidth: 1.5,
-                borderColor: linkType === t ? NF_BLUE : colors.border,
-                backgroundColor: linkType === t ? NF_BLUE + '22' : 'transparent',
-              }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: linkType === t ? NF_BLUE : colors.textSecondary }}>
-                {t === 'external' ? '🔗 External URL' : t === 'internal' ? '📱 Internal Route' : '🚫 No Link'}
-              </Text>
-            </Pressable>
-          ))}
+        <Text style={s.fieldLabel}>LINK DESTINATION</Text>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Pressable onPress={() => setIsInternal(true)} style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}>
+            <Text style={{ color: isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>📱 Internal Page</Text>
+          </Pressable>
+          <Pressable onPress={() => setIsInternal(false)} style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}>
+            <Text style={{ color: !isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>🔗 External URL</Text>
+          </Pressable>
         </View>
-        {linkType === 'internal' && <Text style={{ fontSize: 10, color: NF_BLUE, marginTop: 4 }}>e.g. /(app)/resources · /(app)/focus · /(app)/calendar</Text>}
-        {linkType === 'external' && <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 4 }}>Full external URL — opens in browser (affiliate links, landing pages, etc.)</Text>}
-        {linkType === 'none'     && <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 4 }}>Banner is decorative — button press does nothing.</Text>}
-      </View>
-
-      {linkType !== 'none' && (
-        <Field
-          label={linkType === 'external' ? 'URL (full https:// link)' : 'Internal Route'}
+        <TextInput
+          style={s.input}
           value={link}
           onChangeText={setLink}
-          placeholder={linkType === 'external' ? 'https://your-affiliate-link.com' : '/(app)/resources'}
+          placeholder={isInternal ? '/(app)/resources' : 'https://your-link.com'}
+          placeholderTextColor={colors.textTertiary}
+          autoCapitalize="none"
+          keyboardType={isInternal ? 'default' : 'url'}
         />
-      )}
+        {isInternal
+          ? <Text style={{ fontSize: 10, color: NF_BLUE, marginTop: 2 }}>Internal paths: /(app)/resources · /(app)/focus · /(app)/calendar</Text>
+          : <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 2 }}>Full external URL — opens in browser (affiliate links, landing pages, etc.)</Text>
+        }
+      </View>
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Pressable
-          onPress={discard}
-          style={[s.btn, { flex: 1, borderWidth: 1, borderColor: NF_ORANGE, backgroundColor: 'transparent' }]}
-        >
+        <Pressable onPress={discard} style={[s.btn, { flex: 1, borderWidth: 1, borderColor: NF_ORANGE, backgroundColor: 'transparent' }]}>
           <Text style={{ color: NF_ORANGE, fontWeight: '700', fontSize: 13 }}>↩ Discard</Text>
         </Pressable>
-        <Pressable
-          onPress={save}
-          disabled={saving}
-          style={[s.btn, { flex: 2, backgroundColor: NF_BLUE, opacity: saving ? 0.65 : 1 }]}
-        >
+        <Pressable onPress={save} disabled={saving} style={[s.btn, { flex: 2, backgroundColor: NF_BLUE, opacity: saving ? 0.65 : 1 }]}>
           <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{saving ? 'Saving…' : '💾 Save Banner'}</Text>
         </Pressable>
       </View>

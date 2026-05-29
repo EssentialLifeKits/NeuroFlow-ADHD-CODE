@@ -82,12 +82,13 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
     const initials = resolveInitials(displayName);
 
     // Affiliate card — loaded from DB settings
-    const [affVisible, setAffVisible] = useState(false);
-    const [affIcon,    setAffIcon]    = useState('⚡');
-    const [affTitle,   setAffTitle]   = useState('Featured Affiliate');
-    const [affSub,     setAffSub]     = useState('Supercharge your focus flow');
-    const [affLink,    setAffLink]    = useState('');
-    const [affBadge,   setAffBadge]   = useState('Soon');
+    const [affVisible,    setAffVisible]    = useState(false);
+    const [affIcon,       setAffIcon]       = useState('⚡');
+    const [affTitle,      setAffTitle]      = useState('Featured Affiliate');
+    const [affSub,        setAffSub]        = useState('Supercharge your focus flow');
+    const [affLink,       setAffLink]       = useState('');
+    const [affBadge,      setAffBadge]      = useState('Soon');
+    const [affIsInternal, setAffIsInternal] = useState(false);
 
     useEffect(() => {
         getAllSettings().then(s => {
@@ -97,6 +98,7 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
             if (s['affiliate_sub'])   setAffSub(s['affiliate_sub']);
             if (s['affiliate_link'])  setAffLink(s['affiliate_link']);
             if (s['affiliate_badge'] !== undefined) setAffBadge(s['affiliate_badge']);
+            setAffIsInternal(s['affiliate_is_internal'] === 'true');
         }).catch(() => {});
     }, []);
 
@@ -118,7 +120,10 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
     };
 
     const handleAffiliatePress = () => {
-        if (affLink) {
+        if (!affLink) return;
+        if (affIsInternal) {
+            navigateTo(affLink);
+        } else {
             Linking.openURL(affLink).catch(() => {});
         }
     };
