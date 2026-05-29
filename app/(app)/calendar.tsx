@@ -605,7 +605,6 @@ export default function CalendarScreen() {
       </View>
     </TouchableOpacity>
   ) : null;
-  );
 
   return (
     <SafeAreaView style={s.safe} edges={['bottom']}>
