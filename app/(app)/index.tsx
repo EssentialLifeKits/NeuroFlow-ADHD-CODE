@@ -193,6 +193,32 @@ function StatCard({ label, value, accent, delay }: { label: string; value: strin
   );
 }
 
+// ─── How To Button — glowing green hover on web ───────────────────────────────
+function HowToButton({ onPress }: { onPress: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Pressable
+      onPress={onPress}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      style={[
+        styles.howToBtn,
+        hovered && {
+          borderColor: '#4ade80',
+          backgroundColor: 'rgba(74,222,128,0.13)',
+          // shadowColor translates to box-shadow in React Native Web
+          shadowColor: '#4ade80',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.8,
+          shadowRadius: 8,
+        },
+      ]}
+    >
+      <Text style={[styles.howToBtnText, hovered && { color: '#4ade80' }]}>How To</Text>
+    </Pressable>
+  );
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const { width } = useWindowDimensions();
@@ -538,9 +564,7 @@ export default function DashboardScreen() {
               <PulsingDot />
               <Text style={styles.todayBadgeText}>Today • {DAY_NAMES[new Date().getDay()]}</Text>
             </View>
-            <Pressable onPress={() => setHowToVisible(true)} style={styles.howToBtn}>
-              <Text style={styles.howToBtnText}>How To</Text>
-            </Pressable>
+            <HowToButton onPress={() => setHowToVisible(true)} />
             <Pressable style={styles.avatar}>
               <Text style={styles.avatarText}>{avatarLetter}</Text>
             </Pressable>
