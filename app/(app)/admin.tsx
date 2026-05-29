@@ -1954,13 +1954,13 @@ function CTACardSection({
         <Text style={s.fieldLabel}>LINK DESTINATION</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
-            onPress={() => setIsInternal(true)}
+            onPress={() => { setIsInternal(true); setLink(''); }}
             style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}
           >
             <Text style={{ color: isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>📱 Internal Page</Text>
           </Pressable>
           <Pressable
-            onPress={() => setIsInternal(false)}
+            onPress={() => { setIsInternal(false); setLink(''); }}
             style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}
           >
             <Text style={{ color: !isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>🔗 External URL</Text>
@@ -1970,14 +1970,15 @@ function CTACardSection({
           style={s.input}
           value={link}
           onChangeText={setLink}
-          placeholder={isInternal ? '/(app)/resources' : 'https://affiliate-link.com'}
+          placeholder={isInternal ? '/(app)/resources' : 'https://your-link.com'}
           placeholderTextColor={colors.textTertiary}
+          autoCapitalize="none"
+          keyboardType={isInternal ? 'default' : 'url'}
         />
-        {isInternal && (
-          <Text style={{ fontSize: 10, color: colors.textTertiary }}>
-            Internal paths: /(app)/resources  ·  /(app)/focus  ·  /(app)/calendar
-          </Text>
-        )}
+        {isInternal
+          ? <Text style={{ fontSize: 10, color: NF_BLUE, marginTop: 2 }}>Internal paths: /(app)/resources  ·  /(app)/focus  ·  /(app)/calendar</Text>
+          : <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 2 }}>Full external URL — opens in browser (affiliate links, landing pages, etc.)</Text>
+        }
       </View>
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -2097,10 +2098,10 @@ function AffiliateSection({
       <View style={s.fieldWrap}>
         <Text style={s.fieldLabel}>LINK DESTINATION</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable onPress={() => setIsInternal(true)} style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}>
+          <Pressable onPress={() => { setIsInternal(true); setLink(''); }} style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}>
             <Text style={{ color: isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>📱 Internal Page</Text>
           </Pressable>
-          <Pressable onPress={() => setIsInternal(false)} style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}>
+          <Pressable onPress={() => { setIsInternal(false); setLink(''); }} style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}>
             <Text style={{ color: !isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>🔗 External URL</Text>
           </Pressable>
         </View>
@@ -2217,10 +2218,10 @@ function CalendarCTASection({
       <View style={s.fieldWrap}>
         <Text style={s.fieldLabel}>LINK DESTINATION</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable onPress={() => setIsInternal(true)} style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}>
+          <Pressable onPress={() => { setIsInternal(true); setLink(''); }} style={[s.btn, { flex: 1, backgroundColor: isInternal ? NF_BLUE : 'transparent', borderWidth: 1, borderColor: isInternal ? NF_BLUE : colors.border }]}>
             <Text style={{ color: isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>📱 Internal Page</Text>
           </Pressable>
-          <Pressable onPress={() => setIsInternal(false)} style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}>
+          <Pressable onPress={() => { setIsInternal(false); setLink(''); }} style={[s.btn, { flex: 1, backgroundColor: !isInternal ? NF_ORANGE : 'transparent', borderWidth: 1, borderColor: !isInternal ? NF_ORANGE : colors.border }]}>
             <Text style={{ color: !isInternal ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>🔗 External URL</Text>
           </Pressable>
         </View>
