@@ -19,6 +19,7 @@ import {
   Alert,
   Animated,
   Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -41,6 +42,7 @@ import { useAuth } from '../../src/lib/auth';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { type Task } from '../../src/lib/db';
 import { useTasks } from '../../src/lib/TasksContext';
+import { getAllSettings } from '../../src/lib/adminDb';
 import { TaskThumbnail } from '../../src/components/TaskThumbnail';
 import {
   type ADHDCategory,
@@ -337,6 +339,25 @@ export default function CalendarScreen() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Calendar CTA Banner settings (admin-editable) ──────────────────────────
+  const [ctaEnabled,   setCtaEnabled]   = useState(true);
+  const [ctaTitle,     setCtaTitle]     = useState('🚀 Automate Your ADHD Workflow');
+  const [ctaSub,       setCtaSub]       = useState('Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.');
+  const [ctaBtnLabel,  setCtaBtnLabel]  = useState('Try Free');
+  const [ctaLink,      setCtaLink]      = useState('');
+  const [ctaLinkType,  setCtaLinkType]  = useState<'external' | 'internal' | 'none'>('external');
+
+  useEffect(() => {
+    getAllSettings().then(s => {
+      if (s['cal_cta_enabled'] !== undefined) setCtaEnabled(s['cal_cta_enabled'] !== 'false');
+      if (s['cal_cta_title'])     setCtaTitle(s['cal_cta_title']);
+      if (s['cal_cta_sub'])       setCtaSub(s['cal_cta_sub']);
+      if (s['cal_cta_btn_label']) setCtaBtnLabel(s['cal_cta_btn_label']);
+      if (s['cal_cta_link'])      setCtaLink(s['cal_cta_link']);
+      if (s['cal_cta_link_type']) setCtaLinkType(s['cal_cta_link_type'] as any);
+    }).catch(() => {});
+  }, []);
+
   const today = useMemo(() => {
     const n = new Date();
     return formatDate(n.getFullYear(), n.getMonth(), n.getDate());
@@ -558,20 +579,32 @@ export default function CalendarScreen() {
     </View>
   );
 
-  // ── Affiliate CTA ──────────────────────────────────────────────────────────
-  const AffiliateCTA = (
-    <TouchableOpacity style={[s.cta, isDesktop && s.ctaDesktop]} activeOpacity={0.85}>
+  // ── Calendar CTA Banner (admin-controlled) ───────────────────────────────
+  const handleCtaPress = () => {
+    if (!ctaLink || ctaLinkType === 'none') return;
+    if (ctaLinkType === 'internal') {
+      router.push(ctaLink as any);
+    } else {
+      Linking.openURL(ctaLink).catch(() => {});
+    }
+  };
+
+  const AffiliateCTA = ctaEnabled ? (
+    <TouchableOpacity
+      style={[s.cta, isDesktop && s.ctaDesktop]}
+      activeOpacity={ctaLinkType !== 'none' && ctaLink ? 0.85 : 1}
+      onPress={handleCtaPress}
+    >
       <View style={s.ctaGlow} />
       <View style={s.ctaContent}>
-        <Text style={s.ctaTitle}>🚀 Automate Your ADHD Workflow</Text>
-        <Text style={s.ctaSub}>
-          Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.
-        </Text>
+        <Text style={s.ctaTitle}>{ctaTitle}</Text>
+        <Text style={s.ctaSub}>{ctaSub}</Text>
         <View style={s.ctaBtn}>
-          <Text style={s.ctaBtnText}>Try Free</Text>
+          <Text style={s.ctaBtnText}>{ctaBtnLabel}</Text>
         </View>
       </View>
     </TouchableOpacity>
+  ) : null;
   );
 
   return (

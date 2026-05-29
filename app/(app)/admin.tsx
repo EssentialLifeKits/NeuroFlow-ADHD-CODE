@@ -962,9 +962,9 @@ function AppSettingsSection({
   }
 
   return (
-    <AccordionCard title="⚙️ App Settings" subtitle="Links displayed inside the app">
-      <Field label="Deep Work Blueprint Link" value={blueprint} onChangeText={setBlueprint} placeholder="https://…" />
-      <Field label="Audio Player Link (Focus page)" value={audio} onChangeText={setAudio} placeholder="https://…" />
+    <AccordionCard title="⚙️ App Settings — Focus Page" subtitle="Links that power the Deep Work Blueprint PDF and Audio Player on the Hyperfocus Lotus (Focus) page">
+      <Field label="Deep Work Blueprint Link (opens as PDF on Focus page)" value={blueprint} onChangeText={setBlueprint} placeholder="https://drive.google.com/… or any URL" />
+      <Field label="Audio Player Link (floating audio PiP on Focus page)" value={audio} onChangeText={setAudio} placeholder="https://drive.google.com/… or any URL" />
       <Btn label={saving ? 'Saving…' : '💾 Save Settings'} onPress={save} disabled={saving} />
     </AccordionCard>
   );
@@ -1983,6 +1983,160 @@ function AffiliateSection({
         </Text>
       </View>
       <Btn label={saving ? 'Saving…' : '💾 Save Affiliate Card'} onPress={save} disabled={saving} />
+
+      {/* Live preview — mirrors what users see in the sidebar */}
+      {visible && (
+        <View style={{ marginTop: 16 }}>
+          <Text style={[s.fieldLabel, { marginBottom: 8 }]}>LIVE PREVIEW (how it looks in the sidebar)</Text>
+          <View style={{
+            borderRadius: 12, borderWidth: 1.5, borderColor: NF_BLUE + '55',
+            backgroundColor: '#1a1f30', padding: 14, gap: 6,
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: NF_BLUE + '22', alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 18 }}>{icon || '⚡'}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '800' }}>{title || 'Featured Affiliate'}</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 11, marginTop: 1 }} numberOfLines={2}>{sub || 'Supercharge your focus flow'}</Text>
+              </View>
+              {badge ? (
+                <View style={{ backgroundColor: NF_BLUE, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                  <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{badge}</Text>
+                </View>
+              ) : null}
+            </View>
+            {link ? (
+              <Text style={{ color: NF_BLUE, fontSize: 10, marginTop: 2 }} numberOfLines={1}>🔗 {link}</Text>
+            ) : (
+              <Text style={{ color: colors.textTertiary, fontSize: 10, marginTop: 2, fontStyle: 'italic' }}>No link set — card will be non-clickable</Text>
+            )}
+          </View>
+          <Text style={{ color: NF_GREEN, fontSize: 11, marginTop: 6 }}>✅ This card is currently visible in the sidebar for all users.</Text>
+        </View>
+      )}
+    </AccordionCard>
+  );
+}
+
+// ─── Calendar CTA Banner Section ─────────────────────────────────────────────
+
+function CalendarCTASection({
+  settings, onSave,
+}: {
+  settings: Record<string, string>;
+  onSave: (key: string, value: string) => Promise<void>;
+}) {
+  const [enabled,   setEnabled]   = useState((settings['cal_cta_enabled'] ?? 'true') !== 'false');
+  const [title,     setTitle]     = useState(settings['cal_cta_title']     ?? '🚀 Automate Your ADHD Workflow');
+  const [sub,       setSub]       = useState(settings['cal_cta_sub']       ?? 'Stop leaving focus on the table. Set up smart reminders, routine triggers and focus blocks in minutes.');
+  const [btnLabel,  setBtnLabel]  = useState(settings['cal_cta_btn_label'] ?? 'Try Free');
+  const [link,      setLink]      = useState(settings['cal_cta_link']      ?? '');
+  const [linkType,  setLinkType]  = useState<'external' | 'internal' | 'none'>(
+    (settings['cal_cta_link_type'] as any) ?? 'external'
+  );
+  const [saving,    setSaving]    = useState(false);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await Promise.all([
+        onSave('cal_cta_enabled',    enabled ? 'true' : 'false'),
+        onSave('cal_cta_title',      title),
+        onSave('cal_cta_sub',        sub),
+        onSave('cal_cta_btn_label',  btnLabel),
+        onSave('cal_cta_link',       link),
+        onSave('cal_cta_link_type',  linkType),
+      ]);
+      Alert.alert('Saved', `Calendar CTA banner ${enabled ? 'is now visible' : 'is hidden'}.`);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <AccordionCard title="📅 Calendar CTA Banner" subtitle="Promotional banner shown at the bottom of the Calendar page">
+
+      {/* Enabled toggle */}
+      <View style={s.toggleRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.fieldLabel}>SHOW BANNER ON CALENDAR PAGE</Text>
+          <Text style={{ fontSize: 11, color: colors.textTertiary, marginTop: 2 }}>
+            {enabled ? '✅ Banner is visible to all users' : '🔒 Banner is hidden'}
+          </Text>
+        </View>
+        <Switch
+          value={enabled}
+          onValueChange={setEnabled}
+          trackColor={{ false: colors.border, true: NF_GREEN }}
+          thumbColor="#fff"
+        />
+      </View>
+
+      <Field label="Banner Title" value={title} onChangeText={setTitle} placeholder="🚀 Automate Your ADHD Workflow" />
+      <Field label="Subtitle / Description" value={sub} onChangeText={setSub} placeholder="Supporting copy…" />
+      <Field label="Button Label" value={btnLabel} onChangeText={setBtnLabel} placeholder="Try Free" />
+
+      {/* Link type selector */}
+      <View style={s.fieldWrap}>
+        <Text style={s.fieldLabel}>LINK TYPE</Text>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+          {(['external', 'internal', 'none'] as const).map(t => (
+            <Pressable
+              key={t}
+              onPress={() => setLinkType(t)}
+              style={{
+                paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+                borderWidth: 1.5,
+                borderColor: linkType === t ? NF_BLUE : colors.border,
+                backgroundColor: linkType === t ? NF_BLUE + '22' : 'transparent',
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: linkType === t ? NF_BLUE : colors.textSecondary }}>
+                {t === 'external' ? '🔗 External URL' : t === 'internal' ? '📱 Internal Route' : '🚫 No Link'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {linkType === 'external' && (
+          <Text style={{ fontSize: 10, color: NF_ORANGE, marginTop: 4 }}>External URLs open in the browser (affiliate links, landing pages, etc.)</Text>
+        )}
+        {linkType === 'internal' && (
+          <Text style={{ fontSize: 10, color: NF_BLUE, marginTop: 4 }}>Internal routes: e.g. <Text style={{ fontWeight: '700' }}>/(app)/resources</Text> or <Text style={{ fontWeight: '700' }}>/(app)/focus</Text></Text>
+        )}
+        {linkType === 'none' && (
+          <Text style={{ fontSize: 10, color: colors.textTertiary, marginTop: 4 }}>Banner is decorative — button press does nothing.</Text>
+        )}
+      </View>
+
+      {linkType !== 'none' && (
+        <Field
+          label={linkType === 'external' ? 'URL (full https:// link)' : 'Internal Route (e.g. /(app)/focus)'}
+          value={link}
+          onChangeText={setLink}
+          placeholder={linkType === 'external' ? 'https://your-affiliate-link.com' : '/(app)/resources'}
+        />
+      )}
+
+      {/* Live preview */}
+      {enabled && (
+        <View style={{ marginTop: 12 }}>
+          <Text style={[s.fieldLabel, { marginBottom: 8 }]}>LIVE PREVIEW</Text>
+          <View style={{
+            borderRadius: 14, borderWidth: 1, borderColor: NF_BLUE + '33',
+            backgroundColor: '#161c2e', padding: 16, overflow: 'hidden', gap: 8, alignItems: 'center',
+          }}>
+            <Text style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '800', textAlign: 'center' }}>{title || '🚀 Automate Your ADHD Workflow'}</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 12, textAlign: 'center', lineHeight: 18 }} numberOfLines={3}>{sub || 'Supporting copy…'}</Text>
+            <View style={{ backgroundColor: NF_BLUE, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 8 }}>
+              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{btnLabel || 'Try Free'}</Text>
+            </View>
+            {link && linkType !== 'none' && (
+              <Text style={{ color: NF_BLUE, fontSize: 10 }} numberOfLines={1}>→ {link}</Text>
+            )}
+          </View>
+        </View>
+      )}
+
+      <Btn label={saving ? 'Saving…' : '💾 Save Banner Settings'} onPress={save} disabled={saving} />
     </AccordionCard>
   );
 }
@@ -2302,7 +2456,6 @@ function UserMonitorSection() {
     <AccordionCard
       title="👥 User Monitor"
       subtitle="View registered users, session activity, and account status"
-      defaultOpen
       style={s.monitorCard}
     >
       <View style={s.monitorStatsWrap}>
@@ -2474,6 +2627,7 @@ export default function AdminScreen() {
             <HowToVideoSection settings={settings} onSave={handleSaveSetting} />
             <CTACardSection settings={settings} onSave={handleSaveSetting} />
             <AffiliateSection settings={settings} onSave={handleSaveSetting} />
+            <CalendarCTASection settings={settings} onSave={handleSaveSetting} />
             <ResourcesSection />
             <AppSettingsSection settings={settings} onSave={handleSaveSetting} />
           </>
