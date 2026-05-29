@@ -138,7 +138,7 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
             <View style={[styles.gradientHeader, isDesktop && styles.gradientHeaderDesktop]}>
                 <View style={styles.logoArea}>
                     <NFLogo size={32} />
-                    <Text style={styles.logoText}>NeuroFlow</Text>
+                    <Text style={styles.logoText}>NeuroFlow+</Text>
                 </View>
                 <View style={styles.headerUserArea}>
                     <View style={styles.headerAvatar}>
@@ -146,7 +146,7 @@ function SidebarContent({ isDesktop, onClose }: { isDesktop: boolean; onClose: (
                     </View>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.headerUserName} numberOfLines={1}>{displayName}</Text>
-                        <Text style={styles.headerUserPlan}>NeuroFlow Pro ✨</Text>
+                        <Text style={styles.headerUserPlan}>NeuroFlow+ ✨</Text>
                     </View>
                 </View>
             </View>

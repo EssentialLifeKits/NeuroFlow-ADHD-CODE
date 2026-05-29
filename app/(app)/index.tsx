@@ -287,7 +287,7 @@ export default function DashboardScreen() {
   // How To video — inline card + button opens modal
   const [howToUrl,          setHowToUrl]          = useState(DEFAULT_HOWTO_VIDEO_URL);
   const [howToDownloadUrl,  setHowToDownloadUrl]  = useState('');
-  const [howToTitle,        setHowToTitle]        = useState('How To Use NeuroFlow');
+  const [howToTitle,        setHowToTitle]        = useState('How To Use NeuroFlow+');
   const [howToDesc,         setHowToDesc]         = useState('Watch this short explainer to get the most out of your ADHD toolkit.');
   const [howToVisible, setHowToVisible] = useState(false);
 

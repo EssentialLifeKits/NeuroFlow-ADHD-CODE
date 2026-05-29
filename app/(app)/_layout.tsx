@@ -30,7 +30,7 @@ function BrandHeader() {
         source={require('../../assets/neuroflow-logo.png')}
         style={hStyles.logoImage}
       />
-      <Text style={hStyles.brandName}>NeuroFlow</Text>
+      <Text style={hStyles.brandName}>NeuroFlow+</Text>
     </View>
   );
 }
