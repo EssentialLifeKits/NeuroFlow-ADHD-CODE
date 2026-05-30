@@ -10,6 +10,9 @@ const {
   requestJson,
 } = require('./_billing-utils');
 
+const ARCHIVE_SETTING_KEY = 'monitor_archived';
+const PURGE_AFTER_DAYS = 90;
+
 function displayNameFromEmail(email) {
   const local = String(email || '').split('@')[0] || 'Customer';
   return local
@@ -38,6 +41,27 @@ function getPlanInterval(subscription) {
   const interval = getPrice(subscription)?.recurring?.interval;
   if (!interval) return null;
   return interval === 'month' ? 'Monthly' : interval.charAt(0).toUpperCase() + interval.slice(1);
+}
+
+// Newer Stripe API versions moved current_period_end onto the subscription item.
+// Read whichever is present, then fall back to a scheduled cancel_at timestamp.
+function getPeriodEnd(subscription) {
+  if (subscription?.current_period_end) return periodEndToIso(subscription.current_period_end);
+  const item = subscription?.items?.data?.[0];
+  if (item?.current_period_end) return periodEndToIso(item.current_period_end);
+  if (subscription?.cancel_at) return periodEndToIso(subscription.cancel_at);
+  return null;
+}
+
+// A subscription is "canceling" if cancel_at_period_end is set, OR a future
+// cancel_at timestamp exists (some API versions schedule cancellation that way).
+function isCancelingSub(subscription) {
+  if (subscription?.cancel_at_period_end) return true;
+  if (subscription?.cancel_at) {
+    const ts = Number(subscription.cancel_at) * 1000;
+    if (ts > Date.now()) return true;
+  }
+  return false;
 }
 
 function getStripeCustomerEmail(customer) {
@@ -78,18 +102,22 @@ function makeEmptyRow(email, key) {
 
 function statusFromSubscription(subscription) {
   const status = String(subscription?.status || 'lead').toLowerCase();
-  if (subscription?.cancel_at_period_end) return { status: 'canceling', statusLabel: 'Cancels Soon' };
-  if (ACTIVE_STATUSES.has(status)) return { status: 'active', statusLabel: 'Active' };
   if (status === 'canceled') return { status: 'canceled', statusLabel: 'Canceled' };
+  if (isCancelingSub(subscription)) return { status: 'canceling', statusLabel: 'Canceling' };
+  if (ACTIVE_STATUSES.has(status)) return { status: 'active', statusLabel: 'Active' };
   if (status === 'unpaid' || status === 'past_due') return { status: 'past_due', statusLabel: 'Past Due' };
   if (status === 'incomplete' || status === 'incomplete_expired') return { status: 'lead', statusLabel: 'Lead' };
   return { status: status || 'lead', statusLabel: status ? status.replace(/_/g, ' ') : 'Lead' };
 }
 
-function renewalLabel(row) {
-  const date = row.currentPeriodEnd
-    ? new Date(row.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+function fmtDate(value) {
+  return value
+    ? new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
+}
+
+function renewalLabel(row) {
+  const date = fmtDate(row.currentPeriodEnd);
   if (!date) return '-';
   if (row.cancelAtPeriodEnd || row.status === 'canceling') return `Cancels ${date}`;
   if (row.status === 'canceled') return `Canceled ${date}`;
@@ -97,22 +125,40 @@ function renewalLabel(row) {
   return `Period end ${date}`;
 }
 
-module.exports = async function handler(req, res) {
-  if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET');
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+// ─── Archive persistence (app_settings key/value JSON map) ─────────────────────
 
-  const authUser = await getAuthenticatedUser(req);
-  if (!authUser?.email || !isAdminEmail(authUser.email)) {
-    return res.status(403).json({ error: 'Admin access required' });
+async function readArchiveMap(supabaseUrl) {
+  try {
+    const rows = await requestJson(
+      `${supabaseUrl}/rest/v1/app_settings?key=eq.${ARCHIVE_SETTING_KEY}&select=value`
+    );
+    const raw = Array.isArray(rows) ? rows[0]?.value : null;
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
   }
+}
 
-  if (!hasSupabaseService()) {
-    return res.status(503).json({ error: 'Supabase service role is not configured' });
-  }
+async function writeArchiveMap(supabaseUrl, map) {
+  await requestJson(`${supabaseUrl}/rest/v1/app_settings?on_conflict=key`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify({
+      key: ARCHIVE_SETTING_KEY,
+      value: JSON.stringify(map),
+      updated_at: new Date().toISOString(),
+    }),
+  });
+}
 
-  const supabaseUrl = getSupabaseUrl();
+// ─── Build the merged user/customer rows ──────────────────────────────────────
+
+async function buildRows(supabaseUrl) {
   const rowMap = new Map();
 
   function ensureRow(email, fallbackKey) {
@@ -164,20 +210,21 @@ module.exports = async function handler(req, res) {
     row.priceId = sub.price_id || row.priceId;
     row.currentPeriodEnd = sub.current_period_end || row.currentPeriodEnd;
     row.cancelAtPeriodEnd = Boolean(sub.cancel_at_period_end);
-    const active = ACTIVE_STATUSES.has(String(sub.status || '').toLowerCase());
+    const dbStatus = String(sub.status || '').toLowerCase();
     if (row.cancelAtPeriodEnd) {
       row.status = 'canceling';
-      row.statusLabel = 'Cancels Soon';
-    } else if (active) {
+      row.statusLabel = 'Canceling';
+    } else if (ACTIVE_STATUSES.has(dbStatus)) {
       row.status = 'active';
       row.statusLabel = 'Active';
-    } else if (String(sub.status || '').toLowerCase() === 'canceled') {
+    } else if (dbStatus === 'canceled') {
       row.status = 'canceled';
       row.statusLabel = 'Canceled';
     }
     row.source = row.source === 'stripe' ? 'supabase+stripe' : 'supabase';
   }
 
+  // Live Stripe data is the source of truth — processed last so it overrides.
   const stripe = getStripe();
   let stripeError = null;
   let stripeSubscriptions = [];
@@ -186,11 +233,7 @@ module.exports = async function handler(req, res) {
   if (stripe) {
     try {
       const [subscriptionList, customerList] = await Promise.all([
-        stripe.subscriptions.list({
-          limit: 100,
-          status: 'all',
-          expand: ['data.customer'],
-        }),
+        stripe.subscriptions.list({ limit: 100, status: 'all', expand: ['data.customer'] }),
         stripe.customers.list({ limit: 100 }),
       ]);
       stripeSubscriptions = subscriptionList.data || [];
@@ -231,49 +274,129 @@ module.exports = async function handler(req, res) {
     row.status = statusInfo.status;
     row.statusLabel = statusInfo.statusLabel;
     row.planName = getPlanName(subscription, row.planName === 'None' ? 'NeuroFlow Pro' : row.planName);
-    row.planInterval = getPlanInterval(subscription) || row.planInterval;
+    row.planInterval = getPlanInterval(subscription) || row.planInterval || 'Monthly';
     row.subscriptionStatus = subscription.status || row.subscriptionStatus;
     row.priceId = getPrice(subscription)?.id || row.priceId;
-    row.currentPeriodEnd = periodEndToIso(subscription.current_period_end) || row.currentPeriodEnd;
-    row.cancelAtPeriodEnd = Boolean(subscription.cancel_at_period_end);
+    row.currentPeriodEnd = getPeriodEnd(subscription) || row.currentPeriodEnd;
+    row.cancelAtPeriodEnd = isCancelingSub(subscription);
     row.stripeSubscriptionId = subscription.id;
     row.stripeCustomerId = typeof customer === 'string' ? customer : customer?.id || row.stripeCustomerId;
     row.subscriptionCreatedAt = isoFromUnix(subscription.created);
     row.source = row.source === 'supabase' ? 'supabase+stripe' : 'stripe';
   }
 
-  const rows = Array.from(rowMap.values())
-    .map(row => ({
-      ...row,
-      name: row.name || displayNameFromEmail(row.email),
-      phone: row.phone || '',
-      businessName: row.businessName || '',
-      cancellationLabel: renewalLabel(row),
-      periodEndLabel: row.currentPeriodEnd
-        ? new Date(row.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : '-',
-    }))
-    .sort((a, b) => {
-      const rank = { active: 0, canceling: 1, past_due: 2, canceled: 3, lead: 4 };
-      const aRank = rank[a.status] ?? 5;
-      const bRank = rank[b.status] ?? 5;
-      if (aRank !== bRank) return aRank - bRank;
-      return new Date(b.lastSignInAt || b.signedUpAt || b.createdAtStripe || 0).getTime()
-        - new Date(a.lastSignInAt || a.signedUpAt || a.createdAtStripe || 0).getTime();
-    });
+  const allRows = Array.from(rowMap.values()).map(row => ({
+    ...row,
+    name: row.name || displayNameFromEmail(row.email),
+    phone: row.phone || '',
+    businessName: row.businessName || '',
+    cancellationLabel: renewalLabel(row),
+    periodEndLabel: fmtDate(row.currentPeriodEnd) || '-',
+  }));
+
+  return { allRows, stripeError };
+}
+
+function sortRows(rows) {
+  return rows.sort((a, b) => {
+    const rank = { active: 0, canceling: 1, past_due: 2, canceled: 3, lead: 4 };
+    const aRank = rank[a.status] ?? 5;
+    const bRank = rank[b.status] ?? 5;
+    if (aRank !== bRank) return aRank - bRank;
+    return new Date(b.lastSignInAt || b.signedUpAt || b.createdAtStripe || 0).getTime()
+      - new Date(a.lastSignInAt || a.signedUpAt || a.createdAtStripe || 0).getTime();
+  });
+}
+
+module.exports = async function handler(req, res) {
+  const authUser = await getAuthenticatedUser(req);
+  if (!authUser?.email || !isAdminEmail(authUser.email)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  if (!hasSupabaseService()) {
+    return res.status(503).json({ error: 'Supabase service role is not configured' });
+  }
+
+  const supabaseUrl = getSupabaseUrl();
+
+  // ── POST: archive / restore a user (soft delete) ──────────────────────────
+  if (req.method === 'POST') {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const action = String(body.action || '');
+    const email = normalizeEmail(body.email);
+    if (!email) return res.status(400).json({ error: 'Missing email.' });
+
+    const map = await readArchiveMap(supabaseUrl);
+
+    if (action === 'archive') {
+      // Guard: only inactive accounts (lead / canceled) may be archived.
+      const { allRows } = await buildRows(supabaseUrl);
+      const target = allRows.find(r => normalizeEmail(r.email) === email);
+      if (target && (target.status === 'active' || target.status === 'canceling')) {
+        return res.status(409).json({
+          error: 'Active or canceling subscribers cannot be archived. Cancel their billing first.',
+        });
+      }
+      map[email] = new Date().toISOString();
+    } else if (action === 'restore') {
+      delete map[email];
+    } else {
+      return res.status(400).json({ error: 'Unknown action.' });
+    }
+
+    await writeArchiveMap(supabaseUrl, map);
+    return res.status(200).json({ ok: true, action, email });
+  }
+
+  if (req.method !== 'GET') {
+    res.setHeader('Allow', 'GET, POST');
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // ── GET: build merged list, split archived out ────────────────────────────
+  const [{ allRows, stripeError }, archiveMap] = await Promise.all([
+    buildRows(supabaseUrl),
+    readArchiveMap(supabaseUrl),
+  ]);
+
+  const now = Date.now();
+  const visibleRows = [];
+  const archivedRows = [];
+
+  for (const row of allRows) {
+    const archivedAt = archiveMap[normalizeEmail(row.email)];
+    if (archivedAt) {
+      const ageDays = Math.floor((now - new Date(archivedAt).getTime()) / 86400000);
+      archivedRows.push({
+        ...row,
+        archivedAt,
+        archivedDaysAgo: ageDays,
+        daysUntilPurge: Math.max(0, PURGE_AFTER_DAYS - ageDays),
+        readyToPurge: ageDays >= PURGE_AFTER_DAYS,
+      });
+    } else {
+      visibleRows.push(row);
+    }
+  }
+
+  sortRows(visibleRows);
+  archivedRows.sort((a, b) => new Date(a.archivedAt).getTime() - new Date(b.archivedAt).getTime());
 
   const stats = {
-    totalUsers: rows.length,
-    active: rows.filter(row => row.status === 'active').length,
-    canceling: rows.filter(row => row.status === 'canceling').length,
-    canceled: rows.filter(row => row.status === 'canceled').length,
-    leads: rows.filter(row => row.status === 'lead').length,
+    totalUsers: visibleRows.length,
+    active: visibleRows.filter(r => r.status === 'active').length,
+    canceling: visibleRows.filter(r => r.status === 'canceling').length,
+    canceled: visibleRows.filter(r => r.status === 'canceled').length,
+    leads: visibleRows.filter(r => r.status === 'lead').length,
+    archived: archivedRows.length,
   };
 
   return res.status(200).json({
-    rows,
+    rows: visibleRows,
+    archived: archivedRows,
     stats,
     stripeError,
+    purgeAfterDays: PURGE_AFTER_DAYS,
     updatedAt: new Date().toISOString(),
   });
 };

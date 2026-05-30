@@ -120,8 +120,13 @@ function AccordionCard({
   defaultOpen?: boolean; style?: any;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [hovered, setHovered] = useState(false);
   const chevron = open ? '▾' : '▸';
   const toggle = () => setOpen(o => !o);
+  // Web hover props — subtle glow on the whole container so it reads as interactive
+  const hoverProps: any = Platform.OS === 'web'
+    ? { onMouseEnter: () => setHovered(true), onMouseLeave: () => setHovered(false) }
+    : {};
   const headerContent = (
     <>
       <View style={{ flex: 1 }}>
@@ -135,7 +140,7 @@ function AccordionCard({
   );
 
   return (
-    <View style={[s.card, style]}>
+    <View {...hoverProps} style={[s.card, hovered && s.cardHover, style]}>
       {Platform.OS === 'web'
         ? React.createElement('button', {
             type: 'button',
@@ -2486,6 +2491,7 @@ interface MonitorStats {
   canceling: number;
   canceled: number;
   leads: number;
+  archived?: number;
 }
 
 interface MonitorRow {
@@ -2508,12 +2514,19 @@ interface MonitorRow {
   periodEndLabel: string;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
+  // archived rows only
+  archivedAt?: string | null;
+  archivedDaysAgo?: number;
+  daysUntilPurge?: number;
+  readyToPurge?: boolean;
 }
 
 interface MonitorPayload {
   rows: MonitorRow[];
+  archived?: MonitorRow[];
   stats: MonitorStats;
   stripeError?: string | null;
+  purgeAfterDays?: number;
   updatedAt: string;
 }
 
@@ -2540,6 +2553,107 @@ function statusBadgeStyle(status: string) {
   return { wrap: s.monitorBadgeLead, text: s.monitorBadgeLeadText };
 }
 
+const NF_MONITOR_BLUE = '#4A90E2';
+const NF_MONITOR_GREEN = '#34D399';
+const NF_MONITOR_ORANGE = '#FB923C';
+const NF_MONITOR_RED = '#F87171';
+
+function statusDotColor(status: string) {
+  if (status === 'active') return NF_MONITOR_GREEN;
+  if (status === 'canceling') return NF_MONITOR_ORANGE;
+  if (status === 'canceled' || status === 'past_due') return NF_MONITOR_RED;
+  return NF_MONITOR_BLUE;
+}
+
+// ─── One expandable user/contact card (vertical list, tap to expand) ──────────
+function MonitorUserCard({
+  row, mode, onArchive, onRestore, busyEmail,
+}: {
+  row: MonitorRow;
+  mode: 'all' | 'leads' | 'archived';
+  onArchive: (email: string) => void;
+  onRestore: (email: string) => void;
+  busyEmail: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const dot = statusDotColor(row.status);
+  const canArchive = row.status === 'lead' || row.status === 'canceled' || row.status === 'past_due';
+  const busy = busyEmail === row.email;
+
+  return (
+    <View style={s.ucard}>
+      {/* Collapsed header — always visible */}
+      <Pressable onPress={() => setOpen(o => !o)} style={s.ucardHeader}>
+        <View style={[s.ucardDot, { backgroundColor: dot }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.ucardName} numberOfLines={1}>{row.name || '—'}</Text>
+          <Text style={s.ucardEmail} numberOfLines={1}>{row.email || 'No email'}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+          <View style={statusBadgeStyle(row.status).wrap}>
+            <Text style={statusBadgeStyle(row.status).text}>{row.statusLabel}</Text>
+          </View>
+          <Text style={s.ucardChevron}>{open ? '▴' : '▾'}</Text>
+        </View>
+      </Pressable>
+
+      {/* Expanded — full contact + details */}
+      {open && (
+        <View style={s.ucardBody}>
+          <UcardRow label="Phone" value={row.phone || '—'} />
+          <UcardRow label="Business" value={row.businessName || '—'} />
+          <UcardRow label="Signed up" value={fmtMonitorDate(row.signedUpAt)} />
+          <UcardRow label="Last sign-in" value={fmtMonitorDate(row.lastSignInAt)} />
+          <UcardRow label="Plan" value={row.planName === 'None' ? '—' : `${row.planName}${row.planInterval ? ' · ' + row.planInterval : ''}`} />
+          <UcardRow label="Subscription" value={row.subscriptionStatus || '—'} />
+          <UcardRow label="Renewal / cancel" value={row.cancellationLabel || '—'} highlight={row.status === 'canceling'} />
+          <UcardRow label="Period end" value={row.periodEndLabel || '—'} />
+          <UcardRow label="Stripe customer" value={row.stripeCustomerId || 'None'} mono />
+          <UcardRow label="Stripe subscription" value={row.stripeSubscriptionId || 'None'} mono />
+
+          {mode === 'archived' ? (
+            <View style={{ gap: 8, marginTop: 10 }}>
+              {row.readyToPurge ? (
+                <View style={s.purgeWarn}>
+                  <Text style={s.purgeWarnText}>
+                    ⚠️ Archived {row.archivedDaysAgo} days ago — past the 90-day hold. Ready for permanent removal.
+                  </Text>
+                </View>
+              ) : (
+                <Text style={s.ucardMuted}>
+                  Archived {fmtMonitorDate(row.archivedAt)} · auto-purge eligible in {row.daysUntilPurge} day{row.daysUntilPurge === 1 ? '' : 's'}
+                </Text>
+              )}
+              <Pressable onPress={() => onRestore(row.email)} disabled={busy} style={[s.ucardBtn, { borderColor: NF_MONITOR_GREEN, opacity: busy ? 0.6 : 1 }]}>
+                <Text style={[s.ucardBtnText, { color: NF_MONITOR_GREEN }]}>{busy ? 'Restoring…' : '↩ Restore to monitor'}</Text>
+              </Pressable>
+            </View>
+          ) : canArchive ? (
+            <Pressable onPress={() => onArchive(row.email)} disabled={busy} style={[s.ucardBtn, { borderColor: NF_MONITOR_ORANGE, marginTop: 10, opacity: busy ? 0.6 : 1 }]}>
+              <Text style={[s.ucardBtnText, { color: NF_MONITOR_ORANGE }]}>{busy ? 'Archiving…' : '🗄 Archive (90-day hold)'}</Text>
+            </Pressable>
+          ) : (
+            <Text style={[s.ucardMuted, { marginTop: 10 }]}>
+              Active subscribers can't be archived — cancel their billing first.
+            </Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function UcardRow({ label, value, mono, highlight }: { label: string; value: string; mono?: boolean; highlight?: boolean }) {
+  return (
+    <View style={s.ucardDetailRow}>
+      <Text style={s.ucardDetailLabel}>{label}</Text>
+      <Text style={[s.ucardDetailValue, mono && { fontFamily: 'monospace', fontSize: 11 }, highlight && { color: NF_MONITOR_ORANGE, fontWeight: '800' }]} numberOfLines={2}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 function StatBox({ value, label }: { value: number | string; label: string }) {
   return (
     <View style={s.monitorStatBox}>
@@ -2549,88 +2663,14 @@ function StatBox({ value, label }: { value: number | string; label: string }) {
   );
 }
 
-// ─── Leads Section ───────────────────────────────────────────────────────────
-
-function LeadsSection() {
-  const [payload,    setPayload]    = useState<MonitorPayload | null>(null);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const loadLeads = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
-    try {
-      const res = await fetch('/api/admin-user-monitor', {
-        headers: { Authorization: `Bearer ${(await import('../../src/lib/supabase').then(m => m.supabase.auth.getSession())).data.session?.access_token ?? ''}` },
-      });
-      const data = await res.json();
-      if (res.ok) setPayload(data);
-    } catch {}
-    setLoading(false);
-    setRefreshing(false);
-  }, []);
-
-  useEffect(() => { loadLeads(); }, [loadLeads]);
-
-  const leads = (payload?.rows ?? []).filter(r => r.status === 'lead');
-
-  return (
-    <AccordionCard title="📋 Leads" subtitle={`${leads.length} user${leads.length !== 1 ? 's' : ''} signed up without a paid subscription`}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-          {leads.length === 0 ? 'No leads yet — all signed-up users have active subscriptions.' : `${leads.length} lead${leads.length !== 1 ? 's' : ''} captured`}
-        </Text>
-        <Pressable
-          onPress={() => loadLeads(true)}
-          disabled={refreshing}
-          style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full, borderWidth: 1, borderColor: NF_BLUE, opacity: refreshing ? 0.6 : 1 }}
-        >
-          <Text style={{ color: NF_BLUE, fontSize: 11, fontWeight: '700' }}>{refreshing ? 'Refreshing…' : '↻ Refresh'}</Text>
-        </Pressable>
-      </View>
-
-      {loading ? (
-        <ActivityIndicator color={NF_BLUE} />
-      ) : leads.length === 0 ? (
-        <View style={{ padding: 20, alignItems: 'center' }}>
-          <Text style={{ fontSize: 28, marginBottom: 8 }}>🎉</Text>
-          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>All users are paying subscribers!</Text>
-        </View>
-      ) : (
-        <View style={{ gap: 10 }}>
-          {leads.map(lead => (
-            <View key={lead.key} style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard, padding: 14, gap: 4 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '800' }}>{lead.name || '—'}</Text>
-                <View style={{ backgroundColor: NF_BLUE + '22', borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 3 }}>
-                  <Text style={{ color: NF_BLUE, fontSize: 10, fontWeight: '800' }}>LEAD</Text>
-                </View>
-              </View>
-              <Text style={{ color: NF_BLUE, fontSize: 12 }}>✉️ {lead.email || 'No email'}</Text>
-              {lead.phone ? <Text style={{ color: colors.textSecondary, fontSize: 12 }}>📞 {lead.phone}</Text> : null}
-              {lead.businessName ? <Text style={{ color: colors.textSecondary, fontSize: 12 }}>🏢 {lead.businessName}</Text> : null}
-              <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
-                <Text style={{ color: colors.textTertiary, fontSize: 11 }}>
-                  Signed up: {lead.signedUpAt ? new Date(lead.signedUpAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                </Text>
-                <Text style={{ color: colors.textTertiary, fontSize: 11 }}>
-                  Last seen: {lead.lastSignInAt ? new Date(lead.lastSignInAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-    </AccordionCard>
-  );
-}
-
-// ─── User Monitor ─────────────────────────────────────────────────────────────
+// ─── User Monitor (tabbed: All / Leads / Archived · expandable cards) ─────────
 
 function UserMonitorSection() {
   const [payload, setPayload] = useState<MonitorPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<'all' | 'leads' | 'archived'>('all');
+  const [busyEmail, setBusyEmail] = useState<string | null>(null);
 
   const loadMonitor = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -2639,9 +2679,7 @@ function UserMonitorSection() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('Admin session not available. Please sign in again.');
-      const res = await fetch('/api/admin-user-monitor', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch('/api/admin-user-monitor', { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Unable to load user monitor');
       setPayload(data as MonitorPayload);
@@ -2653,21 +2691,68 @@ function UserMonitorSection() {
     }
   }, []);
 
+  // Auto-refresh: fetches when the section opens (mount) + every 15s while open.
   useEffect(() => {
     loadMonitor();
     const interval = setInterval(() => loadMonitor(true), 15000);
     return () => clearInterval(interval);
   }, [loadMonitor]);
 
-  const stats = payload?.stats ?? { totalUsers: 0, active: 0, canceling: 0, canceled: 0, leads: 0 };
-  const rows = payload?.rows ?? [];
+  const archiveAction = useCallback(async (email: string, action: 'archive' | 'restore') => {
+    setBusyEmail(email);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/admin-user-monitor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action, email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Action failed');
+      await loadMonitor(true);
+    } catch (e: any) {
+      Alert.alert(action === 'archive' ? 'Could not archive' : 'Could not restore', e.message);
+    } finally {
+      setBusyEmail(null);
+    }
+  }, [loadMonitor]);
+
+  const confirmArchive = useCallback((email: string) => {
+    const doIt = () => archiveAction(email, 'archive');
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Archive ${email}? They'll be hidden from the monitor and held for 90 days before being eligible for permanent removal. You can restore them anytime.`)) doIt();
+    } else {
+      Alert.alert('Archive user?', `${email} will be hidden from the monitor and held for 90 days. You can restore anytime.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Archive', style: 'destructive', onPress: doIt },
+      ]);
+    }
+  }, [archiveAction]);
+
+  const stats = payload?.stats ?? { totalUsers: 0, active: 0, canceling: 0, canceled: 0, leads: 0, archived: 0 };
+  const allRows = payload?.rows ?? [];
+  const archivedRows = payload?.archived ?? [];
+  const leadRows = allRows.filter(r => r.status === 'lead');
+
+  const shownRows = tab === 'archived' ? archivedRows : tab === 'leads' ? leadRows : allRows;
+
+  const TabBtn = ({ id, label, count }: { id: 'all' | 'leads' | 'archived'; label: string; count: number }) => (
+    <Pressable
+      onPress={() => setTab(id)}
+      style={[s.monTab, tab === id && s.monTabActive]}
+    >
+      <Text style={[s.monTabText, tab === id && s.monTabTextActive]}>{label} ({count})</Text>
+    </Pressable>
+  );
 
   return (
     <AccordionCard
       title="👥 User Monitor"
-      subtitle="View registered users, session activity, and account status"
+      subtitle="Live Supabase signups merged with Stripe subscription data — tap any user to expand"
       style={s.monitorCard}
     >
+      {/* Stats */}
       <View style={s.monitorStatsWrap}>
         <StatBox value={stats.totalUsers} label="TOTAL USERS" />
         <StatBox value={stats.active} label="ACTIVE" />
@@ -2679,18 +2764,16 @@ function UserMonitorSection() {
           disabled={refreshing}
           style={({ pressed }) => [s.monitorRefreshBtn, pressed && { opacity: 0.82 }, refreshing && { opacity: 0.72 }]}
         >
-          {refreshing ? (
-            <ActivityIndicator color={NF_GREEN} />
-          ) : (
-            <Text style={s.monitorRefreshText}>Refresh Live Data</Text>
-          )}
+          {refreshing ? <ActivityIndicator color={NF_GREEN} /> : <Text style={s.monitorRefreshText}>↻ Refresh Live Data</Text>}
         </Pressable>
       </View>
 
-      <Text style={s.monitorIntro}>
-        This monitor combines Supabase signup users with the latest Stripe customer/subscription data.
-        A signup without a paid subscription is shown as a lead in the same customer list.
-      </Text>
+      {/* View tabs */}
+      <View style={s.monTabRow}>
+        <TabBtn id="all" label="All Users" count={allRows.length} />
+        <TabBtn id="leads" label="Leads" count={leadRows.length} />
+        <TabBtn id="archived" label="Archived" count={archivedRows.length} />
+      </View>
 
       {payload?.stripeError ? (
         <View style={s.monitorWarning}>
@@ -2698,67 +2781,31 @@ function UserMonitorSection() {
         </View>
       ) : null}
 
+      {/* Vertical scrolling list of expandable cards */}
       {loading ? (
         <ActivityIndicator color={NF_BLUE} style={{ marginVertical: 24 }} />
+      ) : shownRows.length === 0 ? (
+        <View style={{ padding: 24, alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 26 }}>{tab === 'leads' ? '🎉' : tab === 'archived' ? '🗄' : '👥'}</Text>
+          <Text style={s.emptyText}>
+            {tab === 'leads' ? 'No leads — everyone who signed up is a paying subscriber.'
+              : tab === 'archived' ? 'No archived users.'
+              : 'No users or Stripe customers found yet.'}
+          </Text>
+        </View>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator style={s.monitorTableScroll}>
-          <View style={s.monitorTable}>
-            <View style={[s.monitorTableRow, s.monitorTableHeader]}>
-              <Text style={[s.monitorTh, { width: 230 }]}>CUSTOMER</Text>
-              <Text style={[s.monitorTh, { width: 210 }]}>CONTACT</Text>
-              <Text style={[s.monitorTh, { width: 210 }]}>STATUS</Text>
-              <Text style={[s.monitorTh, { width: 210 }]}>PLAN</Text>
-              <Text style={[s.monitorTh, { width: 230 }]}>CANCELLATION / RENEWAL</Text>
-              <Text style={[s.monitorTh, { width: 220 }]}>STRIPE</Text>
-            </View>
-
-            {rows.length === 0 ? (
-              <View style={s.monitorEmptyRow}>
-                <Text style={s.emptyText}>No users or Stripe customers found yet.</Text>
-              </View>
-            ) : rows.map((row) => {
-              const badge = statusBadgeStyle(row.status);
-              return (
-                <View key={row.key} style={s.monitorTableRow}>
-                  <View style={[s.monitorTd, { width: 230 }]}>
-                    <Text style={s.monitorPrimary}>{row.name || '—'}</Text>
-                    <Text style={s.monitorMuted}>{row.email || 'No email'}</Text>
-                    <Text style={s.monitorMuted}>Signed up {fmtMonitorDate(row.signedUpAt)}</Text>
-                  </View>
-
-                  <View style={[s.monitorTd, { width: 210 }]}>
-                    {row.phone ? <Text style={s.monitorPrimary}>{row.phone}</Text> : null}
-                    {row.businessName ? <Text style={s.monitorMuted}>{row.businessName}</Text> : null}
-                    {!row.phone && !row.businessName ? <Text style={s.monitorMuted}>—</Text> : null}
-                  </View>
-
-                  <View style={[s.monitorTd, { width: 210 }]}>
-                    <View style={badge.wrap}>
-                      <Text style={badge.text}>{row.statusLabel}</Text>
-                    </View>
-                    <Text style={s.monitorMuted}>Last sign-in {fmtMonitorDate(row.lastSignInAt)}</Text>
-                  </View>
-
-                  <View style={[s.monitorTd, { width: 210 }]}>
-                    <Text style={s.monitorPrimary}>{row.planName || 'None'}</Text>
-                    {row.planInterval ? <Text style={s.monitorPrimary}>{row.planInterval}</Text> : null}
-                    <Text style={s.monitorMuted}>{row.subscriptionStatus || 'lead'}</Text>
-                  </View>
-
-                  <View style={[s.monitorTd, { width: 230 }]}>
-                    <Text style={[s.monitorPrimary, row.status === 'canceling' && s.monitorCancelText]}>
-                      {row.cancellationLabel}
-                    </Text>
-                    <Text style={s.monitorMuted}>Period end {row.periodEndLabel}</Text>
-                  </View>
-
-                  <View style={[s.monitorTd, { width: 220 }]}>
-                    <Text style={s.monitorMuted}>{row.stripeCustomerId || 'No Stripe customer'}</Text>
-                    <Text style={s.monitorMuted}>{row.stripeSubscriptionId || 'No subscription'}</Text>
-                  </View>
-                </View>
-              );
-            })}
+        <ScrollView style={s.monVerticalList} nestedScrollEnabled showsVerticalScrollIndicator>
+          <View style={{ gap: 10 }}>
+            {shownRows.map(row => (
+              <MonitorUserCard
+                key={row.key}
+                row={row}
+                mode={tab}
+                busyEmail={busyEmail}
+                onArchive={confirmArchive}
+                onRestore={(email) => archiveAction(email, 'restore')}
+              />
+            ))}
           </View>
         </ScrollView>
       )}
@@ -2833,7 +2880,6 @@ export default function AdminScreen() {
         ) : (
           <>
             <UserMonitorSection />
-            <LeadsSection />
             <EmailTemplateSection settings={settings} onSave={handleSaveSetting} />
             <HowToVideoSection settings={settings} onSave={handleSaveSetting} />
             <CTACardSection settings={settings} onSave={handleSaveSetting} />
@@ -2864,7 +2910,35 @@ const s = StyleSheet.create({
   adminBadge:   { backgroundColor: 'rgba(74,144,226,0.12)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: radius.full, borderWidth: 1, borderColor: NF_BLUE + '44' },
   adminBadgeText: { fontSize: 12, fontWeight: '700', color: NF_BLUE },
 
-  card: { backgroundColor: colors.bgCard, borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, gap: spacing.md },
+  card: { backgroundColor: colors.bgCard, borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, gap: spacing.md, ...(Platform.OS === 'web' ? { transitionProperty: 'border-color, box-shadow, background-color', transitionDuration: '160ms' } as any : {}) },
+  cardHover: Platform.OS === 'web' ? ({ borderColor: NF_BLUE, backgroundColor: '#181c28', boxShadow: '0 0 0 1px rgba(74,144,226,0.35), 0 4px 18px rgba(74,144,226,0.14)' } as any) : {},
+
+  // ── User Monitor: view tabs ──
+  monTabRow: { flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 4, flexWrap: 'wrap' },
+  monTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: radius.full, borderWidth: 1.5, borderColor: colors.border, backgroundColor: 'transparent', ...(Platform.OS === 'web' ? { cursor: 'pointer', transitionProperty: 'all', transitionDuration: '140ms' } as any : {}) },
+  monTabActive: { borderColor: NF_BLUE, backgroundColor: NF_BLUE + '22' },
+  monTabText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+  monTabTextActive: { color: NF_BLUE },
+
+  // ── User Monitor: vertical scroll list ──
+  monVerticalList: { maxHeight: 520, marginTop: 4 },
+
+  // ── User Monitor: expandable user card ──
+  ucard: { borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgBase, overflow: 'hidden', ...(Platform.OS === 'web' ? { transitionProperty: 'border-color', transitionDuration: '140ms' } as any : {}) },
+  ucardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}) },
+  ucardDot: { width: 10, height: 10, borderRadius: 5 },
+  ucardName: { fontSize: 14, fontWeight: '800', color: colors.textPrimary },
+  ucardEmail: { fontSize: 12, color: NF_BLUE, marginTop: 1 },
+  ucardChevron: { fontSize: 12, color: colors.textTertiary },
+  ucardBody: { paddingHorizontal: 14, paddingBottom: 14, paddingTop: 4, gap: 6, borderTopWidth: 1, borderTopColor: colors.border },
+  ucardDetailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  ucardDetailLabel: { fontSize: 12, color: colors.textTertiary, fontWeight: '600' },
+  ucardDetailValue: { fontSize: 12, color: colors.textPrimary, flex: 1, textAlign: 'right' },
+  ucardMuted: { fontSize: 11, color: colors.textTertiary, fontStyle: 'italic' },
+  ucardBtn: { paddingVertical: 10, borderRadius: radius.full, borderWidth: 1.5, alignItems: 'center', ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}) },
+  ucardBtnText: { fontSize: 13, fontWeight: '800' },
+  purgeWarn: { backgroundColor: 'rgba(248,113,113,0.12)', borderWidth: 1, borderColor: 'rgba(248,113,113,0.4)', borderRadius: 10, padding: 10 },
+  purgeWarnText: { color: '#F87171', fontSize: 12, fontWeight: '700' },
 
   sectionHeader: { marginBottom: 4 },
   sectionTitle:  { fontSize: 16, fontWeight: '800', color: colors.textPrimary },
