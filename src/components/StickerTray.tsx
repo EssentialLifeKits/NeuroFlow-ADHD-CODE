@@ -66,8 +66,8 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   btnSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentLight,
+    borderColor: colors.accentBlue,
+    backgroundColor: 'rgba(74,144,226,0.12)',
   },
   sticker: { fontSize: 22 },
   none: {

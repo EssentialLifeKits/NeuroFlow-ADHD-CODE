@@ -1,6 +1,7 @@
 /**
- * NeuroFlow — Design System (GramLogic Dark Mode Tokens)
- * Exact hex values from the GramLogic CSS :root blueprint.
+ * NeuroFlow — Design System Tokens
+ * Brand: NeuroFlow Pro by Essential Life Kits
+ * Primary blue: #4A90E2 · Dark mode throughout
  */
 export const colors = {
   // Backgrounds
@@ -21,12 +22,13 @@ export const colors = {
   border: 'rgba(255, 255, 255, 0.06)',
   borderHover: 'rgba(255, 255, 255, 0.12)',
 
-  // Instagram / Brand accent
-  accentInstagram: '#DD2A7B',
-  accentPurple: '#8134AF',
-  accentOrange: '#F58529',
-  accentBlue: '#515BD4',
-  accentYellow: '#FEDA75',
+  // NeuroFlow brand accents
+  accentBlue: '#4A90E2',    // primary NeuroFlow blue
+  accentCyan: '#00C6FF',    // secondary cyan
+  accentPurple: '#7B5EA7',  // purple (Focus long-break sessions)
+  accentGreen: '#34D399',   // success / active
+  accentAmber: '#FBBF24',   // warning / deadline
+  accentRed: '#F87171',     // error / self-care
 
   // Semantic
   success: '#34D399',
@@ -34,18 +36,18 @@ export const colors = {
   error: '#F87171',
   info: '#60A5FA',
 
-  // Post type colors (calendar color bars)
-  colorPost: '#FEDA75',
-  colorStory: '#34D399',
-  colorReel: '#F87171',
-  colorCarousel: '#60A5FA',
-  colorLive: '#FB923C',
+  // ADHD task category colors (calendar color bars)
+  colorTask:        '#4A90E2',  // blue  — Task
+  colorAppointment: '#34D399',  // green — Appointment
+  colorSelfCare:    '#F87171',  // red   — Self-Care
+  colorRoutine:     '#FBBF24',  // amber — Routine
+  colorDeadline:    '#FB923C',  // orange — Deadline
 
-  // Legacy aliases (for existing screens that use old names)
-  primary: '#DD2A7B',
-  primaryLight: '#8134AF',
-  primaryMuted: 'rgba(221, 42, 123, 0.08)',
-  accent: '#8134AF',
+  // Primary alias — NeuroFlow blue
+  primary: '#4A90E2',
+  primaryLight: '#7B5EA7',
+  primaryMuted: 'rgba(74, 144, 226, 0.08)',
+  accent: '#4A90E2',
   textMuted: '#5c5c72',
   bgSubtle: '#1e1e2a',
 
@@ -56,10 +58,10 @@ export const colors = {
   white: '#FFFFFF',
   black: '#000000',
 
-  // Calendar view accent backgrounds
-  dailyBg: 'rgba(221, 42, 123, 0.06)',
-  weeklyBg: 'rgba(129, 52, 175, 0.06)',
-  monthlyBg: 'rgba(245, 133, 41, 0.06)',
+  // Calendar view accent backgrounds (NeuroFlow blue family)
+  dailyBg:   'rgba(74, 144, 226, 0.06)',
+  weeklyBg:  'rgba(123, 94, 167, 0.06)',
+  monthlyBg: 'rgba(0, 198, 255, 0.06)',
 
   // Neon palette (task-card accents)
   neonBlue: '#00D4FF',
@@ -100,16 +102,16 @@ export const typography = {
   lineHeightRelaxed: 1.75,
 } as const;
 
-/** Post type configuration — used by calendar + modal */
-export const POST_TYPES = {
-  post: { label: 'Post', color: colors.colorPost, emoji: '📸' },
-  story: { label: 'Story', color: colors.colorStory, emoji: '⭕' },
-  reel: { label: 'Reel', color: colors.colorReel, emoji: '🎬' },
-  carousel: { label: 'Carousel', color: colors.colorCarousel, emoji: '📑' },
-  live: { label: 'Live', color: colors.colorLive, emoji: '🔴' },
+/** ADHD task category configuration — used by calendar + modal */
+export const TASK_CATEGORIES = {
+  task:        { label: 'Task',        color: colors.colorTask,        emoji: '📋' },
+  appointment: { label: 'Appointment', color: colors.colorAppointment, emoji: '📅' },
+  selfcare:    { label: 'Self-Care',   color: colors.colorSelfCare,    emoji: '💆' },
+  routine:     { label: 'Routine',     color: colors.colorRoutine,     emoji: '🔄' },
+  deadline:    { label: 'Deadline',    color: colors.colorDeadline,    emoji: '⏰' },
 } as const;
 
-export type PostType = keyof typeof POST_TYPES;
+export type TaskCategory = keyof typeof TASK_CATEGORIES;
 
 export const NEON_PALETTE = [
   colors.neonBlue,

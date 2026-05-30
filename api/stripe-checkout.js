@@ -33,6 +33,11 @@ module.exports = async function handler(req, res) {
       customer_email: email,
       line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
       allow_promotion_codes: true,
+      // Collect billing name — captures customer name without asking for full address.
+      // 'auto' means Stripe asks for whatever the payment method requires; card
+      // payments will prompt for name. Digital wallets (Cash App, Apple Pay, etc.)
+      // pass name automatically when available.
+      billing_address_collection: 'auto',
       success_url: `${appUrl}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/?checkout=cancelled`,
       metadata: {
