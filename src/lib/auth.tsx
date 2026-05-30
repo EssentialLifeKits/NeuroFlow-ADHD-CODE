@@ -23,7 +23,7 @@ interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
   signInWithEmail:  (email: string, password: string) => Promise<string | null>;
-  signUp:           (email: string, password: string) => Promise<string | null>;
+  signUp:           (email: string, password: string, fullName?: string) => Promise<string | null>;
   resetPassword:    (email: string) => Promise<string | null>;
   signInWithGoogle: () => Promise<string | null>;
   refreshUser:      () => Promise<void>;
@@ -66,9 +66,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
   const signUp = useCallback(
-    async (email: string, password: string): Promise<string | null> => {
+    async (email: string, password: string, fullName?: string): Promise<string | null> => {
       try {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const name = (fullName || '').trim();
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          // Store the name in user metadata so it appears in the admin User Monitor
+          // immediately — even before (or without) a paid subscription.
+          options: name ? { data: { full_name: name, name } } : undefined,
+        });
         if (error) return error.message;
         if (data?.user) setUser(data.user);
         return null;

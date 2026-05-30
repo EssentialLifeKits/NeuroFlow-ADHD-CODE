@@ -192,7 +192,9 @@ async function buildRows(supabaseUrl) {
 
   for (const user of Array.isArray(users) ? users : []) {
     const row = ensureRow(user.email, user.id);
-    row.name = user.display_name || displayNameFromEmail(user.email);
+    // Keep an existing real name (from auth metadata) — only fall back to
+    // email-derived name if nothing better is available.
+    row.name = user.display_name || row.name || displayNameFromEmail(user.email);
     row.email = normalizeEmail(user.email);
     row.signedUpAt = user.created_at || row.signedUpAt;
     row.lastSignInAt = user.updated_at || row.lastSignInAt;

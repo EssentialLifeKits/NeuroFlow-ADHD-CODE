@@ -188,6 +188,7 @@ export default function LoginScreen() {
   const { width, height: windowHeight } = useWindowDimensions();
 
   const [mode,          setMode]          = useState<Mode>('signin');
+  const [fullName,      setFullName]      = useState('');
   const [email,         setEmail]         = useState('');
   const [password,      setPassword]      = useState('');
   const [loading,       setLoading]       = useState(false);
@@ -278,7 +279,7 @@ export default function LoginScreen() {
         const err = await resetPassword(email.trim());
         if (err) setError(err); else setMessage('✅ Check your email for a reset link.');
       } else if (mode === 'signup') {
-        const err = await signUp(email.trim(), password);
+        const err = await signUp(email.trim(), password, fullName.trim());
         if (err) setError(err);
       } else {
         const err = await signInWithEmail(email.trim(), password);
@@ -571,6 +572,22 @@ export default function LoginScreen() {
             {/* Error / message */}
             {error   ? <Text style={styles.errorText}>{error}</Text>   : null}
             {message ? <Text style={styles.msgText}>{message}</Text>   : null}
+
+            {/* Full name — sign-up only */}
+            {mode === 'signup' && (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Full Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Your name"
+                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  value={fullName}
+                  onChangeText={setFullName}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+              </View>
+            )}
 
             {/* Email */}
             <View style={styles.fieldGroup}>
