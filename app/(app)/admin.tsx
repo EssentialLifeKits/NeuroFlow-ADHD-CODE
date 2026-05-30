@@ -2494,7 +2494,6 @@ interface MonitorRow {
   email: string;
   phone: string;
   businessName: string;
-  instagramHandle: string;
   signedUpAt?: string | null;
   lastSignInAt?: string | null;
   status: 'active' | 'canceling' | 'canceled' | 'lead' | 'past_due' | string;
@@ -2549,6 +2548,84 @@ function StatBox({ value, label }: { value: number | string; label: string }) {
     </View>
   );
 }
+
+// ─── Leads Section ───────────────────────────────────────────────────────────
+
+function LeadsSection() {
+  const [payload,    setPayload]    = useState<MonitorPayload | null>(null);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadLeads = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+    try {
+      const res = await fetch('/api/admin-user-monitor', {
+        headers: { Authorization: `Bearer ${(await import('../../src/lib/supabase').then(m => m.supabase.auth.getSession())).data.session?.access_token ?? ''}` },
+      });
+      const data = await res.json();
+      if (res.ok) setPayload(data);
+    } catch {}
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => { loadLeads(); }, [loadLeads]);
+
+  const leads = (payload?.rows ?? []).filter(r => r.status === 'lead');
+
+  return (
+    <AccordionCard title="📋 Leads" subtitle={`${leads.length} user${leads.length !== 1 ? 's' : ''} signed up without a paid subscription`}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+          {leads.length === 0 ? 'No leads yet — all signed-up users have active subscriptions.' : `${leads.length} lead${leads.length !== 1 ? 's' : ''} captured`}
+        </Text>
+        <Pressable
+          onPress={() => loadLeads(true)}
+          disabled={refreshing}
+          style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full, borderWidth: 1, borderColor: NF_BLUE, opacity: refreshing ? 0.6 : 1 }}
+        >
+          <Text style={{ color: NF_BLUE, fontSize: 11, fontWeight: '700' }}>{refreshing ? 'Refreshing…' : '↻ Refresh'}</Text>
+        </Pressable>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color={NF_BLUE} />
+      ) : leads.length === 0 ? (
+        <View style={{ padding: 20, alignItems: 'center' }}>
+          <Text style={{ fontSize: 28, marginBottom: 8 }}>🎉</Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 13 }}>All users are paying subscribers!</Text>
+        </View>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {leads.map(lead => (
+            <View key={lead.key} style={{ borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgCard, padding: 14, gap: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '800' }}>{lead.name || '—'}</Text>
+                <View style={{ backgroundColor: NF_BLUE + '22', borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 3 }}>
+                  <Text style={{ color: NF_BLUE, fontSize: 10, fontWeight: '800' }}>LEAD</Text>
+                </View>
+              </View>
+              <Text style={{ color: NF_BLUE, fontSize: 12 }}>✉️ {lead.email || 'No email'}</Text>
+              {lead.phone ? <Text style={{ color: colors.textSecondary, fontSize: 12 }}>📞 {lead.phone}</Text> : null}
+              {lead.businessName ? <Text style={{ color: colors.textSecondary, fontSize: 12 }}>🏢 {lead.businessName}</Text> : null}
+              <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
+                <Text style={{ color: colors.textTertiary, fontSize: 11 }}>
+                  Signed up: {lead.signedUpAt ? new Date(lead.signedUpAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                </Text>
+                <Text style={{ color: colors.textTertiary, fontSize: 11 }}>
+                  Last seen: {lead.lastSignInAt ? new Date(lead.lastSignInAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </AccordionCard>
+  );
+}
+
+// ─── User Monitor ─────────────────────────────────────────────────────────────
 
 function UserMonitorSection() {
   const [payload, setPayload] = useState<MonitorPayload | null>(null);
@@ -2650,9 +2727,9 @@ function UserMonitorSection() {
                   </View>
 
                   <View style={[s.monitorTd, { width: 210 }]}>
-                    <Text style={s.monitorPrimary}>{row.phone}</Text>
-                    <Text style={s.monitorMuted}>{row.businessName}</Text>
-                    <Text style={s.monitorMuted}>{row.instagramHandle}</Text>
+                    {row.phone ? <Text style={s.monitorPrimary}>{row.phone}</Text> : null}
+                    {row.businessName ? <Text style={s.monitorMuted}>{row.businessName}</Text> : null}
+                    {!row.phone && !row.businessName ? <Text style={s.monitorMuted}>—</Text> : null}
                   </View>
 
                   <View style={[s.monitorTd, { width: 210 }]}>
@@ -2756,6 +2833,7 @@ export default function AdminScreen() {
         ) : (
           <>
             <UserMonitorSection />
+            <LeadsSection />
             <EmailTemplateSection settings={settings} onSave={handleSaveSetting} />
             <HowToVideoSection settings={settings} onSave={handleSaveSetting} />
             <CTACardSection settings={settings} onSave={handleSaveSetting} />

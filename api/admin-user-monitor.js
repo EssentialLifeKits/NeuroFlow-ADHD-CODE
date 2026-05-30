@@ -48,9 +48,7 @@ function getStripeCustomerEmail(customer) {
 function mergeMetadata(row, metadata = {}) {
   if (!metadata || typeof metadata !== 'object') return row;
   const businessName = metadata.business_name || metadata.businessName || metadata.company || metadata.company_name;
-  const instagramHandle = metadata.instagram || metadata.instagram_handle || metadata.ig || metadata.handle;
   if (businessName && !row.businessName) row.businessName = businessName;
-  if (instagramHandle && !row.instagramHandle) row.instagramHandle = instagramHandle;
   return row;
 }
 
@@ -61,7 +59,6 @@ function makeEmptyRow(email, key) {
     email,
     phone: '',
     businessName: '',
-    instagramHandle: '',
     signedUpAt: null,
     lastSignInAt: null,
     status: 'lead',
@@ -192,7 +189,7 @@ module.exports = async function handler(req, res) {
         stripe.subscriptions.list({
           limit: 100,
           status: 'all',
-          expand: ['data.customer', 'data.items.data.price.product'],
+          expand: ['data.customer'],
         }),
         stripe.customers.list({ limit: 100 }),
       ]);
@@ -249,9 +246,8 @@ module.exports = async function handler(req, res) {
     .map(row => ({
       ...row,
       name: row.name || displayNameFromEmail(row.email),
-      phone: row.phone || 'No phone',
-      businessName: row.businessName || 'No business name',
-      instagramHandle: row.instagramHandle || 'No Instagram handle',
+      phone: row.phone || '',
+      businessName: row.businessName || '',
       cancellationLabel: renewalLabel(row),
       periodEndLabel: row.currentPeriodEnd
         ? new Date(row.currentPeriodEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
