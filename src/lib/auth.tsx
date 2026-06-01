@@ -106,10 +106,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : 'neuroflow://auth/callback';
 
       if (Platform.OS === 'web') {
-        // Web: full redirect flow — Supabase handles PKCE automatically
+        // Web: full redirect flow — Supabase handles PKCE automatically.
+        // prompt: 'select_account' forces Google to always show the account
+        // picker instead of silently auto-signing in the only active session.
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
-          options: { redirectTo },
+          options: { redirectTo, queryParams: { prompt: 'select_account' } },
         });
         if (error) return error.message;
         return null;
@@ -118,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Native: open browser, capture redirect, exchange code
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo, skipBrowserRedirect: true },
+        options: { redirectTo, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
       });
       if (error) return error.message;
       if (!data?.url) return 'No OAuth URL returned';
