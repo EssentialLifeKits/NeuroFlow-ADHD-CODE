@@ -6,7 +6,14 @@ const {
   upsertSubscription,
 } = require('./_billing-utils');
 
-module.exports = async function handler(req, res) {
+// Stripe signature verification requires the EXACT raw request body. Vercel
+// auto-parses JSON bodies by default, which corrupts the bytes and breaks the
+// signature check. Disabling the body parser lets us read the untouched stream.
+const config = {
+  api: { bodyParser: false },
+};
+
+async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed' });
@@ -53,4 +60,7 @@ module.exports = async function handler(req, res) {
     console.error('[stripe-webhook] processing failed:', error);
     return res.status(500).json({ error: error.message || 'Webhook processing failed.' });
   }
-};
+}
+
+module.exports = handler;
+module.exports.config = config;
