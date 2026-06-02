@@ -1,12 +1,30 @@
+import billing from './_billing-utils.js';
+
 const {
   getStripe,
   normalizeEmail,
-  readRawBody,
   subscriptionRecordFromStripe,
   upsertSubscription,
-} = require('./_billing-utils');
+} = billing;
 
-async function handler(req, res) {
+// Tell Vercel NOT to parse the request body, so we can read Stripe's exact
+// raw bytes for signature verification. (ESM `export const config` is honored
+// by Vercel's build, unlike the CommonJS variant which it ignored.)
+export const config = {
+  api: { bodyParser: false },
+};
+
+// Read the untouched raw request body straight off the stream.
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed' });
@@ -40,7 +58,9 @@ async function handler(req, res) {
       }
     }
 
-    if (event.type === 'customer.subscription.created' || event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+    if (event.type === 'customer.subscription.created'
+      || event.type === 'customer.subscription.updated'
+      || event.type === 'customer.subscription.deleted') {
       const subscription = event.data.object;
       await upsertSubscription(subscriptionRecordFromStripe(subscription, {
         user_email: normalizeEmail(subscription.metadata?.email),
@@ -54,12 +74,3 @@ async function handler(req, res) {
     return res.status(500).json({ error: error.message || 'Webhook processing failed.' });
   }
 }
-
-module.exports = handler;
-
-// Stripe signature verification needs the EXACT raw request body. Vercel
-// auto-parses JSON bodies, which corrupts the bytes and breaks the signature.
-// This config disables the parser so readRawBody reads the untouched stream.
-// NOTE: must be an inline object literal — Vercel detects it via static
-// analysis at build time and won't resolve a variable reference.
-module.exports.config = { api: { bodyParser: false } };
