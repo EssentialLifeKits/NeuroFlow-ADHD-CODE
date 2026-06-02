@@ -6,13 +6,6 @@ const {
   upsertSubscription,
 } = require('./_billing-utils');
 
-// Stripe signature verification requires the EXACT raw request body. Vercel
-// auto-parses JSON bodies by default, which corrupts the bytes and breaks the
-// signature check. Disabling the body parser lets us read the untouched stream.
-const config = {
-  api: { bodyParser: false },
-};
-
 async function handler(req, res) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -63,4 +56,10 @@ async function handler(req, res) {
 }
 
 module.exports = handler;
-module.exports.config = config;
+
+// Stripe signature verification needs the EXACT raw request body. Vercel
+// auto-parses JSON bodies, which corrupts the bytes and breaks the signature.
+// This config disables the parser so readRawBody reads the untouched stream.
+// NOTE: must be an inline object literal — Vercel detects it via static
+// analysis at build time and won't resolve a variable reference.
+module.exports.config = { api: { bodyParser: false } };
